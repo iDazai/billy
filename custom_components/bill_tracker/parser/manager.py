@@ -28,7 +28,7 @@ MAX_IMPORT_HISTORY = 500
 class ParserManager:
     """Own parser state while BillTrackerManager remains the owner of expenses."""
 
-    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.6.3") -> None:
+    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.6.4") -> None:
         self.hass = hass
         self.bill_manager = bill_manager
         self.billy_version = billy_version
@@ -426,7 +426,14 @@ class ParserManager:
             part = self._find_part(document, envelope.parts)
             if part is None:
                 if document.get("required", False):
-                    raise ParserError(f"Required attachment '{document_id}' was not found")
+                    available = ", ".join(
+                        f"{item.part}:{item.content_type}:{item.filename or '-'}"
+                        for item in envelope.parts
+                    ) or "none"
+                    raise ParserError(
+                        f"Required attachment '{document_id}' was not found; "
+                        f"available parts: {available}"
+                    )
                 continue
             content = await self.imap.async_fetch_part(envelope, part)
             hashes.append(hashlib.sha256(content).hexdigest())
@@ -442,32 +449,57 @@ class ParserManager:
 
     @staticmethod
     def _find_part(document: dict[str, Any], parts: list[MailPart]) -> MailPart | None:
-        mime_types = {str(value).casefold() for value in document.get("mime_types", []) or []}
+        mime_types = {
+            str(value).casefold().split(";", 1)[0].strip()
+            for value in document.get("mime_types", []) or []
+        }
         filename_regex = str(document.get("filename_regex") or "")
+        generic_binary_types = {"", "application/octet-stream", "binary/octet-stream"}
         for part in parts:
-            if mime_types and part.content_type.casefold() not in mime_types:
+            filename = part.filename or ""
+            if filename_regex and not re.search(filename_regex, filename):
                 continue
-            if filename_regex and not re.search(filename_regex, part.filename or ""):
-                continue
+
+            content_type = part.content_type.casefold().split(";", 1)[0].strip()
+            if mime_types and content_type not in mime_types:
+                # Some providers (including TIM via Gmail) expose a real PDF as
+                # application/octet-stream. If the parser supplied a restrictive
+                # filename regex and it matches, treat a generic binary MIME as
+                # unknown rather than rejecting the attachment.
+                if not (filename_regex and content_type in generic_binary_types):
+                    continue
             return part
         return None
 
     @staticmethod
     def _merge_fetched_envelope(envelope: MailEnvelope, fetched: dict[str, Any]) -> MailEnvelope:
-        parts: list[MailPart] = []
+        # Preserve attachment metadata already present on imap_content. The IMAP
+        # fetch action normally returns the same metadata, but providers can omit
+        # or downgrade MIME/filename information on a second parse. Never discard
+        # metadata that was good enough to prefilter the original event.
+        merged: dict[str, MailPart] = {part.part: part for part in envelope.parts}
         for part_id, metadata in (fetched.get("parts") or {}).items():
             if not isinstance(metadata, dict):
                 continue
-            parts.append(
-                MailPart(
-                    part=str(part_id),
-                    content_type=str(metadata.get("content_type") or ""),
-                    filename=str(metadata.get("filename") or ""),
-                    content_transfer_encoding=str(metadata.get("content_transfer_encoding") or ""),
-                )
+            key = str(part_id)
+            previous = merged.get(key)
+            merged[key] = MailPart(
+                part=key,
+                content_type=str(
+                    metadata.get("content_type")
+                    or (previous.content_type if previous else "")
+                ),
+                filename=str(
+                    metadata.get("filename")
+                    or (previous.filename if previous else "")
+                ),
+                content_transfer_encoding=str(
+                    metadata.get("content_transfer_encoding")
+                    or (previous.content_transfer_encoding if previous else "")
+                ),
             )
-        if parts:
-            envelope.parts = parts
+        if merged:
+            envelope.parts = list(merged.values())
         envelope.sender = str(fetched.get("sender") or envelope.sender)
         envelope.subject = str(fetched.get("subject") or envelope.subject)
         return envelope
@@ -564,8 +596,11 @@ class ParserManager:
         self._notify_import_updated()
 
     def _has_source_fingerprint(self, fingerprint: str) -> bool:
+        # Failed attempts must be retryable after a parser/catalog fix. Pending,
+        # imported and explicitly rejected candidates remain deduplicated.
         return any(
-            row.get("source", {}).get("source_fingerprint") == fingerprint
+            row.get("status") != "error"
+            and row.get("source", {}).get("source_fingerprint") == fingerprint
             for row in self.storage.data.get("imports", [])
         )
 

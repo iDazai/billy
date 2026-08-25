@@ -1,3 +1,12 @@
+# Changelog
+
+## 0.6.4
+
+- Fix automatic parsing of PDF attachments exposed by IMAP as `application/octet-stream` when the parser filename rule matches.
+- Preserve `imap_content` attachment metadata when merging the later `imap.fetch` response.
+- Allow failed IMAP parse attempts to be retried after updating a parser instead of permanently deduplicating the UID.
+- Include available attachment metadata in parser failure logs for easier diagnosis.
+
 # Billy 0.6.3
 
 ## Added

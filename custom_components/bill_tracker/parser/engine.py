@@ -14,17 +14,29 @@ MAX_PATTERN_SIZE = 600
 
 _MONTHS_IT = {
     "gennaio": 1,
+    "gen": 1,
     "febbraio": 2,
+    "feb": 2,
     "marzo": 3,
+    "mar": 3,
     "aprile": 4,
+    "apr": 4,
     "maggio": 5,
+    "mag": 5,
     "giugno": 6,
+    "giu": 6,
     "luglio": 7,
+    "lug": 7,
     "agosto": 8,
+    "ago": 8,
     "settembre": 9,
+    "set": 9,
     "ottobre": 10,
+    "ott": 10,
     "novembre": 11,
+    "nov": 11,
     "dicembre": 12,
+    "dic": 12,
 }
 
 
@@ -267,11 +279,14 @@ class ParserEngine:
         if locale.lower().startswith("it"):
             normalized = self._strip_accents(text.casefold())
             month_map = {self._strip_accents(key): value for key, value in _MONTHS_IT.items()}
-            match = re.fullmatch(r"(\d{1,2})\s+([a-z]+)(?:\s+(\d{4}))?", normalized)
+            match = re.fullmatch(r"(\d{1,2})\s+([a-z]+)(?:\s+(\d{2}|\d{4}))?", normalized)
             if match:
                 day = int(match.group(1))
                 month = month_map.get(match.group(2))
-                year = int(match.group(3)) if match.group(3) else fallback_year
+                year_text = match.group(3)
+                year = int(year_text) if year_text else fallback_year
+                if year_text and len(year_text) == 2:
+                    year += 2000
                 if month and year:
                     try:
                         return date(year, month, day).isoformat()

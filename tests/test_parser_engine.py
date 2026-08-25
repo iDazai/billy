@@ -89,3 +89,23 @@ def test_wrong_sender_does_not_pass_prefilter():
         subject="Bolletta",
     )
     assert not ParserEngine().prefilter(parser, envelope)
+
+
+def test_italian_abbreviated_month_date_range():
+    parser = _parser()
+    parser["fields"]["period"]["candidates"][0]["regex"] = (
+        r"Periodo: (?P<start>\d{2} [a-z]{3} \d{2}) - "
+        r"(?P<end>\d{2} [a-z]{3} \d{2})"
+    )
+    envelope = MailEnvelope(
+        entry_id="entry",
+        uid="3",
+        sender="billing@example.test",
+        subject="Bolletta",
+    )
+    documents = DocumentBundle(
+        email="Totale: 25,90 EUR\nPeriodo: 01 lug 26 - 31 lug 26"
+    )
+    data = ParserEngine().parse(parser, envelope, documents)["data"]
+    assert data["period_start"] == "2026-07-01"
+    assert data["period_end"] == "2026-07-31"

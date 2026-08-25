@@ -1,3 +1,7 @@
+## 0.6.3 parser compatibility
+
+Billy 0.6.3 adds support for abbreviated Italian dates used in provider invoices and anchors automatic imports to the billing/competence month before the due date. The 0.5.2-based dashboard UI from 0.6.2 is unchanged.
+
 # Billy 0.6.2
 
 Billy is a Home Assistant custom integration for tracking recurring household bills,

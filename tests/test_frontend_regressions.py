@@ -36,10 +36,10 @@ def test_frontend_and_manifest_use_rewrite_version():
     bootstrap = (FRONTEND / "bill-tracker-card.js").read_text(encoding="utf-8")
     implementation = (FRONTEND / "bill-tracker-card-impl.js").read_text(encoding="utf-8")
     manifest = (ROOT / "custom_components" / "bill_tracker" / "manifest.json").read_text(encoding="utf-8")
-    assert "BILLY_FRONTEND_VERSION = '0.6.2'" in bootstrap
-    assert "BILL_TRACKER_VERSION = '0.6.2'" in implementation
-    assert "./bill-tracker-i18n.js?v=0.6.2" in implementation
-    assert '"version": "0.6.2"' in manifest
+    assert "BILLY_FRONTEND_VERSION = '0.6.3'" in bootstrap
+    assert "BILL_TRACKER_VERSION = '0.6.3'" in implementation
+    assert "./bill-tracker-i18n.js?v=0.6.3" in implementation
+    assert '"version": "0.6.3"' in manifest
 
 
 def test_automatic_parsing_does_not_replace_lovelace_ui():

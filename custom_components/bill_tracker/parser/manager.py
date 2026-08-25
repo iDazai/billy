@@ -28,7 +28,7 @@ MAX_IMPORT_HISTORY = 500
 class ParserManager:
     """Own parser state while BillTrackerManager remains the owner of expenses."""
 
-    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.6.2") -> None:
+    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.6.3") -> None:
         self.hass = hass
         self.bill_manager = bill_manager
         self.billy_version = billy_version

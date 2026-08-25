@@ -1,3 +1,13 @@
+# Billy 0.6.3
+
+## Added
+
+- Parser-engine support for abbreviated Italian month names and two-digit years used by provider PDFs such as `01 lug 26 - 31 lug 26`.
+
+## Fixed
+
+- Automatic imports now anchor the bill to the parsed competence/billing month first, then the invoice issue date, instead of incorrectly preferring a later due date.
+
 # Billy 0.6.2
 
 ## Fixed

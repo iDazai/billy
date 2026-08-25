@@ -60,7 +60,11 @@ class BillImportCoordinator:
 
     @classmethod
     def _anchor_date(cls, data: dict[str, Any]) -> date:
-        for key in ("payment_date", "due_date", "issue_date", "period_end"):
+        # Bill history is grouped by the billed/competence month, not by the
+        # later due date. Prefer the parsed competence end, then the invoice
+        # issue date. Payment/due dates are only fallbacks for parsers that do
+        # not expose either billing reference.
+        for key in ("period_end", "issue_date", "payment_date", "due_date"):
             parsed = cls._iso_date(data.get(key))
             if parsed:
                 return parsed

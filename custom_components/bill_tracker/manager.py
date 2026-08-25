@@ -632,6 +632,7 @@ class BillTrackerManager:
         status: str = "all",
         category_id: str | None = None,
         trend: str = "both",
+        language: str = "en",
     ) -> tuple[bytes, str, str]:
         """Return exported bytes, MIME type and extension for the requested format."""
         fmt = str(file_format or "csv").lower()
@@ -650,13 +651,13 @@ class BillTrackerManager:
             return csv_bytes(rows, category_lookup, currency=self.currency), "text/csv;charset=utf-8", "csv"
         if fmt == "xlsx":
             return (
-                xlsx_bytes(rows, category_lookup, from_month=from_month, to_month=to_month, currency=self.currency),
+                xlsx_bytes(rows, category_lookup, from_month=from_month, to_month=to_month, currency=self.currency, language=language),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "xlsx",
             )
         return (
             pdf_bytes(
-                rows, category_lookup, from_month=from_month, to_month=to_month, trend=trend, currency=self.currency,
+                rows, category_lookup, from_month=from_month, to_month=to_month, trend=trend, currency=self.currency, language=language,
             ),
             "application/pdf",
             "pdf",

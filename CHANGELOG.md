@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.1
+
+### Localization
+
+- Added **English, Italian, Spanish, French, German and Portuguese** localization.
+- The Lovelace card and visual editor now automatically follow the language selected in Home Assistant, with English fallback for unsupported languages.
+- Localized bill forms, filters, status labels, import/export UI, savings views, recurrence labels and built-in bill type names.
+- Localized Home Assistant config/options flows and the Billy sensor entity name.
+- Generated Excel and PDF reports now use the selected Home Assistant language.
+- User-created bill types, payer names, providers, contracts and notes remain untouched and are never translated.
+
+### Support
+
+- Added an optional **Support Billy** entry to the native Home Assistant integration settings.
+- Provides direct links to star the project on GitHub or buy the developer a coffee through PayPal.Me.
+- Support links are informational only and never interrupt normal Billy usage.
+
 ## 0.5.0
 
 ### Consumption, contracts and savings

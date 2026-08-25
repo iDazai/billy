@@ -23,7 +23,7 @@ async def async_setup_entry(
 class BillTrackerSensor(SensorEntity):
     """Expose the current month's bill total as a sensor."""
 
-    _attr_name = "Totale bollette"
+    _attr_translation_key = "total_bills"
     _attr_unique_id = "bill_tracker_total"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:receipt-text"

@@ -1,11 +1,13 @@
 """Constants for Bill Tracker."""
 
 DOMAIN = "bill_tracker"
+PROJECT_URL = "https://github.com/robin994/billy"
+SUPPORT_URL = "https://paypal.me/rtortora94"
 STORAGE_VERSION = 1
 STORAGE_SCHEMA_VERSION = 8
 STORAGE_KEY = "bill_tracker.expenses"
 EVENT_UPDATED = "bill_tracker_updated"
-FRONTEND_VERSION = "0.5.0"
+FRONTEND_VERSION = "0.5.1"
 
 SUPPORTED_INTERVALS = (1, 2, 3, 4, 6, 12)
 INTERVAL_LABELS = {

@@ -14,6 +14,8 @@ from datetime import datetime
 from html import escape as xml_escape
 from typing import Any, Iterable
 
+from .localization import category_label, report_labels
+
 CSV_HEADERS = [
     "id",
     "category",
@@ -206,7 +208,7 @@ def _sheet_xml(data: list[list[Any]], widths: list[float] | None = None) -> str:
     )
 
 
-def _monthly_summary(rows: list[dict[str, Any]], range_start: tuple[int, int] | None, range_end: tuple[int, int] | None) -> list[list[Any]]:
+def _monthly_summary(rows: list[dict[str, Any]], range_start: tuple[int, int] | None, range_end: tuple[int, int] | None, labels: dict[str, str]) -> list[list[Any]]:
     if rows:
         min_key = min((int(x["paid_year"]), int(x["paid_month"])) for x in rows)
         max_key = max((int(x["paid_year"]), int(x["paid_month"])) for x in rows)
@@ -233,26 +235,27 @@ def _monthly_summary(rows: list[dict[str, Any]], range_start: tuple[int, int] | 
         for key in competence:
             if start <= key <= end:
                 normalized[key] += share
-    table = [["Month", "Paid total", "Normalized monthly cost", "Bills"]]
+    table = [[labels["month"], labels["paid_total"], labels["normalized_cost"], labels["bills_count"]]]
     for key in months:
         table.append([month_key(*key), round(paid[key], 2), round(normalized[key], 2), count[key]])
     return table
 
 
-def xlsx_bytes(rows: list[dict[str, Any]], category_lookup: dict[str, dict[str, Any]], *, from_month: str | None, to_month: str | None, currency: str = "EUR") -> bytes:
+def xlsx_bytes(rows: list[dict[str, Any]], category_lookup: dict[str, dict[str, Any]], *, from_month: str | None, to_month: str | None, currency: str = "EUR", language: str = "en") -> bytes:
+    labels = report_labels(language)
     bills = [[
-        "Category", "Interval (months)", "Amount", "Currency", "Provider", "Contract", "Consumption", "Unit",
-        "Billing month", "Paid", "Payment date", "Due date", "Period start", "Period end", "Payer", "Split", "Note", "ID",
+        labels["type"], labels["interval_months"], labels["amount"], labels["currency"], labels["provider"], labels["contract"], labels["consumption"], labels["unit"],
+        labels["billing_month"], labels["paid"], labels["payment_date"], labels["due_date"], labels["period_start"], labels["period_end"], labels["payer"], labels["split"], labels["note"], labels["id"],
     ]]
     for item in rows:
         row = expense_to_export_row(item, category_lookup.get(str(item.get("category_id", ""))), currency=currency)
         bills.append([
-            row["category"], int(row["interval_months"]), float(row["amount"]), row["currency"], row["provider"], row["contract"],
+            category_label(language, category_lookup.get(str(item.get("category_id", ""))), row["category"]), int(row["interval_months"]), float(row["amount"]), row["currency"], row["provider"], row["contract"],
             float(row["consumption"]) if row["consumption"] else None, row["consumption_unit"], row["billing_month"],
             bool(item.get("paid", False)), row["payment_date"], row["due_date"], row["period_start"], row["period_end"],
             row["payer"], row["split"], row["note"], row["id"],
         ])
-    summary = _monthly_summary(rows, month_tuple(from_month), month_tuple(to_month))
+    summary = _monthly_summary(rows, month_tuple(from_month), month_tuple(to_month), labels)
 
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -269,9 +272,11 @@ def xlsx_bytes(rows: list[dict[str, Any]], category_lookup: dict[str, dict[str, 
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
 </Relationships>''')
-        zf.writestr("xl/workbook.xml", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        sheet_bills = xml_escape(labels["sheet_bills"], quote=True)
+        sheet_summary = xml_escape(labels["sheet_summary"], quote=True)
+        zf.writestr("xl/workbook.xml", f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="Bills" sheetId="1" r:id="rId1"/><sheet name="Monthly summary" sheetId="2" r:id="rId2"/></sheets>
+<sheets><sheet name="{sheet_bills}" sheetId="1" r:id="rId1"/><sheet name="{sheet_summary}" sheetId="2" r:id="rId2"/></sheets>
 </workbook>''')
         zf.writestr("xl/_rels/workbook.xml.rels", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -338,11 +343,11 @@ def _trend_data(rows: list[dict[str, Any]], start: tuple[int, int], end: tuple[i
     return months, [paid[x] for x in months], [normalized[x] for x in months]
 
 
-def _pdf_chart(title: str, months: list[tuple[int, int]], values: list[float], *, x: float, y: float, w: float, h: float, line: bool = False, currency: str = "EUR") -> bytes:
+def _pdf_chart(title: str, months: list[tuple[int, int]], values: list[float], *, x: float, y: float, w: float, h: float, line: bool = False, currency: str = "EUR", no_data_label: str = "No data") -> bytes:
     out = bytearray()
     out.extend(_pdf_text(x, y + h + 16, title, 11, True))
     if not months:
-        out.extend(_pdf_text(x, y + h / 2, "Nessun dato nel periodo selezionato", 9))
+        out.extend(_pdf_text(x, y + h / 2, no_data_label, 9))
         return bytes(out)
     max_v = max(1.0, max(values, default=0.0) * 1.15)
     out.extend(f"0.82 G 0.5 w {x:.1f} {y:.1f} {w:.1f} {h:.1f} re S\n".encode())
@@ -445,7 +450,9 @@ def pdf_bytes(
     to_month: str | None,
     trend: str = "both",
     currency: str = "EUR",
+    language: str = "en",
 ) -> bytes:
+    labels = report_labels(language)
     now = datetime.now()
     if rows:
         data_start = min((int(x["paid_year"]), int(x["paid_month"])) for x in rows)
@@ -462,19 +469,21 @@ def pdf_bytes(
     total = sum(float(x.get("amount", 0) or 0) for x in rows)
     category_totals: dict[str, float] = defaultdict(float)
     for item in rows:
-        category_totals[str(item.get("category", "Altro"))] += float(item.get("amount", 0) or 0)
+        category = category_lookup.get(str(item.get("category_id", "")))
+        display_name = category_label(language, category, str(item.get("category", "")))
+        category_totals[display_name] += float(item.get("amount", 0) or 0)
 
     pages: list[bytes] = []
     p = bytearray()
-    p.extend(_pdf_text(42, 802, "Billy - Report bollette", 19, True))
-    p.extend(_pdf_text(42, 783, f"Periodo: {month_key(*start)} - {month_key(*end)}", 10))
-    p.extend(_pdf_text(420, 802, f"Generato: {now:%d/%m/%Y}", 8))
+    p.extend(_pdf_text(42, 802, labels["report_title"], 19, True))
+    p.extend(_pdf_text(42, 783, f"{labels['period']}: {month_key(*start)} - {month_key(*end)}", 10))
+    p.extend(_pdf_text(420, 802, f"{labels['generated']}: {now:%Y-%m-%d}", 8))
 
     stats = [
-        ("Bollette", str(len(rows))),
-        ("Totale", f"{total:.2f} {currency}"),
-        ("Pagate", f"{len(paid_rows)} / {sum(float(x.get('amount', 0) or 0) for x in paid_rows):.2f} {currency}"),
-        ("Da pagare", f"{len(unpaid_rows)} / {sum(float(x.get('amount', 0) or 0) for x in unpaid_rows):.2f} {currency}"),
+        (labels["bills"], str(len(rows))),
+        (labels["total"], f"{total:.2f} {currency}"),
+        (labels["paid"], f"{len(paid_rows)} / {sum(float(x.get('amount', 0) or 0) for x in paid_rows):.2f} {currency}"),
+        (labels["unpaid"], f"{len(unpaid_rows)} / {sum(float(x.get('amount', 0) or 0) for x in unpaid_rows):.2f} {currency}"),
     ]
     x0 = 42
     for label, value in stats:
@@ -486,14 +495,14 @@ def pdf_bytes(
     chart_y = 485
     trend = trend if trend in {"payments", "normalized", "both"} else "both"
     if trend == "both":
-        p.extend(_pdf_chart("Andamento pagamenti", months, paid_values, x=42, y=chart_y, w=245, h=165, line=False, currency=currency))
-        p.extend(_pdf_chart("Costo mensile normalizzato", months, normalized_values, x=308, y=chart_y, w=245, h=165, line=True, currency=currency))
+        p.extend(_pdf_chart(labels["payments_trend"], months, paid_values, x=42, y=chart_y, w=245, h=165, line=False, currency=currency, no_data_label=labels["no_data"]))
+        p.extend(_pdf_chart(labels["normalized_cost"], months, normalized_values, x=308, y=chart_y, w=245, h=165, line=True, currency=currency, no_data_label=labels["no_data"]))
     elif trend == "payments":
-        p.extend(_pdf_chart("Andamento pagamenti", months, paid_values, x=42, y=chart_y, w=511, h=165, line=False, currency=currency))
+        p.extend(_pdf_chart(labels["payments_trend"], months, paid_values, x=42, y=chart_y, w=511, h=165, line=False, currency=currency, no_data_label=labels["no_data"]))
     else:
-        p.extend(_pdf_chart("Costo mensile normalizzato", months, normalized_values, x=42, y=chart_y, w=511, h=165, line=True, currency=currency))
+        p.extend(_pdf_chart(labels["normalized_cost"], months, normalized_values, x=42, y=chart_y, w=511, h=165, line=True, currency=currency, no_data_label=labels["no_data"]))
 
-    p.extend(_pdf_text(42, 438, "Totali per tipo", 12, True))
+    p.extend(_pdf_text(42, 438, labels["totals_by_type"], 12, True))
     y = 418
     for name, amount in sorted(category_totals.items(), key=lambda x: x[1], reverse=True)[:12]:
         p.extend(_pdf_text(50, y, str(name)[:42], 9))
@@ -501,7 +510,7 @@ def pdf_bytes(
         y -= 17
         if y < 210:
             break
-    p.extend(_pdf_text(42, 190, "Il report usa il mese bolletta per il filtro temporale. Il costo normalizzato distribuisce l'importo sul periodo di competenza.", 7))
+    p.extend(_pdf_text(42, 190, labels["report_note"], 7))
     pages.append(bytes(p))
 
     # Detail pages.
@@ -510,9 +519,9 @@ def pdf_bytes(
     for offset in range(0, len(detail_rows), per_page):
         chunk = detail_rows[offset:offset + per_page]
         page = bytearray()
-        page.extend(_pdf_text(42, 802, "Dettaglio bollette", 15, True))
+        page.extend(_pdf_text(42, 802, labels["bill_details"], 15, True))
         page.extend(_pdf_text(455, 802, f"{offset+1}-{offset+len(chunk)} / {len(detail_rows)}", 8))
-        headers = [(42, "Mese"), (92, "Tipo"), (260, "Importo"), (325, "Stato"), (385, "Scadenza"), (465, "Pagamento")]
+        headers = [(42, labels["month"]), (92, labels["type"]), (260, labels["amount"]), (325, labels["status"]), (385, labels["due_date"]), (465, labels["payment_date"])]
         page.extend(_pdf_rect(38, 764, 520, 24, fill=0.94, stroke=0.3))
         for hx, label in headers:
             page.extend(_pdf_text(hx, 773, label, 8, True))
@@ -520,9 +529,9 @@ def pdf_bytes(
         for item in chunk:
             page.extend(f"0.88 G 0.35 w 38 {yy-5:.1f} m 558 {yy-5:.1f} l S\n".encode())
             page.extend(_pdf_text(42, yy, month_key(int(item["paid_year"]), int(item["paid_month"])), 8))
-            page.extend(_pdf_text(92, yy, str(item.get("category", ""))[:27], 8))
+            page.extend(_pdf_text(92, yy, category_label(language, category_lookup.get(str(item.get("category_id", ""))), str(item.get("category", "")))[:27], 8))
             page.extend(_pdf_text(260, yy, f"{float(item.get('amount', 0) or 0):.2f} {currency}", 8))
-            page.extend(_pdf_text(325, yy, "Pagata" if bool(item.get("paid", False)) else "Da pagare", 8))
+            page.extend(_pdf_text(325, yy, labels["paid"] if bool(item.get("paid", False)) else labels["unpaid"], 8))
             page.extend(_pdf_text(385, yy, str(item.get("due_date") or "-"), 8))
             page.extend(_pdf_text(465, yy, str(item.get("payment_date") or "-"), 8))
             meta = []
@@ -531,7 +540,7 @@ def pdf_bytes(
             if provider or contract:
                 meta.append(" / ".join(x for x in (provider, contract) if x))
             if item.get("consumption") is not None and item.get("consumption_unit"):
-                meta.append(f"consumo {float(item.get('consumption') or 0):g} {item.get('consumption_unit')}")
+                meta.append(f"{labels['consumption']}: {float(item.get('consumption') or 0):g} {item.get('consumption_unit')}")
             note = str(item.get("note") or "").strip()
             if note:
                 meta.append(note)

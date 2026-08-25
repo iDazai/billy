@@ -1,0 +1,121 @@
+{
+  "title": "Bill Tracker",
+  "config": {
+    "abort": {
+      "already_configured": "Bill Tracker est déjà configuré."
+    },
+    "step": {
+      "user": {
+        "title": "Bill Tracker",
+        "description": "Créez la base locale des factures et activez la carte du tableau de bord."
+      }
+    }
+  },
+  "options": {
+    "abort": {
+      "not_setup": "Bill Tracker n’est pas chargé. Redémarrez Home Assistant et réessayez.",
+      "category_not_found": "Le type de facture sélectionné n’existe plus.",
+      "payer_not_found": "Le payeur sélectionné n’existe plus."
+    },
+    "error": {
+      "invalid_category": "Vérifiez les données du type de facture. Le nom, la périodicité, le payeur par défaut ou la couleur peuvent être invalides.",
+      "category_in_use": "Ce type de facture possède un historique et ne peut pas être supprimé. Désactivez-le plutôt.",
+      "invalid_payer": "Vérifiez le nom et la part par défaut. Un payeur portant ce nom existe peut-être déjà.",
+      "payer_in_use": "Ce payeur est référencé par des factures, des valeurs par défaut ou des règlements. Désactivez-le plutôt."
+    },
+    "step": {
+      "init": {
+        "title": "Paramètres de Bill Tracker",
+        "menu_options": {
+          "add_payer": "Ajouter un payeur",
+          "manage_payer": "Gérer les payeurs",
+          "add_category": "Ajouter un type de facture",
+          "manage_category": "Gérer les types de facture",
+          "done": "Terminé",
+          "support": "Soutenir Billy"
+        }
+      },
+      "add_payer": {
+        "title": "Ajouter un payeur",
+        "description": "La part par défaut sert de poids lorsque Billy répartit automatiquement une facture entre les payeurs actifs.",
+        "data": {
+          "name": "Nom",
+          "share_percent": "Part par défaut (%)",
+          "paypal_me": "Identifiant ou lien PayPal.Me",
+          "enabled": "Utiliser pour les nouvelles factures"
+        }
+      },
+      "manage_payer": {
+        "title": "Gérer un payeur",
+        "data": {
+          "payer_id": "Payeur",
+          "action": "Action"
+        }
+      },
+      "edit_payer": {
+        "title": "Modifier le payeur",
+        "description": "Désactiver un payeur conserve tout l’historique mais le retire des nouvelles répartitions automatiques.",
+        "data": {
+          "name": "Nom",
+          "share_percent": "Part par défaut (%)",
+          "paypal_me": "Identifiant ou lien PayPal.Me",
+          "enabled": "Utiliser pour les nouvelles factures"
+        }
+      },
+      "delete_payer": {
+        "title": "Supprimer {name}",
+        "description": "Seul un payeur qui n’a jamais été référencé peut être supprimé."
+      },
+      "add_category": {
+        "title": "Ajouter un type de facture",
+        "description": "Choisissez la périodicité, le payeur par défaut, la couleur du graphique et une unité de consommation facultative. La consommation permet à Billy de comparer les changements de fournisseur/contrat via le coût par unité.",
+        "data": {
+          "name": "Nom",
+          "interval_months": "Périodicité",
+          "default_payer_id": "Payeur par défaut",
+          "color": "Couleur du graphique (#RRGGBB)",
+          "enabled": "Afficher dans la liste des factures",
+          "consumption_unit": "Unité de consommation (ex. kWh, m³)",
+          "default_provider": "Fournisseur/société par défaut",
+          "default_contract": "Contrat/offre par défaut"
+        }
+      },
+      "manage_category": {
+        "title": "Gérer un type de facture",
+        "data": {
+          "category_id": "Type de facture",
+          "action": "Action"
+        }
+      },
+      "edit_category": {
+        "title": "Modifier le type de facture",
+        "description": "Le payeur par défaut est présélectionné pour les nouvelles factures. Définissez une unité comme kWh ou m³ pour activer les estimations d’économies entre contrats. Désactiver le type conserve son historique.",
+        "data": {
+          "name": "Nom",
+          "interval_months": "Périodicité",
+          "default_payer_id": "Payeur par défaut",
+          "color": "Couleur du graphique (#RRGGBB)",
+          "enabled": "Afficher dans la liste des factures",
+          "consumption_unit": "Unité de consommation (ex. kWh, m³)",
+          "default_provider": "Fournisseur/société par défaut",
+          "default_contract": "Contrat/offre par défaut"
+        }
+      },
+      "delete_category": {
+        "title": "Supprimer {name}",
+        "description": "Seuls les types de facture sans historique peuvent être supprimés."
+      },
+      "support": {
+        "title": "Soutenir Billy",
+        "description": "Si Billy vous est utile, vous pouvez [⭐ ajouter une étoile au projet sur GitHub]({project_url}) ou [☕ m’offrir un café avec PayPal.Me]({support_url}). Ces deux options sont entièrement facultatives — merci d’utiliser Billy !"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_bills": {
+        "name": "Total des factures"
+      }
+    }
+  }
+}

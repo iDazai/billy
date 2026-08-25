@@ -8,7 +8,8 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 
-from .const import DOMAIN, INTERVAL_LABELS, SUPPORTED_INTERVALS
+from .const import DOMAIN, PROJECT_URL, SUPPORT_URL, SUPPORTED_INTERVALS
+from .localization import category_label, config_label, interval_label, normalize_language
 from .manager import BillTrackerManager
 
 NO_DEFAULT_PAYER = "__none__"
@@ -42,6 +43,12 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
     def _manager(self) -> BillTrackerManager | None:
         return self.hass.data.get(DOMAIN, {}).get("manager")
 
+    def _language(self) -> str:
+        return normalize_language(getattr(self.hass.config, "language", "en"))
+
+    def _label(self, key: str) -> str:
+        return config_label(self._language(), key)
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         if self._manager() is None:
             return self.async_abort(reason="not_setup")
@@ -52,6 +59,7 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                 "manage_payer",
                 "add_category",
                 "manage_category",
+                "support",
                 "done",
             ],
         )
@@ -101,8 +109,8 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_edit_payer()
         payers = {
             str(item["id"]): (
-                f"{item['name']} — quota {float(item.get('share_percent', 0)):g}%"
-                + ("" if item.get("enabled", True) else " — disattivato")
+                f"{item['name']} — {self._label('share')} {float(item.get('share_percent', 0)):g}%"
+                + ("" if item.get("enabled", True) else f" — {self._label('disabled')}")
             )
             for item in manager.payers
         }
@@ -112,7 +120,7 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required("payer_id"): vol.In(payers),
                     vol.Required("action", default="edit"): vol.In(
-                        {"edit": "Modifica", "delete": "Elimina"}
+                        {"edit": self._label("edit"), "delete": self._label("delete")}
                     ),
                 }
             ),
@@ -179,11 +187,11 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
     # Categories
     # ------------------------------------------------------------------
     def _category_schema(self, manager: BillTrackerManager, item: dict[str, Any] | None = None):
-        interval_choices = {str(value): INTERVAL_LABELS[value] for value in SUPPORTED_INTERVALS}
+        interval_choices = {str(value): interval_label(self._language(), value) for value in SUPPORTED_INTERVALS}
         # Home Assistant option selectors do not reliably preserve an empty-string
         # option. Use an explicit sentinel so "no default payer" is always
         # selectable, and expose every configured payer (disabled ones are tagged).
-        payer_choices = {NO_DEFAULT_PAYER: "Nessuno"}
+        payer_choices = {NO_DEFAULT_PAYER: self._label("none")}
         payer_choices.update(
             {str(p["id"]): str(p["name"]) for p in manager.payers if p.get("enabled", True)}
         )
@@ -192,7 +200,7 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
             if selected:
                 payer_choices.setdefault(
                     str(selected["id"]),
-                    f"{selected['name']}{'' if selected.get('enabled', True) else ' — disattivato'}",
+                    f"{selected['name']}{'' if selected.get('enabled', True) else f' — {self._label("disabled")}'}",
                 )
         return vol.Schema(
             {
@@ -271,8 +279,8 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_edit_category()
         categories = {
             str(item["id"]): (
-                f"{item['name']} — {INTERVAL_LABELS.get(int(item['interval_months']), str(item['interval_months']))}"
-                + ("" if item.get("enabled", True) else " — disattivata")
+                f"{category_label(self._language(), item)} — {interval_label(self._language(), int(item['interval_months']))}"
+                + ("" if item.get("enabled", True) else f" — {self._label('disabled')}")
             )
             for item in manager.categories
         }
@@ -282,7 +290,7 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required("category_id"): vol.In(categories),
                     vol.Required("action", default="edit"): vol.In(
-                        {"edit": "Modifica", "delete": "Elimina"}
+                        {"edit": self._label("edit"), "delete": self._label("delete")}
                     ),
                 }
             ),
@@ -345,6 +353,19 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema({}),
             errors=errors,
             description_placeholders={"name": str(item["name"])},
+        )
+
+    async def async_step_support(self, user_input: dict[str, Any] | None = None):
+        """Show optional ways to support Billy."""
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="support",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "project_url": PROJECT_URL,
+                "support_url": SUPPORT_URL,
+            },
         )
 
     async def async_step_done(self, user_input: dict[str, Any] | None = None):

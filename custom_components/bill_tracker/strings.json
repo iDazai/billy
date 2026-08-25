@@ -31,7 +31,8 @@
           "manage_payer": "Manage payers",
           "add_category": "Add bill type",
           "manage_category": "Manage bill types",
-          "done": "Done"
+          "done": "Done",
+          "support": "Support Billy"
         }
       },
       "add_payer": {
@@ -103,6 +104,17 @@
       "delete_category": {
         "title": "Delete {name}",
         "description": "Only bill types with no history can be deleted."
+      },
+      "support": {
+        "title": "Support Billy",
+        "description": "If Billy is useful to you, you can [⭐ star the project on GitHub]({project_url}) or [☕ buy me a coffee with PayPal.Me]({support_url}). Both are completely optional — thanks for using Billy!"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_bills": {
+        "name": "Total bills"
       }
     }
   }

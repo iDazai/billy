@@ -26,8 +26,10 @@ PLATFORMS = ["sensor"]
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 FRONTEND_PATH = FRONTEND_DIR / "bill-tracker-card.js"
 FRONTEND_IMPL_PATH = FRONTEND_DIR / "bill-tracker-card-impl.js"
+FRONTEND_I18N_PATH = FRONTEND_DIR / "bill-tracker-i18n.js"
 FRONTEND_URL = "/bill_tracker/bill-tracker-card.js"
 FRONTEND_IMPL_URL = "/bill_tracker/bill-tracker-card-impl.js"
+FRONTEND_I18N_URL = "/bill_tracker/bill-tracker-i18n.js"
 FRONTEND_MODULE_URL = f"{FRONTEND_URL}?v={FRONTEND_VERSION}"
 
 
@@ -115,6 +117,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         [
             StaticPathConfig(FRONTEND_URL, str(FRONTEND_PATH), False),
             StaticPathConfig(FRONTEND_IMPL_URL, str(FRONTEND_IMPL_PATH), False),
+            StaticPathConfig(FRONTEND_I18N_URL, str(FRONTEND_I18N_PATH), False),
         ]
     )
 
@@ -484,6 +487,7 @@ async def ws_import_csv(hass, connection, msg):
         vol.Optional("status", default="all"): vol.In(("all", "paid", "unpaid")),
         vol.Optional("category_id", default="all"): str,
         vol.Optional("trend", default="both"): vol.In(("payments", "normalized", "both")),
+        vol.Optional("language", default="en"): str,
     }
 )
 @websocket_api.async_response
@@ -496,6 +500,7 @@ async def ws_export(hass, connection, msg):
             status=msg["status"],
             category_id=msg.get("category_id") or "all",
             trend=msg["trend"],
+            language=msg.get("language", "en"),
         )
     except (ValueError, RuntimeError) as err:
         connection.send_error(msg["id"], "export_failed", str(err))

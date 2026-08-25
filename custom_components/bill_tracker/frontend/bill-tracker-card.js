@@ -1,4 +1,4 @@
-const BILLY_FRONTEND_VERSION = "0.5.0";
+const BILLY_FRONTEND_VERSION = "0.5.1";
 const BILLY_IMPL_URL = `/bill_tracker/bill-tracker-card-impl.js?v=${BILLY_FRONTEND_VERSION}`;
 
 let billyImplementationPromise = null;
@@ -26,7 +26,7 @@ class BillyCardHost extends HTMLElement {
 
   static getStubConfig() {
     return {
-      title: "Bollette di casa",
+      title: "",
       columns: "full",
       history_months: 12,
       forecast_months: 12,

@@ -30,6 +30,16 @@ Billy is a HACS custom integration for keeping a persistent history of household
   <img src="docs/images/edit-bill.png" alt="Billy edit bill modal with payer and split configuration" width="820">
 </p>
 
+## v0.5.1 — Localization
+
+Billy now follows the language selected in Home Assistant. The dashboard card, visual editor, bill forms, filters, settings/options flows, built-in bill type labels, recurrence labels, import/export interface, entity name and generated Excel/PDF reports are localized.
+
+Supported languages: **English, Italian, Spanish, French, German and Portuguese**. Unsupported languages fall back to English. User-created bill types, payer names, providers, contracts and notes are always preserved exactly as entered.
+
+## Support Billy
+
+If Billy is useful to you, the integration settings include an optional **Support Billy** page where you can [⭐ star the project on GitHub](https://github.com/robin994/billy) or [☕ buy me a coffee with PayPal.Me](https://paypal.me/rtortora94). Both are completely optional.
+
 ## v0.5.0 features
 
 - New **Import / Export** dialog with CSV import, CSV/Excel export and PDF reports.

@@ -31,7 +31,8 @@
           "manage_payer": "Gestisci paganti",
           "add_category": "Aggiungi tipo di bolletta",
           "manage_category": "Gestisci tipi di bolletta",
-          "done": "Fine"
+          "done": "Fine",
+          "support": "Supporta Billy"
         }
       },
       "add_payer": {
@@ -103,6 +104,17 @@
       "delete_category": {
         "title": "Elimina {name}",
         "description": "Puoi eliminare solo tipi di bolletta senza storico."
+      },
+      "support": {
+        "title": "Supporta Billy",
+        "description": "Se Billy ti è utile, puoi [⭐ lasciare una stella al progetto su GitHub]({project_url}) oppure [☕ offrirmi un caffè con PayPal.Me]({support_url}). Entrambe le cose sono completamente facoltative — grazie per usare Billy!"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_bills": {
+        "name": "Totale bollette"
       }
     }
   }

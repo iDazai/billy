@@ -1,4 +1,6 @@
-const BILL_TRACKER_VERSION = "0.5.0";
+import { billyCategoryLabel, billyLanguage, billyLocale, billyT } from "./bill-tracker-i18n.js?v=0.5.1";
+
+const BILL_TRACKER_VERSION = "0.5.1";
 
 class BillTrackerCard extends HTMLElement {
   constructor() {
@@ -38,7 +40,7 @@ class BillTrackerCard extends HTMLElement {
 
   static getStubConfig() {
     return {
-      title: "Bollette di casa",
+      title: "",
       columns: "full",
       history_months: 12,
       forecast_months: 12,
@@ -55,7 +57,7 @@ class BillTrackerCard extends HTMLElement {
       ? "full"
       : Math.max(1, Math.min(12, Number(rawColumns || 12)));
     this._config = {
-      title: config.title || "Bollette di casa",
+      title: config.title || "",
       columns,
       history_months: Math.max(3, Math.min(36, Number(config.history_months ?? 12))),
       forecast_months: Math.max(1, Math.min(24, Number(config.forecast_months ?? 12))),
@@ -120,26 +122,42 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
+  _language() {
+    return billyLanguage(this._hass);
+  }
+
+  _locale() {
+    return billyLocale(this._hass);
+  }
+
+  _t(key, vars = {}) {
+    return billyT(this._hass, key, vars);
+  }
+
+  _categoryLabel(category) {
+    return billyCategoryLabel(this._hass, category);
+  }
+
+  _expenseCategoryLabel(item) {
+    const category = this._categoryById(item?.category_id);
+    return category ? this._categoryLabel(category) : String(item?.category || "");
+  }
+
   _monthNames() {
-    return [
-      "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
-      "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
-    ];
+    const formatter = new Intl.DateTimeFormat(this._locale(), { month: "long" });
+    return Array.from({ length: 12 }, (_, index) => formatter.format(new Date(2026, index, 1)));
   }
 
   _monthShort() {
-    return ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
+    const formatter = new Intl.DateTimeFormat(this._locale(), { month: "short" });
+    return Array.from({ length: 12 }, (_, index) => formatter.format(new Date(2026, index, 1)).replace(/\.$/, ""));
   }
 
   _intervalLabel(months) {
-    return ({
-      1: "Mensile",
-      2: "Bimestrale",
-      3: "Trimestrale",
-      4: "Quadrimestrale",
-      6: "Semestrale",
-      12: "Annuale",
-    })[Number(months)] || `Ogni ${months} mesi`;
+    const count = Number(months);
+    const key = `interval.${count}`;
+    const translated = this._t(key);
+    return translated === key ? this._t("interval.other", { count }) : translated;
   }
 
   _defaultDate() {
@@ -149,7 +167,7 @@ class BillTrackerCard extends HTMLElement {
 
   _money(value) {
     const currency = this._data?.currency || this._hass?.config?.currency || "EUR";
-    const locale = this._hass?.locale?.language || navigator.language || "en-US";
+    const locale = this._locale();
     try {
       return new Intl.NumberFormat(locale, { style: "currency", currency }).format(Number(value || 0));
     } catch (_err) {
@@ -159,7 +177,7 @@ class BillTrackerCard extends HTMLElement {
 
   _compactMoney(value) {
     const currency = this._data?.currency || this._hass?.config?.currency || "EUR";
-    const locale = this._hass?.locale?.language || navigator.language || "en-US";
+    const locale = this._locale();
     try {
       return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 0 }).format(Number(value || 0));
     } catch (_err) {
@@ -170,7 +188,7 @@ class BillTrackerCard extends HTMLElement {
   _unitPrice(value, unit) {
     const currency = this._data?.currency || this._hass?.config?.currency || "EUR";
     const number = Number(value || 0);
-    return `${number.toLocaleString(this._hass?.locale?.language || navigator.language || "en-US", { maximumFractionDigits: 6 })} ${currency}/${unit}`;
+    return `${number.toLocaleString(this._locale(), { maximumFractionDigits: 6 })} ${currency}/${unit}`;
   }
 
   _usageText(item) {
@@ -179,7 +197,7 @@ class BillTrackerCard extends HTMLElement {
     const contract = String(item?.contract || "").trim();
     if (provider || contract) parts.push([provider, contract].filter(Boolean).join(" · "));
     if (item?.consumption !== null && item?.consumption !== undefined && item?.consumption_unit) {
-      parts.push(`Consumo: ${Number(item.consumption).toLocaleString(this._hass?.locale?.language || navigator.language || "en-US", { maximumFractionDigits: 4 })} ${item.consumption_unit}`);
+      parts.push(this._t("consumption_value", { value: Number(item.consumption).toLocaleString(this._locale(), { maximumFractionDigits: 4 }), unit: item.consumption_unit }));
     }
     return parts.join(" · ");
   }
@@ -190,13 +208,13 @@ class BillTrackerCard extends HTMLElement {
     const [year, month, day] = text.split("-").map(Number);
     const parsed = new Date(year, month - 1, day);
     if (Number.isNaN(parsed.getTime())) return text;
-    return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }).format(parsed);
+    return new Intl.DateTimeFormat(this._locale(), { day: "2-digit", month: "2-digit", year: "numeric" }).format(parsed);
   }
 
   _expenseDatesText(item) {
     const parts = [];
-    if (item?.due_date) parts.push(`Scadenza: ${this._formatDate(item.due_date)}`);
-    if (item?.payment_date) parts.push(`Pagamento: ${this._formatDate(item.payment_date)}`);
+    if (item?.due_date) parts.push(this._t("due_date", { date: this._formatDate(item.due_date) }));
+    if (item?.payment_date) parts.push(this._t("payment_date", { date: this._formatDate(item.payment_date) }));
     return parts.join(" · ");
   }
 
@@ -234,13 +252,13 @@ class BillTrackerCard extends HTMLElement {
 
   _activeCategories() {
     return (this._data?.active_categories || []).slice().sort((a, b) =>
-      String(a.name).localeCompare(String(b.name), "it")
+      this._categoryLabel(a).localeCompare(this._categoryLabel(b), this._locale())
     );
   }
 
   _activePayers() {
     return (this._data?.active_payers || []).slice().sort((a, b) =>
-      String(a.name).localeCompare(String(b.name), "it")
+      String(a.name || "").localeCompare(String(b.name || ""), this._locale())
     );
   }
 
@@ -270,7 +288,7 @@ class BillTrackerCard extends HTMLElement {
     const forecast = (forecastSource || []).slice(0, this._config.forecast_months);
 
     if (!actual.length) {
-      return '<div class="empty-chart">Inserisci almeno una bolletta per visualizzare andamento e previsione.</div>';
+      return `<div class="empty-chart">${this._escape(this._t("empty_chart"))}</div>`;
     }
 
     const rows = [
@@ -351,7 +369,7 @@ class BillTrackerCard extends HTMLElement {
       : "";
 
     return `<div class="chart-scroll">
-      <svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafico stacked delle bollette reali e previste">
+      <svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${this._escape(this._t("chart_aria"))}">
         ${grid}
         ${bars}
         ${divider}
@@ -372,9 +390,9 @@ class BillTrackerCard extends HTMLElement {
     }
     const categoryLegend = [...used].map((name) => {
       const category = this._categoryByName(name);
-      return `<span><i class="legend-square" style="background:${this._safeColor(category?.color)}"></i>${this._escape(name)}</span>`;
+      return `<span><i class="legend-square" style="background:${this._safeColor(category?.color)}"></i>${this._escape(category ? this._categoryLabel(category) : name)}</span>`;
     }).join("");
-    return `${categoryLegend}<span><i class="legend-line"></i>Stima totale</span>`;
+    return `${categoryLegend}<span><i class="legend-line"></i>${this._escape(this._t("forecast_total"))}</span>`;
   }
 
   _periodText(item) {
@@ -390,7 +408,7 @@ class BillTrackerCard extends HTMLElement {
 
   _splitText(item) {
     const parts = (item.split || []).filter((x) => Number(x.percentage) > 0);
-    if (!parts.length) return "Non divisa";
+    if (!parts.length) return this._t("not_split");
     return parts.map((x) => `${x.name} ${Number(x.percentage).toFixed(Number(x.percentage) % 1 ? 1 : 0)}%`).join(" · ");
   }
 
@@ -438,19 +456,19 @@ class BillTrackerCard extends HTMLElement {
   _renderDebts() {
     const payers = this._data?.payers || [];
     if (payers.length < 2) {
-      return `<div class="settle-empty">Configura almeno due paganti nelle impostazioni per usare la divisione delle spese.</div>`;
+      return `<div class="settle-empty">${this._escape(this._t("configure_two_payers"))}</div>`;
     }
     const debts = this._data?.debts || [];
     if (!debts.length) {
-      return `<div class="settle-empty ok">✓ Nessun saldo da regolare</div>`;
+      return `<div class="settle-empty ok">✓ ${this._escape(this._t("no_balance"))}</div>`;
     }
     return `<div class="debt-list">${debts.map((debt) => `
       <div class="debt-row">
-        <div><strong>${this._escape(debt.from_name)} → ${this._escape(debt.to_name)}</strong><span>Saldo da regolare · ${Number(debt.expense_count || 0)} ${Number(debt.expense_count || 0) === 1 ? "bolletta" : "bollette"} non pagate</span></div>
+        <div><strong>${this._escape(debt.from_name)} → ${this._escape(debt.to_name)}</strong><span>${this._escape(this._t("balance_to_settle", { count: Number(debt.expense_count || 0), bills: this._t(Number(debt.expense_count || 0) === 1 ? "bill_singular" : "bill_plural") }))}</span></div>
         <b>${this._money(debt.amount)}</b>
         <div class="debt-actions">
-          ${debt.paypal_url ? `<a class="paypal" href="${this._escape(debt.paypal_url)}" target="_blank" rel="noopener noreferrer">Paga con PayPal</a>` : `<button class="secondary small" type="button" disabled title="Aggiungi il PayPal.Me del creditore nelle impostazioni">PayPal.Me non configurato</button>`}
-          <button class="primary small settle" type="button" data-from="${this._escape(debt.from_payer_id)}" data-to="${this._escape(debt.to_payer_id)}" data-amount="${Number(debt.amount)}" data-count="${Number(debt.expense_count || 0)}">Segna saldato</button>
+          ${debt.paypal_url ? `<a class="paypal" href="${this._escape(debt.paypal_url)}" target="_blank" rel="noopener noreferrer">${this._escape(this._t("pay_with_paypal"))}</a>` : `<button class="secondary small" type="button" disabled title="${this._escape(this._t("paypal_missing_hint"))}">${this._escape(this._t("paypal_missing"))}</button>`}
+          <button class="primary small settle" type="button" data-from="${this._escape(debt.from_payer_id)}" data-to="${this._escape(debt.to_payer_id)}" data-amount="${Number(debt.amount)}" data-count="${Number(debt.expense_count || 0)}">${this._escape(this._t("mark_settled"))}</button>
         </div>
       </div>`).join("")}</div>`;
   }
@@ -458,7 +476,7 @@ class BillTrackerCard extends HTMLElement {
   _render() {
     if (!this.shadowRoot) return;
     if (!this._data) {
-      this.shadowRoot.innerHTML = `<ha-card><div style="padding:20px">${this._loading ? "Caricamento Billy…" : this._escape(this._error || "Bill Tracker non ancora disponibile")}</div></ha-card>`;
+      this.shadowRoot.innerHTML = `<ha-card><div style="padding:20px">${this._loading ? this._escape(this._t("loading")) : this._escape(this._error || this._t("not_available"))}</div></ha-card>`;
       return;
     }
 
@@ -488,7 +506,7 @@ class BillTrackerCard extends HTMLElement {
     const currentMonthExpenses = allExpenses.filter(
       (x) => Number(x.paid_year) === now.year && Number(x.paid_month) === now.month
     );
-    const allBillCategories = (this._data.categories || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name), "it"));
+    const allBillCategories = (this._data.categories || []).slice().sort((a, b) => this._categoryLabel(a).localeCompare(this._categoryLabel(b), this._locale()));
     const allBillYears = this._allBillsYears(allExpenses);
     const filteredAllExpenses = this._filterAllBills(allExpenses);
     const totalAllBillPages = Math.max(1, Math.ceil(filteredAllExpenses.length / this._allBillsPageSize));
@@ -503,36 +521,36 @@ class BillTrackerCard extends HTMLElement {
     const selectedConsumptionUnit = String(selectedCategory?.consumption_unit || "");
 
     const expenseFormHtml = `<form id="expense-form">
-          <label>Tipo
+          <label>${this._escape(this._t("type"))}
             <select id="category" required>
-              ${activeCategories.map((c) => `<option value="${this._escape(c.id)}" ${c.id === selectedCategoryId ? "selected" : ""}>${this._escape(c.name)} · ${this._escape(this._intervalLabel(c.interval_months))}</option>`).join("")}
-              ${editing && selectedCategory && !selectedCategory.enabled ? `<option value="${this._escape(selectedCategory.id)}" selected>${this._escape(selectedCategory.name)} · disattivata</option>` : ""}
+              ${activeCategories.map((c) => `<option value="${this._escape(c.id)}" ${c.id === selectedCategoryId ? "selected" : ""}>${this._escape(this._categoryLabel(c))} · ${this._escape(this._intervalLabel(c.interval_months))}</option>`).join("")}
+              ${editing && selectedCategory && !selectedCategory.enabled ? `<option value="${this._escape(selectedCategory.id)}" selected>${this._escape(this._categoryLabel(selectedCategory))} · ${this._escape(this._t("disabled_type"))}</option>` : ""}
             </select>
           </label>
-          <label>Mese pagamento<input id="paid-month" type="month" required value="${this._escape(selectedPaid)}"></label>
-          <label>Importo (${this._escape(currency)})<input id="amount" type="number" min="0" step="0.01" inputmode="decimal" required value="${editing ? this._escape(editing.amount) : ""}" placeholder="0,00"></label>
-          <label>Fornitore / compagnia (opzionale)<input id="provider" type="text" maxlength="100" value="${editing ? this._escape(editing.provider || "") : this._escape(selectedCategory?.default_provider || "")}" placeholder="Es. Enel Energia"></label>
-          <label>Contratto / offerta (opzionale)<input id="contract" type="text" maxlength="100" value="${editing ? this._escape(editing.contract || "") : this._escape(selectedCategory?.default_contract || "")}" placeholder="Es. Flex Luce"></label>
-          <label id="consumption-label">Consumo${selectedConsumptionUnit ? ` (${this._escape(selectedConsumptionUnit)})` : " (unità non configurata)"}<input id="consumption" type="number" min="0" step="any" inputmode="decimal" ${selectedConsumptionUnit ? "" : "disabled"} value="${editing?.consumption !== null && editing?.consumption !== undefined ? this._escape(editing.consumption) : ""}" placeholder="${selectedConsumptionUnit ? "0" : "Configura l'unità nel tipo bolletta"}"></label>
-          <label class="paid-check"><input id="paid-status" type="checkbox" ${editing?.paid ? "checked" : ""}><div><strong>Bolletta pagata</strong><span>Attiva il check solo quando la bolletta è stata effettivamente saldata.</span></div></label>
-          <label>Data pagamento (opzionale)<input id="payment-date" type="date" value="${editing?.payment_date ? this._escape(editing.payment_date) : ""}"></label>
-          <label>Scadenza (opzionale)<input id="due-date" type="date" value="${editing?.due_date ? this._escape(editing.due_date) : ""}"></label>
-          ${formPayers.length ? `<label>Pagata da
+          <label>${this._escape(this._t("payment_month"))}<input id="paid-month" type="month" required value="${this._escape(selectedPaid)}"></label>
+          <label>${this._escape(this._t("amount", { currency }))}<input id="amount" type="number" min="0" step="0.01" inputmode="decimal" required value="${editing ? this._escape(editing.amount) : ""}" placeholder="0,00"></label>
+          <label>${this._escape(this._t("provider_optional"))}<input id="provider" type="text" maxlength="100" value="${editing ? this._escape(editing.provider || "") : this._escape(selectedCategory?.default_provider || "")}" placeholder="${this._escape(this._t("provider_placeholder"))}"></label>
+          <label>${this._escape(this._t("contract_optional"))}<input id="contract" type="text" maxlength="100" value="${editing ? this._escape(editing.contract || "") : this._escape(selectedCategory?.default_contract || "")}" placeholder="${this._escape(this._t("contract_placeholder"))}"></label>
+          <label id="consumption-label">${this._escape(this._t("consumption"))}${selectedConsumptionUnit ? ` (${this._escape(selectedConsumptionUnit)})` : ` (${this._escape(this._t("unit_not_configured"))})`}<input id="consumption" type="number" min="0" step="any" inputmode="decimal" ${selectedConsumptionUnit ? "" : "disabled"} value="${editing?.consumption !== null && editing?.consumption !== undefined ? this._escape(editing.consumption) : ""}" placeholder="${selectedConsumptionUnit ? "0" : this._escape(this._t("configure_unit"))}"></label>
+          <label class="paid-check"><input id="paid-status" type="checkbox" ${editing?.paid ? "checked" : ""}><div><strong>${this._escape(this._t("paid_checkbox"))}</strong><span>${this._escape(this._t("paid_checkbox_help"))}</span></div></label>
+          <label>${this._escape(this._t("payment_date_optional"))}<input id="payment-date" type="date" value="${editing?.payment_date ? this._escape(editing.payment_date) : ""}"></label>
+          <label>${this._escape(this._t("due_date_optional"))}<input id="due-date" type="date" value="${editing?.due_date ? this._escape(editing.due_date) : ""}"></label>
+          ${formPayers.length ? `<label>${this._escape(this._t("paid_by"))}
             <select id="payer" required>
-              ${formPayers.map((p) => `<option value="${this._escape(p.id)}" ${p.id === defaultPayerId ? "selected" : ""}>${this._escape(p.name)}${p.enabled ? "" : " · disattivato"}</option>`).join("")}
+              ${formPayers.map((p) => `<option value="${this._escape(p.id)}" ${p.id === defaultPayerId ? "selected" : ""}>${this._escape(p.name)}${p.enabled ? "" : ` · ${this._escape(this._t("disabled"))}`}</option>`).join("")}
             </select>
           </label>` : ""}
-          <label>Fine competenza<input id="period-end" type="month" required value="${this._escape(defaultEnd)}"></label>
-          <label>Inizio competenza<input id="period-start" type="month" required value="${this._escape(defaultStart)}"></label>
-          <label class="wide">Nota (opzionale)<input id="note" type="text" maxlength="120" value="${editing ? this._escape(editing.note || "") : ""}" placeholder="Es. conguaglio, rata, periodo fatturato..."></label>
+          <label>${this._escape(this._t("competence_end"))}<input id="period-end" type="month" required value="${this._escape(defaultEnd)}"></label>
+          <label>${this._escape(this._t("competence_start"))}<input id="period-start" type="month" required value="${this._escape(defaultStart)}"></label>
+          <label class="wide">${this._escape(this._t("note_optional"))}<input id="note" type="text" maxlength="120" value="${editing ? this._escape(editing.note || "") : ""}" placeholder="${this._escape(this._t("note_placeholder"))}"></label>
           ${formPayers.length ? `<div class="split-box">
-            <div class="split-head"><strong>Divisione della spesa</strong><span id="split-total" class="split-total"></span></div>
+            <div class="split-head"><strong>${this._escape(this._t("expense_split"))}</strong><span id="split-total" class="split-total"></span></div>
             <div class="split-grid">
               ${formPayers.map((p) => `<label>${this._escape(p.name)} (%)<input class="split-input" data-payer="${this._escape(p.id)}" type="number" min="0" max="100" step="0.01" value="${Number(splitMap[p.id] || 0)}"></label>`).join("")}
             </div>
-          </div>` : '<div class="form-help">Nessun pagante configurato: la bolletta verrà salvata senza divisione. Puoi aggiungere i paganti dalle impostazioni.</div>'}
-          <div class="form-help">La periodicità precompila il periodo di competenza. Fornitore, contratto e consumo sono facoltativi; il consumo usa l’unità configurata nel tipo di bolletta (es. kWh o m³) e permette a Billy di stimare il risparmio dopo un cambio contratto. Data pagamento e scadenza sono facoltative. Solo le bollette NON pagate entrano nel saldo tra persone.</div>
-          <div class="buttons"><button class="secondary" id="cancel" type="button">Annulla</button><button class="primary" type="submit">${editing ? "Salva modifiche" : "Aggiungi"}</button></div>
+          </div>` : `<div class="form-help">${this._escape(this._t("no_payers"))}</div>`}
+          <div class="form-help">${this._escape(this._t("form_help"))}</div>
+          <div class="buttons"><button class="secondary" id="cancel" type="button">${this._escape(this._t("cancel"))}</button><button class="primary" type="submit">${this._escape(this._t(editing ? "save_changes" : "add"))}</button></div>
         </form>`;
 
     this.shadowRoot.innerHTML = `
@@ -677,140 +695,140 @@ class BillTrackerCard extends HTMLElement {
       </style>
       <ha-card>
         <div class="head">
-          <div class="title">${this._escape(this._config.title || "Bollette di casa")}</div>
+          <div class="title">${this._escape(this._config.title || this._t("card_title"))}</div>
           <div class="head-actions">
-            <button class="secondary" id="open-transfer" type="button">⇅ Import / Export</button>
-            <button class="secondary" id="settings" type="button">⚙ Impostazioni</button>
-            <button class="primary" id="open-form" type="button" ${activeCategories.length ? "" : "disabled"}>+ Aggiungi bolletta</button>
+            <button class="secondary" id="open-transfer" type="button">⇅ ${this._escape(this._t("import_export"))}</button>
+            <button class="secondary" id="settings" type="button">⚙ ${this._escape(this._t("settings"))}</button>
+            <button class="primary" id="open-form" type="button" ${activeCategories.length ? "" : "disabled"}>+ ${this._escape(this._t("add_bill"))}</button>
           </div>
         </div>
         <div class="stats">
-          <div class="stat"><span>Pagato questo mese</span><strong>${this._money(summary.current_month)}</strong></div>
-          <div class="stat"><span>Media pagamenti 6 mesi</span><strong>${this._money(summary.average_6_months)}</strong></div>
-          <div class="stat"><span>Stima prossimo mese</span><strong>${this._money(summary.next_month_estimate)}</strong></div>
-          <div class="stat"><span>Costo mensile normalizzato</span><strong>${this._money(summary.normalized_current_month)}</strong></div>
-          <div class="stat"><span>Bollette da pagare</span><strong>${this._money(summary.unpaid_total ?? summary.outstanding_total)}</strong></div>
+          <div class="stat"><span>${this._escape(this._t("paid_this_month"))}</span><strong>${this._money(summary.current_month)}</strong></div>
+          <div class="stat"><span>${this._escape(this._t("average_6_months"))}</span><strong>${this._money(summary.average_6_months)}</strong></div>
+          <div class="stat"><span>${this._escape(this._t("next_month_estimate"))}</span><strong>${this._money(summary.next_month_estimate)}</strong></div>
+          <div class="stat"><span>${this._escape(this._t("normalized_monthly_cost"))}</span><strong>${this._money(summary.normalized_current_month)}</strong></div>
+          <div class="stat"><span>${this._escape(this._t("bills_to_pay"))}</span><strong>${this._money(summary.unpaid_total ?? summary.outstanding_total)}</strong></div>
         </div>
-        ${!activeCategories.length ? '<div class="warning">Nessun tipo di bolletta attivo. Apri <strong>Impostazioni</strong> e abilita o aggiungi almeno una voce.</div>' : ""}
+        ${!activeCategories.length ? `<div class="warning">${this._escape(this._t("no_active_types"))}</div>` : ""}
         ${editing ? `<div class="edit-modal" id="edit-modal" role="presentation">
           <div class="edit-modal-shell" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
             <div class="edit-modal-head">
-              <div><strong id="edit-modal-title">Modifica bolletta</strong><span>${this._escape(editing.category)} · ${this._monthLabel(editing.paid_year, editing.paid_month)}</span></div>
-              <button class="secondary edit-modal-close" id="modal-close" type="button" aria-label="Chiudi modifica">×</button>
+              <div><strong id="edit-modal-title">${this._escape(this._t("edit_bill"))}</strong><span>${this._escape(this._expenseCategoryLabel(editing))} · ${this._monthLabel(editing.paid_year, editing.paid_month)}</span></div>
+              <button class="secondary edit-modal-close" id="modal-close" type="button" aria-label="${this._escape(this._t("close_edit"))}">×</button>
             </div>
             ${expenseFormHtml}
           </div>
         </div>` : (this._formOpen ? expenseFormHtml : "")}
         ${this._error ? `<div class="msg error">${this._escape(this._error)}</div>` : ""}
 
-        <div class="section"><div class="section-title">Rimborsi tra paganti</div><div class="settle-box">${this._renderDebts()}</div></div>
+        <div class="section"><div class="section-title">${this._escape(this._t("reimbursements"))}</div><div class="settle-box">${this._renderDebts()}</div></div>
 
         <div class="chart-panel">
           <div class="chart-head">
-            <div class="chart-copy"><strong>Andamento e previsione</strong><span>${this._chartMode === "cashflow" ? "Colonne colorate per tipo di spesa + prossime scadenze stimate" : "Costo distribuito sui mesi di competenza"}</span></div>
-            <div class="mode"><button type="button" data-mode="cashflow" class="${this._chartMode === "cashflow" ? "active" : ""}">Pagamenti</button><button type="button" data-mode="normalized" class="${this._chartMode === "normalized" ? "active" : ""}">Costo mensile</button></div>
+            <div class="chart-copy"><strong>${this._escape(this._t("trend_forecast"))}</strong><span>${this._escape(this._t(this._chartMode === "cashflow" ? "cashflow_help" : "normalized_help"))}</span></div>
+            <div class="mode"><button type="button" data-mode="cashflow" class="${this._chartMode === "cashflow" ? "active" : ""}">${this._escape(this._t("payments"))}</button><button type="button" data-mode="normalized" class="${this._chartMode === "normalized" ? "active" : ""}">${this._escape(this._t("monthly_cost"))}</button></div>
           </div>
           <div class="legend">${this._chartLegend()}</div>
           ${this._chart()}
         </div>
 
         <div class="section">
-          <div class="section-title">Risparmio da cambio fornitore / contratto</div>
+          <div class="section-title">${this._escape(this._t("savings_title"))}</div>
           ${contractSavings.length ? `<div class="savings-grid">${contractSavings.map((x) => {
             const saving = Number(x.estimated_savings || 0);
-            const oldLabel = [x.old_provider, x.old_contract].filter(Boolean).join(" · ") || "Contratto precedente";
-            const newLabel = [x.new_provider, x.new_contract].filter(Boolean).join(" · ") || "Contratto attuale";
+            const oldLabel = [x.old_provider, x.old_contract].filter(Boolean).join(" · ") || this._t("previous_contract");
+            const newLabel = [x.new_provider, x.new_contract].filter(Boolean).join(" · ") || this._t("current_contract");
             return `<div class="savings-card">
-              <div class="savings-card-head"><div><strong>${this._escape(x.category)}</strong><span>${this._escape(x.unit)} · ${Number(x.old_bill_count || 0)} → ${Number(x.new_bill_count || 0)} bollette con consumo</span></div><div class="savings-value ${saving >= 0 ? "positive" : "negative"}">${saving >= 0 ? "+" : ""}${this._money(saving)}</div></div>
+              <div class="savings-card-head"><div><strong>${this._escape(this._expenseCategoryLabel(x))}</strong><span>${this._escape(x.unit)} · ${this._escape(this._t("bills_with_consumption", { old: Number(x.old_bill_count || 0), new: Number(x.new_bill_count || 0) }))}</span></div><div class="savings-value ${saving >= 0 ? "positive" : "negative"}">${saving >= 0 ? "+" : ""}${this._money(saving)}</div></div>
               <div class="savings-comparison"><div><span>Prima</span><b>${this._escape(oldLabel)}</b><span>${this._escape(this._unitPrice(x.old_unit_price, x.unit))}</span></div><span>→</span><div><span>Dopo</span><b>${this._escape(newLabel)}</b><span>${this._escape(this._unitPrice(x.new_unit_price, x.unit))}</span></div></div>
-              <div class="savings-meta">Stima a consumo equivalente: ${saving >= 0 ? "risparmio" : "aumento"} ${Math.abs(Number(x.estimated_savings_percent || 0)).toFixed(1)}%. Spesa media ${this._money(x.old_avg_amount)} → ${this._money(x.new_avg_amount)}. Consumo medio ${Number(x.old_avg_consumption || 0).toLocaleString(undefined,{maximumFractionDigits:4})} → ${Number(x.new_avg_consumption || 0).toLocaleString(undefined,{maximumFractionDigits:4})} ${this._escape(x.unit)} (${Number(x.consumption_change_percent || 0) >= 0 ? "+" : ""}${Number(x.consumption_change_percent || 0).toFixed(1)}%).</div>
+              <div class="savings-meta">${this._escape(this._t("equivalent_saving", { kind: this._t(saving >= 0 ? "saving" : "increase"), percent: Math.abs(Number(x.estimated_savings_percent || 0)).toFixed(1), old_amount: this._money(x.old_avg_amount), new_amount: this._money(x.new_avg_amount), old_consumption: Number(x.old_avg_consumption || 0).toLocaleString(this._locale(),{maximumFractionDigits:4}), new_consumption: Number(x.new_avg_consumption || 0).toLocaleString(this._locale(),{maximumFractionDigits:4}), unit: x.unit, change: `${Number(x.consumption_change_percent || 0) >= 0 ? "+" : ""}${Number(x.consumption_change_percent || 0).toFixed(1)}` }))}</div>
             </div>`;
           }).join("")}</div>` : '<div class="msg">Per stimare il risparmio, inserisci fornitore/contratto e consumo nelle bollette prima e dopo un cambio. Billy confronta il costo per unità a consumo equivalente.</div>'}
         </div>
 
-        <div class="section"><div class="section-title">Prossime bollette stimate</div>
-          ${upcoming.length ? `<div class="upcoming-grid">${upcoming.map((x) => `<div class="upcoming-item"><span>${this._monthNames()[Number(x.month) - 1]} ${x.year}</span><strong><b>${this._escape(x.category)}</b><b>${this._money(x.amount)}</b></strong></div>`).join("")}</div>` : '<div class="msg">Servono bollette storiche per calcolare le prossime scadenze.</div>'}
+        <div class="section"><div class="section-title">${this._escape(this._t("upcoming_title"))}</div>
+          ${upcoming.length ? `<div class="upcoming-grid">${upcoming.map((x) => `<div class="upcoming-item"><span>${this._monthNames()[Number(x.month) - 1]} ${x.year}</span><strong><b>${this._escape(this._expenseCategoryLabel(x))}</b><b>${this._money(x.amount)}</b></strong></div>`).join("")}</div>` : `<div class="msg">${this._escape(this._t("upcoming_empty"))}</div>`}
         </div>
 
-        ${settlements.length ? `<div class="section"><div class="section-title">Rimborsi recenti</div>${settlements.map((x) => `<div class="settlement"><div><strong>${this._escape(x.from_name)} → ${this._escape(x.to_name)}</strong><span>${new Date(x.created_at).toLocaleString("it-IT")}${x.note ? ` · ${this._escape(x.note)}` : ""}</span></div><b>${this._money(x.amount)}</b><button class="icon delete-settlement" type="button" data-id="${this._escape(x.id)}" title="Annulla rimborso">×</button></div>`).join("")}</div>` : ""}
+        ${settlements.length ? `<div class="section"><div class="section-title">${this._escape(this._t("recent_settlements"))}</div>${settlements.map((x) => `<div class="settlement"><div><strong>${this._escape(x.from_name)} → ${this._escape(x.to_name)}</strong><span>${new Date(x.created_at).toLocaleString(this._locale())}${x.note ? ` · ${this._escape(x.note)}` : ""}</span></div><b>${this._money(x.amount)}</b><button class="icon delete-settlement" type="button" data-id="${this._escape(x.id)}" title="${this._escape(this._t("cancel_settlement"))}">×</button></div>`).join("")}</div>` : ""}
 
         <div class="section">
           <div class="section-head">
-            <div class="section-title">Bollette del mese · ${this._monthNames()[now.month - 1]} ${now.year} (${currentMonthExpenses.length})</div>
+            <div class="section-title">${this._escape(this._t("current_month_bills", { month: this._monthNames()[now.month - 1], year: now.year, count: currentMonthExpenses.length }))}</div>
             <div class="head-actions">
-              <button class="secondary small" id="toggle-current-bills" type="button">${this._currentMonthBillsOpen ? "Nascondi" : `Mostra (${currentMonthExpenses.length})`}</button>
-              <button class="secondary small" id="open-all-bills" type="button">Tutte le bollette (${allExpenses.length})</button>
+              <button class="secondary small" id="toggle-current-bills" type="button">${this._escape(this._currentMonthBillsOpen ? this._t("hide") : this._t("show_count", { count: currentMonthExpenses.length }))}</button>
+              <button class="secondary small" id="open-all-bills" type="button">${this._escape(this._t("all_bills_count", { count: allExpenses.length }))}</button>
             </div>
           </div>
           ${this._currentMonthBillsOpen ? `<div class="list">
             ${currentMonthExpenses.length ? currentMonthExpenses.map((x) => `<div class="row">
               <div><strong>${this._monthLabel(x.paid_year, x.paid_month)}</strong><div class="date">${this._escape(this._periodText(x))}</div></div>
-              <div><strong>${this._escape(x.category)}</strong><div class="payer-line">${x.payer ? `Pagatore: ${this._escape(x.payer)} · ` : ""}${this._escape(this._splitText(x))}</div>${this._usageText(x) ? `<div class="usage-line">${this._escape(this._usageText(x))}</div>` : ""}${this._expenseDatesText(x) ? `<div class="bill-dates">${this._escape(this._expenseDatesText(x))}</div>` : ""}${x.note ? `<div class="note">${this._escape(x.note)}</div>` : ""}</div>
-              <div class="amount"><span class="paid-status ${x.paid ? "yes" : "no"}" title="${x.paid ? "Bolletta pagata" : "Bolletta non pagata"}" aria-label="${x.paid ? "Bolletta pagata" : "Bolletta non pagata"}">✓</span> ${this._money(x.amount)}</div>
-              <div class="actions"><button class="icon edit" type="button" data-id="${this._escape(x.id)}" title="Modifica">✎</button><button class="icon delete" type="button" data-id="${this._escape(x.id)}" title="Elimina">×</button></div>
-            </div>`).join("") : '<div class="msg">Nessuna bolletta nel mese corrente.</div>'}
+              <div><strong>${this._escape(this._expenseCategoryLabel(x))}</strong><div class="payer-line">${x.payer ? this._escape(this._t("payer_prefix", { name: x.payer })) : ""}${this._escape(this._splitText(x))}</div>${this._usageText(x) ? `<div class="usage-line">${this._escape(this._usageText(x))}</div>` : ""}${this._expenseDatesText(x) ? `<div class="bill-dates">${this._escape(this._expenseDatesText(x))}</div>` : ""}${x.note ? `<div class="note">${this._escape(x.note)}</div>` : ""}</div>
+              <div class="amount"><span class="paid-status ${x.paid ? "yes" : "no"}" title="${this._escape(this._t(x.paid ? "bill_paid" : "bill_unpaid"))}" aria-label="${this._escape(this._t(x.paid ? "bill_paid" : "bill_unpaid"))}">✓</span> ${this._money(x.amount)}</div>
+              <div class="actions"><button class="icon edit" type="button" data-id="${this._escape(x.id)}" title="${this._escape(this._t("edit"))}">✎</button><button class="icon delete" type="button" data-id="${this._escape(x.id)}" title="${this._escape(this._t("delete"))}">×</button></div>
+            </div>`).join("") : `<div class="msg">${this._escape(this._t("no_current_bills"))}</div>`}
           </div>` : ""}
         </div>
         ${this._allBillsOpen ? `<div class="all-bills-modal" id="all-bills-modal" role="presentation">
           <div class="all-bills-shell" role="dialog" aria-modal="true" aria-labelledby="all-bills-title">
             <div class="all-bills-head">
-              <div><strong id="all-bills-title">Tutte le bollette</strong><span>${filteredAllExpenses.length} risultati su ${allExpenses.length}</span></div>
-              <button class="secondary edit-modal-close" id="all-bills-close" type="button" aria-label="Chiudi elenco bollette">×</button>
+              <div><strong id="all-bills-title">${this._escape(this._t("all_bills"))}</strong><span>${this._escape(this._t("results_of", { filtered: filteredAllExpenses.length, total: allExpenses.length }))}</span></div>
+              <button class="secondary edit-modal-close" id="all-bills-close" type="button" aria-label="${this._escape(this._t("close_bill_list"))}">×</button>
             </div>
             <div class="all-bills-body">
               <div class="all-bills-toolbar">
-                <label>Tipo
+                <label>${this._escape(this._t("type"))}
                   <select id="all-bills-category">
-                    <option value="all" ${this._allBillsCategory === "all" ? "selected" : ""}>Tutti i tipi</option>
-                    ${allBillCategories.map((c) => `<option value="${this._escape(c.id)}" ${c.id === this._allBillsCategory ? "selected" : ""}>${this._escape(c.name)}</option>`).join("")}
+                    <option value="all" ${this._allBillsCategory === "all" ? "selected" : ""}>${this._escape(this._t("all_types"))}</option>
+                    ${allBillCategories.map((c) => `<option value="${this._escape(c.id)}" ${c.id === this._allBillsCategory ? "selected" : ""}>${this._escape(this._categoryLabel(c))}</option>`).join("")}
                   </select>
                 </label>
-                <label>Stato
+                <label>${this._escape(this._t("status"))}
                   <select id="all-bills-status">
-                    <option value="all" ${this._allBillsStatus === "all" ? "selected" : ""}>Tutte</option>
-                    <option value="unpaid" ${this._allBillsStatus === "unpaid" ? "selected" : ""}>Da pagare</option>
-                    <option value="paid" ${this._allBillsStatus === "paid" ? "selected" : ""}>Pagate</option>
+                    <option value="all" ${this._allBillsStatus === "all" ? "selected" : ""}>${this._escape(this._t("all"))}</option>
+                    <option value="unpaid" ${this._allBillsStatus === "unpaid" ? "selected" : ""}>${this._escape(this._t("unpaid"))}</option>
+                    <option value="paid" ${this._allBillsStatus === "paid" ? "selected" : ""}>${this._escape(this._t("paid"))}</option>
                   </select>
                 </label>
-                <label>Periodo
+                <label>${this._escape(this._t("period"))}
                   <select id="all-bills-time-mode">
-                    <option value="all" ${this._allBillsTimeMode === "all" ? "selected" : ""}>Tutto lo storico</option>
-                    <option value="year" ${this._allBillsTimeMode === "year" ? "selected" : ""}>Per anno</option>
-                    <option value="range" ${this._allBillsTimeMode === "range" ? "selected" : ""}>Intervallo mesi</option>
+                    <option value="all" ${this._allBillsTimeMode === "all" ? "selected" : ""}>${this._escape(this._t("all_history"))}</option>
+                    <option value="year" ${this._allBillsTimeMode === "year" ? "selected" : ""}>${this._escape(this._t("by_year"))}</option>
+                    <option value="range" ${this._allBillsTimeMode === "range" ? "selected" : ""}>${this._escape(this._t("month_range"))}</option>
                   </select>
                 </label>
-                ${this._allBillsTimeMode === "year" ? `<label>Anno
+                ${this._allBillsTimeMode === "year" ? `<label>${this._escape(this._t("year"))}
                   <select id="all-bills-year">
-                    <option value="all" ${this._allBillsYear === "all" ? "selected" : ""}>Tutti gli anni</option>
+                    <option value="all" ${this._allBillsYear === "all" ? "selected" : ""}>${this._escape(this._t("all_years"))}</option>
                     ${allBillYears.map((year) => `<option value="${year}" ${String(year) === String(this._allBillsYear) ? "selected" : ""}>${year}</option>`).join("")}
                   </select>
                 </label>` : ""}
-                ${this._allBillsTimeMode === "range" ? `<label>Da<input id="all-bills-from" type="month" value="${this._escape(this._allBillsFrom)}"></label><label>A<input id="all-bills-to" type="month" value="${this._escape(this._allBillsTo)}"></label>` : ""}
-                <label>Per pagina
+                ${this._allBillsTimeMode === "range" ? `<label>${this._escape(this._t("from"))}<input id="all-bills-from" type="month" value="${this._escape(this._allBillsFrom)}"></label><label>${this._escape(this._t("to"))}<input id="all-bills-to" type="month" value="${this._escape(this._allBillsTo)}"></label>` : ""}
+                <label>${this._escape(this._t("per_page"))}
                   <select id="all-bills-page-size">
                     ${[10,20,50].map((size) => `<option value="${size}" ${Number(this._allBillsPageSize) === size ? "selected" : ""}>${size}</option>`).join("")}
                   </select>
                 </label>
               </div>
-              <div class="all-bills-count">${filteredAllExpenses.length ? `${allBillsStart + 1}–${Math.min(allBillsStart + this._allBillsPageSize, filteredAllExpenses.length)} di ${filteredAllExpenses.length}` : "Nessuna bolletta"}</div>
+              <div class="all-bills-count">${filteredAllExpenses.length ? this._escape(this._t("range_count", { start: allBillsStart + 1, end: Math.min(allBillsStart + this._allBillsPageSize, filteredAllExpenses.length), total: filteredAllExpenses.length })) : this._escape(this._t("no_bills"))}</div>
               <div class="all-bills-list">
                 ${pagedAllExpenses.length ? pagedAllExpenses.map((x) => `<div class="all-row">
-                  <label class="paid-toggle" title="${x.paid ? "Segna come non pagata" : "Segna come pagata"}">
-                    <input class="bill-paid-toggle" type="checkbox" data-id="${this._escape(x.id)}" ${x.paid ? "checked" : ""} aria-label="${x.paid ? "Bolletta pagata" : "Bolletta non pagata"}">
+                  <label class="paid-toggle" title="${this._escape(this._t(x.paid ? "mark_unpaid" : "mark_paid"))}">
+                    <input class="bill-paid-toggle" type="checkbox" data-id="${this._escape(x.id)}" ${x.paid ? "checked" : ""} aria-label="${this._escape(this._t(x.paid ? "bill_paid" : "bill_unpaid"))}">
                     <span class="paid-toggle-mark">✓</span>
                   </label>
                   <div class="all-date"><strong>${this._monthLabel(x.paid_year, x.paid_month)}</strong><div class="date">${this._escape(this._periodText(x))}</div></div>
-                  <div class="all-main"><strong>${this._escape(x.category)}</strong><div class="payer-line">${x.payer ? `Pagatore: ${this._escape(x.payer)} · ` : ""}${this._escape(this._splitText(x))}</div>${this._usageText(x) ? `<div class="usage-line">${this._escape(this._usageText(x))}</div>` : ""}${this._expenseDatesText(x) ? `<div class="bill-dates">${this._escape(this._expenseDatesText(x))}</div>` : ""}${x.note ? `<div class="note">${this._escape(x.note)}</div>` : ""}</div>
+                  <div class="all-main"><strong>${this._escape(this._expenseCategoryLabel(x))}</strong><div class="payer-line">${x.payer ? this._escape(this._t("payer_prefix", { name: x.payer })) : ""}${this._escape(this._splitText(x))}</div>${this._usageText(x) ? `<div class="usage-line">${this._escape(this._usageText(x))}</div>` : ""}${this._expenseDatesText(x) ? `<div class="bill-dates">${this._escape(this._expenseDatesText(x))}</div>` : ""}${x.note ? `<div class="note">${this._escape(x.note)}</div>` : ""}</div>
                   <div class="amount">${this._money(x.amount)}</div>
-                  <div class="actions"><button class="icon edit" type="button" data-id="${this._escape(x.id)}" title="Modifica">✎</button><button class="icon delete" type="button" data-id="${this._escape(x.id)}" title="Elimina">×</button></div>
-                </div>`).join("") : '<div class="msg">Nessuna bolletta per i filtri selezionati.</div>'}
+                  <div class="actions"><button class="icon edit" type="button" data-id="${this._escape(x.id)}" title="${this._escape(this._t("edit"))}">✎</button><button class="icon delete" type="button" data-id="${this._escape(x.id)}" title="${this._escape(this._t("delete"))}">×</button></div>
+                </div>`).join("") : `<div class="msg">${this._escape(this._t("no_filtered_bills"))}</div>`}
               </div>
             </div>
             <div class="all-bills-footer">
-              <span class="all-bills-count">Pagina ${this._allBillsPage} di ${totalAllBillPages}</span>
+              <span class="all-bills-count">${this._escape(this._t("page_of", { page: this._allBillsPage, pages: totalAllBillPages }))}</span>
               <div class="pagination">
-                <button class="secondary small all-bills-page" type="button" data-page="${this._allBillsPage - 1}" ${this._allBillsPage <= 1 ? "disabled" : ""}>← Precedente</button>
-                <button class="secondary small all-bills-page" type="button" data-page="${this._allBillsPage + 1}" ${this._allBillsPage >= totalAllBillPages ? "disabled" : ""}>Successiva →</button>
+                <button class="secondary small all-bills-page" type="button" data-page="${this._allBillsPage - 1}" ${this._allBillsPage <= 1 ? "disabled" : ""}>← ${this._escape(this._t("previous"))}</button>
+                <button class="secondary small all-bills-page" type="button" data-page="${this._allBillsPage + 1}" ${this._allBillsPage >= totalAllBillPages ? "disabled" : ""}>${this._escape(this._t("next"))} →</button>
               </div>
             </div>
           </div>
@@ -818,49 +836,49 @@ class BillTrackerCard extends HTMLElement {
         ${this._transferOpen ? `<div class="transfer-modal" id="transfer-modal" role="presentation">
           <div class="transfer-shell" role="dialog" aria-modal="true" aria-labelledby="transfer-title">
             <div class="transfer-head">
-              <div><strong id="transfer-title">Import / Export dati</strong><span>Importa CSV oppure esporta lo storico filtrato in CSV, Excel o PDF.</span></div>
-              <button class="secondary edit-modal-close" id="transfer-close" type="button" aria-label="Chiudi import export">×</button>
+              <div><strong id="transfer-title">${this._escape(this._t("import_export_title"))}</strong><span>${this._escape(this._t("import_export_help"))}</span></div>
+              <button class="secondary edit-modal-close" id="transfer-close" type="button" aria-label="${this._escape(this._t("close_import_export"))}">×</button>
             </div>
             <div class="transfer-body">
               <section class="transfer-panel">
-                <h3>Importa CSV</h3>
-                <p>Puoi usare un CSV esportato da Billy oppure un file con colonne equivalenti. Le righe con un ID già presente vengono ignorate.</p>
-                <label>File CSV<input id="import-csv-file" type="file" accept=".csv,text/csv"></label>
-                <div class="transfer-file" id="import-file-label">${this._importFileName ? this._escape(this._importFileName) : "Nessun file selezionato"}</div>
-                <label class="transfer-check"><input id="import-create-categories" type="checkbox" checked> Crea automaticamente i tipi di bolletta mancanti</label>
-                <label class="transfer-check"><input id="import-create-payers" type="checkbox" checked> Crea automaticamente i paganti mancanti</label>
+                <h3>${this._escape(this._t("import_csv"))}</h3>
+                <p>${this._escape(this._t("import_csv_help"))}</p>
+                <label>${this._escape(this._t("csv_file"))}<input id="import-csv-file" type="file" accept=".csv,text/csv"></label>
+                <div class="transfer-file" id="import-file-label">${this._importFileName ? this._escape(this._importFileName) : this._escape(this._t("no_file"))}</div>
+                <label class="transfer-check"><input id="import-create-categories" type="checkbox" checked> ${this._escape(this._t("create_missing_types"))}</label>
+                <label class="transfer-check"><input id="import-create-payers" type="checkbox" checked> ${this._escape(this._t("create_missing_payers"))}</label>
                 <div class="transfer-actions">
-                  <button class="secondary small" id="download-template" type="button" ${this._transferBusy ? "disabled" : ""}>Scarica template CSV</button>
-                  <button class="primary small" id="import-csv" type="button" ${!this._importCsvText || this._transferBusy ? "disabled" : ""}>${this._transferBusy ? "Attendi…" : "Importa"}</button>
+                  <button class="secondary small" id="download-template" type="button" ${this._transferBusy ? "disabled" : ""}>${this._escape(this._t("download_csv_template"))}</button>
+                  <button class="primary small" id="import-csv" type="button" ${!this._importCsvText || this._transferBusy ? "disabled" : ""}>${this._escape(this._t(this._transferBusy ? "wait" : "import"))}</button>
                 </div>
               </section>
               <section class="transfer-panel">
-                <h3>Esporta storico</h3>
-                <p>Il range usa il mese della bolletta. CSV ed Excel esportano le righe; il PDF genera anche un report degli andamenti.</p>
+                <h3>${this._escape(this._t("export_history"))}</h3>
+                <p>${this._escape(this._t("export_help"))}</p>
                 <div class="transfer-fields">
-                  <label>Formato<select id="export-format">
+                  <label>${this._escape(this._t("format"))}<select id="export-format">
                     <option value="csv" ${this._exportFormat === "csv" ? "selected" : ""}>CSV</option>
                     <option value="xlsx" ${this._exportFormat === "xlsx" ? "selected" : ""}>Excel (.xlsx)</option>
-                    <option value="pdf" ${this._exportFormat === "pdf" ? "selected" : ""}>Report PDF</option>
+                    <option value="pdf" ${this._exportFormat === "pdf" ? "selected" : ""}>${this._escape(this._t("pdf_report"))}</option>
                   </select></label>
-                  <label>Stato<select id="export-status">
-                    <option value="all" ${this._exportStatus === "all" ? "selected" : ""}>Tutte</option>
-                    <option value="unpaid" ${this._exportStatus === "unpaid" ? "selected" : ""}>Da pagare</option>
-                    <option value="paid" ${this._exportStatus === "paid" ? "selected" : ""}>Pagate</option>
+                  <label>${this._escape(this._t("status"))}<select id="export-status">
+                    <option value="all" ${this._exportStatus === "all" ? "selected" : ""}>${this._escape(this._t("all"))}</option>
+                    <option value="unpaid" ${this._exportStatus === "unpaid" ? "selected" : ""}>${this._escape(this._t("unpaid"))}</option>
+                    <option value="paid" ${this._exportStatus === "paid" ? "selected" : ""}>${this._escape(this._t("paid"))}</option>
                   </select></label>
-                  <label>Da<input id="export-from" type="month" value="${this._escape(this._exportFrom)}"></label>
-                  <label>A<input id="export-to" type="month" value="${this._escape(this._exportTo)}"></label>
-                  <label class="full">Tipo<select id="export-category">
-                    <option value="all" ${this._exportCategory === "all" ? "selected" : ""}>Tutti i tipi</option>
-                    ${allBillCategories.map((c) => `<option value="${this._escape(c.id)}" ${c.id === this._exportCategory ? "selected" : ""}>${this._escape(c.name)}</option>`).join("")}
+                  <label>${this._escape(this._t("from"))}<input id="export-from" type="month" value="${this._escape(this._exportFrom)}"></label>
+                  <label>${this._escape(this._t("to"))}<input id="export-to" type="month" value="${this._escape(this._exportTo)}"></label>
+                  <label class="full">${this._escape(this._t("type"))}<select id="export-category">
+                    <option value="all" ${this._exportCategory === "all" ? "selected" : ""}>${this._escape(this._t("all_types"))}</option>
+                    ${allBillCategories.map((c) => `<option value="${this._escape(c.id)}" ${c.id === this._exportCategory ? "selected" : ""}>${this._escape(this._categoryLabel(c))}</option>`).join("")}
                   </select></label>
-                  ${this._exportFormat === "pdf" ? `<label class="full">Andamento nel report<select id="export-trend">
-                    <option value="both" ${this._exportTrend === "both" ? "selected" : ""}>Pagamenti + costo mensile</option>
-                    <option value="payments" ${this._exportTrend === "payments" ? "selected" : ""}>Solo pagamenti</option>
-                    <option value="normalized" ${this._exportTrend === "normalized" ? "selected" : ""}>Solo costo mensile normalizzato</option>
+                  ${this._exportFormat === "pdf" ? `<label class="full">${this._escape(this._t("report_trend"))}<select id="export-trend">
+                    <option value="both" ${this._exportTrend === "both" ? "selected" : ""}>${this._escape(this._t("payments_plus_monthly"))}</option>
+                    <option value="payments" ${this._exportTrend === "payments" ? "selected" : ""}>${this._escape(this._t("payments_only"))}</option>
+                    <option value="normalized" ${this._exportTrend === "normalized" ? "selected" : ""}>${this._escape(this._t("normalized_only"))}</option>
                   </select></label>` : ""}
                 </div>
-                <div class="transfer-actions"><button class="primary" id="export-data" type="button" ${this._transferBusy ? "disabled" : ""}>${this._transferBusy ? "Generazione…" : "Esporta"}</button></div>
+                <div class="transfer-actions"><button class="primary" id="export-data" type="button" ${this._transferBusy ? "disabled" : ""}>${this._escape(this._t(this._transferBusy ? "generating" : "export"))}</button></div>
               </section>
             </div>
             ${this._transferMessage ? `<div class="transfer-message">${this._escape(this._transferMessage)}</div>` : ""}
@@ -1013,14 +1031,14 @@ class BillTrackerCard extends HTMLElement {
     if (file.size > 5_000_000) {
       this._importCsvText = "";
       this._importFileName = file.name;
-      this._transferMessage = "Il CSV supera il limite di 5 MB.";
+      this._transferMessage = this._t("csv_too_large");
       this._render();
       return;
     }
     try {
       this._importCsvText = await file.text();
       this._importFileName = file.name;
-      this._transferMessage = `CSV pronto: ${file.name}`;
+      this._transferMessage = this._t("csv_ready", { name: file.name });
     } catch (err) {
       this._importCsvText = "";
       this._transferMessage = String(err?.message || err);
@@ -1029,7 +1047,7 @@ class BillTrackerCard extends HTMLElement {
   }
 
   _downloadPayload(result) {
-    if (!result?.content_base64) throw new Error("Export vuoto");
+    if (!result?.content_base64) throw new Error(this._t("empty_export"));
     const binary = atob(result.content_base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
@@ -1052,9 +1070,9 @@ class BillTrackerCard extends HTMLElement {
     try {
       const result = await this._hass.callWS({ type: "bill_tracker/export_template" });
       this._downloadPayload(result);
-      this._transferMessage = "Template CSV scaricato.";
+      this._transferMessage = this._t("template_downloaded");
     } catch (err) {
-      this._transferMessage = `Errore template: ${String(err?.message || err)}`;
+      this._transferMessage = this._t("template_error", { error: String(err?.message || err) });
     } finally {
       this._transferBusy = false;
       this._render();
@@ -1066,7 +1084,7 @@ class BillTrackerCard extends HTMLElement {
     const createCategories = Boolean(this.shadowRoot.getElementById("import-create-categories")?.checked);
     const createPayers = Boolean(this.shadowRoot.getElementById("import-create-payers")?.checked);
     this._transferBusy = true;
-    this._transferMessage = "Import in corso…";
+    this._transferMessage = this._t("importing");
     this._render();
     try {
       const result = await this._hass.callWS({
@@ -1076,19 +1094,19 @@ class BillTrackerCard extends HTMLElement {
         create_missing_payers: createPayers,
       });
       const parts = [
-        `Importate: ${Number(result.imported || 0)}`,
-        `Saltate: ${Number(result.skipped || 0)}`,
-        `Nuovi tipi: ${Number(result.created_categories || 0)}`,
-        `Nuovi paganti: ${Number(result.created_payers || 0)}`,
+        this._t("imported", { count: Number(result.imported || 0) }),
+        this._t("skipped", { count: Number(result.skipped || 0) }),
+        this._t("new_types", { count: Number(result.created_categories || 0) }),
+        this._t("new_payers", { count: Number(result.created_payers || 0) }),
       ];
-      if (Number(result.error_count || 0)) parts.push(`Errori: ${Number(result.error_count || 0)}\n${(result.errors || []).join("\n")}`);
+      if (Number(result.error_count || 0)) parts.push(`${this._t("errors", { count: Number(result.error_count || 0) })}\n${(result.errors || []).join("\n")}`);
       this._transferMessage = parts.join(" · ");
       this._importCsvText = "";
       this._importFileName = "";
       await this._load();
       this._transferOpen = true;
     } catch (err) {
-      this._transferMessage = `Import fallito: ${String(err?.message || err)}`;
+      this._transferMessage = this._t("import_failed", { error: String(err?.message || err) });
     } finally {
       this._transferBusy = false;
       this._render();
@@ -1102,12 +1120,12 @@ class BillTrackerCard extends HTMLElement {
     this._exportFrom = fromMonth;
     this._exportTo = toMonth;
     if (fromMonth && toMonth && fromMonth > toMonth) {
-      this._transferMessage = "Il mese iniziale non può essere successivo a quello finale.";
+      this._transferMessage = this._t("invalid_range");
       this._render();
       return;
     }
     this._transferBusy = true;
-    this._transferMessage = "Generazione export…";
+    this._transferMessage = this._t("generating_export");
     this._render();
     try {
       const result = await this._hass.callWS({
@@ -1118,11 +1136,12 @@ class BillTrackerCard extends HTMLElement {
         status: this._exportStatus,
         category_id: this._exportCategory,
         trend: this._exportTrend,
+        language: this._language(),
       });
       this._downloadPayload(result);
-      this._transferMessage = `Export creato: ${result.filename}`;
+      this._transferMessage = this._t("export_created", { filename: result.filename });
     } catch (err) {
-      this._transferMessage = `Export fallito: ${String(err?.message || err)}`;
+      this._transferMessage = this._t("export_failed", { error: String(err?.message || err) });
     } finally {
       this._transferBusy = false;
       this._render();
@@ -1133,7 +1152,7 @@ class BillTrackerCard extends HTMLElement {
     const label = this.shadowRoot.getElementById("split-total");
     if (!label) return;
     const total = [...this.shadowRoot.querySelectorAll(".split-input")].reduce((sum, input) => sum + (Number(input.value) || 0), 0);
-    label.textContent = `Totale ${total.toFixed(2)}%`;
+    label.textContent = this._t("split_total", { total: total.toFixed(2) });
     label.classList.toggle("bad", Math.abs(total - 100) > 0.05);
   }
 
@@ -1153,12 +1172,12 @@ class BillTrackerCard extends HTMLElement {
     const consumptionLabel = this.shadowRoot.getElementById("consumption-label");
     if (consumption) {
       consumption.disabled = !unit;
-      consumption.placeholder = unit ? "0" : "Configura l'unità nel tipo bolletta";
+      consumption.placeholder = unit ? "0" : this._t("configure_unit");
       if (!unit) consumption.value = "";
     }
     if (consumptionLabel) {
       const textNode = consumptionLabel.childNodes[0];
-      if (textNode) textNode.textContent = unit ? `Consumo (${unit})` : "Consumo (unità non configurata)";
+      if (textNode) textNode.textContent = unit ? `${this._t("consumption")} (${unit})` : `${this._t("consumption")} (${this._t("unit_not_configured")})`;
     }
   }
 
@@ -1201,12 +1220,12 @@ class BillTrackerCard extends HTMLElement {
       .map((input) => ({ payer_id: input.dataset.payer, percentage: Number(input.value || 0) }))
       .filter((x) => x.payer_id && x.percentage > 0);
     if (!categoryId || !paid || !start || !end || !Number.isFinite(amount) || amount < 0) {
-      this._error = "Controlla i dati inseriti.";
+      this._error = this._t("invalid_data");
       this._render();
       return;
     }
     if (split.length && Math.abs(split.reduce((sum, x) => sum + x.percentage, 0) - 100) > 0.05) {
-      this._error = "Le quote della divisione devono sommare al 100%.";
+      this._error = this._t("split_must_100");
       this._render();
       return;
     }
@@ -1228,7 +1247,7 @@ class BillTrackerCard extends HTMLElement {
     };
     if (consumption !== undefined) {
       if (!Number.isFinite(consumption) || consumption < 0) {
-        this._error = "Il consumo non è valido.";
+        this._error = this._t("invalid_consumption");
         this._render();
         return;
       }
@@ -1288,7 +1307,7 @@ class BillTrackerCard extends HTMLElement {
   }
 
   async _delete(id) {
-    if (!this._hass || !confirm("Eliminare questa bolletta?")) return;
+    if (!this._hass || !confirm(this._t("delete_bill_confirm"))) return;
     try {
       await this._hass.callWS({ type: "bill_tracker/delete", expense_id: id });
       await this._load();
@@ -1303,17 +1322,17 @@ class BillTrackerCard extends HTMLElement {
     const amount = Number(button.dataset.amount || 0);
     const from = button.dataset.from;
     const to = button.dataset.to;
-    const fromName = this._payerById(from)?.name || "Il debitore";
-    const toName = this._payerById(to)?.name || "il creditore";
+    const fromName = this._payerById(from)?.name || this._t("debtor");
+    const toName = this._payerById(to)?.name || this._t("creditor");
     const count = Number(button.dataset.count || 0);
-    if (!confirm(`Segnare come saldato ${this._money(amount)} da ${fromName} a ${toName}? Le ${count || ""} bollette incluse nel saldo verranno marcate come pagate.`)) return;
+    if (!confirm(this._t("settle_confirm", { amount: this._money(amount), from: fromName, to: toName, count: count || "" }))) return;
     try {
       await this._hass.callWS({
         type: "bill_tracker/settlement/add",
         from_payer_id: from,
         to_payer_id: to,
         amount,
-        note: "Saldo registrato da Billy; bollette collegate marcate come pagate",
+        note: this._t("settlement_note"),
       });
       await this._load();
     } catch (err) {
@@ -1323,7 +1342,7 @@ class BillTrackerCard extends HTMLElement {
   }
 
   async _deleteSettlement(id) {
-    if (!this._hass || !confirm("Annullare questo saldo? Le bollette collegate verranno nuovamente segnate come non pagate.")) return;
+    if (!this._hass || !confirm(this._t("undo_settlement_confirm"))) return;
     try {
       await this._hass.callWS({ type: "bill_tracker/settlement/delete", settlement_id: id });
       await this._load();
@@ -1339,6 +1358,7 @@ class BillTrackerCardEditor extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._config = BillTrackerCard.getStubConfig();
+    this._hass = null;
   }
 
   setConfig(config) {
@@ -1346,7 +1366,14 @@ class BillTrackerCardEditor extends HTMLElement {
     this._render();
   }
 
-  set hass(_hass) {}
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _t(key, vars = {}) {
+    return billyT(this._hass, key, vars);
+  }
 
   _render() {
     if (!this.shadowRoot) return;
@@ -1361,14 +1388,14 @@ class BillTrackerCardEditor extends HTMLElement {
         @media (max-width:520px) { .grid { grid-template-columns:1fr; } }
       </style>
       <div class="editor">
-        <label><span>Titolo</span><input data-key="title" type="text" value="${this._escape(this._config.title || "")}"></label>
+        <label><span>${this._escape(this._t("editor_title"))}</span><input data-key="title" type="text" value="${this._escape(this._config.title || "")}"></label>
         <div class="grid">
-          <label><span>Larghezza predefinita</span><select data-key="columns">
-            <option value="full" ${columns === "full" ? "selected" : ""}>Tutta la sezione</option>
-            ${[4,6,8,10,12].map((n) => `<option value="${n}" ${Number(columns) === n ? "selected" : ""}>${n} colonne</option>`).join("")}
+          <label><span>${this._escape(this._t("editor_width"))}</span><select data-key="columns">
+            <option value="full" ${columns === "full" ? "selected" : ""}>${this._escape(this._t("editor_full"))}</option>
+            ${[4,6,8,10,12].map((n) => `<option value="${n}" ${Number(columns) === n ? "selected" : ""}>${this._escape(this._t("editor_columns", { count: n }))}</option>`).join("")}
           </select></label>
-          <label><span>Mesi di storico nel grafico</span><input data-key="history_months" type="number" min="3" max="36" step="1" value="${Number(this._config.history_months || 12)}"></label>
-          <label><span>Mesi di previsione</span><input data-key="forecast_months" type="number" min="1" max="24" step="1" value="${Number(this._config.forecast_months || 12)}"></label>
+          <label><span>${this._escape(this._t("editor_history"))}</span><input data-key="history_months" type="number" min="3" max="36" step="1" value="${Number(this._config.history_months || 12)}"></label>
+          <label><span>${this._escape(this._t("editor_forecast"))}</span><input data-key="forecast_months" type="number" min="1" max="24" step="1" value="${Number(this._config.forecast_months || 12)}"></label>
         </div>
       </div>`;
     this.shadowRoot.querySelectorAll("input,select").forEach((input) => input.addEventListener("change", () => this._changed(input)));

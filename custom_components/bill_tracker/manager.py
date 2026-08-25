@@ -325,6 +325,8 @@ class BillTrackerManager:
             "period_end_month": em,
             "payer_id": resolved_payer,
             "split": normalized_split,
+            "reimbursement_manual_done": False,
+            "reimbursement_manual_at": None,
             "paid": bool(paid),
             "payment_date": normalized_payment_date,
             "due_date": normalized_due_date,
@@ -382,6 +384,11 @@ class BillTrackerManager:
         for item in self.expenses:
             if item.get("id") != expense_id:
                 continue
+            reimbursement_changed = (
+                round(float(item.get("amount", 0.0) or 0.0), 2) != round(float(amount), 2)
+                or str(item.get("payer_id") or "") != str(resolved_payer or "")
+                or list(item.get("split", [])) != normalized_split
+            )
             item.update(
                 {
                     "paid_year": int(year),
@@ -394,6 +401,12 @@ class BillTrackerManager:
                     "period_end_month": em,
                     "payer_id": resolved_payer,
                     "split": normalized_split,
+                    "reimbursement_manual_done": (
+                        False if reimbursement_changed else bool(item.get("reimbursement_manual_done", False))
+                    ),
+                    "reimbursement_manual_at": (
+                        None if reimbursement_changed else item.get("reimbursement_manual_at")
+                    ),
                     "paid": bool(paid) if paid is not None else bool(item.get("paid", False)),
                     "payment_date": (
                         normalized_payment_date if payment_date is not None else item.get("payment_date")
@@ -417,6 +430,33 @@ class BillTrackerManager:
             if item.get("id") != expense_id:
                 continue
             item["paid"] = bool(paid)
+            await self._save_and_notify()
+            return self._public_expense(item)
+        return None
+
+    async def async_set_reimbursement_done(
+        self, expense_id: str, done: bool
+    ) -> dict[str, Any] | None:
+        """Manually mark all user reimbursements for one bill as done or pending.
+
+        This flag is intentionally independent from the provider-payment state.
+        Bills already linked to a recorded settlement are managed through the
+        reimbursement history, so the manual flag cannot override them.
+        """
+        for item in self.expenses:
+            if item.get("id") != expense_id:
+                continue
+            state = self._expense_reimbursement_state(item)
+            if state["status"] == "none":
+                raise ValueError("Questa bolletta non prevede rimborsi tra utenti")
+            if state["has_recorded_settlement"]:
+                raise ValueError(
+                    "Questa bolletta è collegata a un rimborso registrato: gestiscilo dallo storico rimborsi"
+                )
+            item["reimbursement_manual_done"] = bool(done)
+            item["reimbursement_manual_at"] = (
+                datetime.now().astimezone().isoformat(timespec="seconds") if done else None
+            )
             await self._save_and_notify()
             return self._public_expense(item)
         return None
@@ -676,12 +716,12 @@ class BillTrackerManager:
         amount: float,
         note: str = "",
     ) -> dict[str, Any]:
-        """Settle one complete payer-to-payer balance and mark its bills paid.
+        """Record one complete reimbursement between payers.
 
-        In Billy, ``paid`` means that a bill no longer contributes to the
-        outstanding split balance.  Therefore a balance settlement must close
-        the underlying unpaid bills too, otherwise the same debt would appear
-        again immediately after recording the settlement.
+        Bill payment and payer reimbursements are deliberately independent.
+        ``expense.paid`` means the utility/provider bill itself has actually
+        been paid by the payer. A settlement only records money transferred
+        between Billy participants and must never change that bill status.
         """
         source = self.payer(from_payer_id)
         target = self.payer(to_payer_id)
@@ -697,37 +737,15 @@ class BillTrackerManager:
             None,
         )
         if debt is None or float(debt.get("amount", 0.0)) <= 0:
-            raise ValueError("Non esiste un saldo aperto tra questi paganti")
+            raise ValueError("Non esiste un rimborso aperto tra questi paganti")
 
         outstanding = float(debt["amount"])
         if abs(float(amount) - outstanding) > 0.01:
-            raise ValueError("Per ora Billy può saldare solo l'intero saldo aperto")
+            raise ValueError("Per ora Billy può registrare solo l'intero rimborso aperto")
 
         expense_ids = [str(x) for x in debt.get("expense_ids", []) if x]
         if not expense_ids:
-            raise ValueError("Nessuna bolletta non pagata associata a questo saldo")
-
-        pair = {from_payer_id, to_payer_id}
-        for expense in self.expenses:
-            if str(expense.get("id")) not in expense_ids:
-                continue
-            participants = {
-                str(part.get("payer_id"))
-                for part in expense.get("split", [])
-                if float(part.get("percentage", 0.0) or 0.0) > 0
-            }
-            payer_id = str(expense.get("payer_id") or "")
-            if payer_id:
-                participants.add(payer_id)
-            if not participants.issubset(pair):
-                raise ValueError(
-                    "Questo saldo include una bolletta divisa tra più di due persone: "
-                    "segnala le quote manualmente prima di saldarla"
-                )
-
-        for expense in self.expenses:
-            if str(expense.get("id")) in expense_ids:
-                expense["paid"] = True
+            raise ValueError("Nessuna bolletta associata a questo rimborso")
 
         item = {
             "id": uuid4().hex,
@@ -744,35 +762,24 @@ class BillTrackerManager:
         return self._public_settlement(item)
 
     async def async_delete_settlement(self, settlement_id: str) -> bool:
-        """Undo a recorded settlement and reopen its linked bills."""
+        """Undo a recorded payer reimbursement without touching bill status."""
         item = next((x for x in self.settlements if x.get("id") == settlement_id), None)
         if item is None:
             return False
-
-        linked = {str(x) for x in item.get("expense_ids", []) if x}
         self.settlements = [x for x in self.settlements if x.get("id") != settlement_id]
-
-        still_settled = {
-            str(expense_id)
-            for settlement in self.settlements
-            for expense_id in settlement.get("expense_ids", [])
-            if expense_id
-        }
-        for expense in self.expenses:
-            expense_id = str(expense.get("id"))
-            if expense_id in linked and expense_id not in still_settled:
-                expense["paid"] = False
-
         await self._save_and_notify()
         return True
 
     def _pairwise_debts(self) -> list[dict[str, Any]]:
-        """Build pairwise debts from *unpaid* bills only."""
-        amounts: dict[tuple[str, str], float] = defaultdict(float)
+        """Build outstanding reimbursements independently from bill payment status."""
+        gross: dict[tuple[str, str], float] = defaultdict(float)
         expense_ids: dict[tuple[str, str], set[str]] = defaultdict(set)
 
+        # Every split bill creates a reimbursement obligation towards the payer
+        # who advanced the provider bill. Whether that provider bill is paid is
+        # a separate state and therefore intentionally not checked here.
         for item in self.expenses:
-            if bool(item.get("paid", False)):
+            if bool(item.get("reimbursement_manual_done", False)):
                 continue
             creditor = str(item.get("payer_id") or "")
             if self.payer(creditor) is None:
@@ -790,9 +797,19 @@ class BillTrackerManager:
                 if share <= 0.009:
                     continue
                 key = (debtor, creditor)
-                amounts[key] += share
+                gross[key] += share
                 if item_id:
                     expense_ids[key].add(item_id)
+
+        # Recorded reimbursements reduce only the participant-to-participant
+        # balance. They never mutate ``expense.paid``.
+        settled: dict[tuple[str, str], float] = defaultdict(float)
+        for item in self.settlements:
+            source = str(item.get("from_payer_id") or "")
+            target = str(item.get("to_payer_id") or "")
+            amount = float(item.get("amount", 0.0) or 0.0)
+            if source and target and source != target and amount > 0:
+                settled[(source, target)] += amount
 
         payer_ids = [str(x["id"]) for x in self.payers]
         result: list[dict[str, Any]] = []
@@ -805,8 +822,8 @@ class BillTrackerManager:
                 if pair in seen:
                     continue
                 seen.add(pair)
-                left_to_right = amounts.get((left, right), 0.0)
-                right_to_left = amounts.get((right, left), 0.0)
+                left_to_right = max(0.0, gross.get((left, right), 0.0) - settled.get((left, right), 0.0))
+                right_to_left = max(0.0, gross.get((right, left), 0.0) - settled.get((right, left), 0.0))
                 net = round(left_to_right - right_to_left, 2)
                 if abs(net) <= 0.009:
                     continue
@@ -818,7 +835,10 @@ class BillTrackerManager:
                 target = self.payer(to_id)
                 if source is None or target is None:
                     continue
-                linked = sorted(expense_ids.get((left, right), set()) | expense_ids.get((right, left), set()))
+                linked = sorted(
+                    expense_ids.get((left, right), set())
+                    | expense_ids.get((right, left), set())
+                )
                 paypal_me = str(target.get("paypal_me", ""))
                 result.append(
                     {
@@ -837,7 +857,7 @@ class BillTrackerManager:
         return result
 
     def balances(self) -> list[dict[str, Any]]:
-        """Return payer positions generated by unpaid bills only."""
+        """Return payer positions generated by outstanding reimbursements."""
         positions: dict[str, float] = {str(x["id"]): 0.0 for x in self.payers}
         for debt in self._pairwise_debts():
             source = str(debt["from_payer_id"])
@@ -862,7 +882,7 @@ class BillTrackerManager:
         ]
 
     def debts(self) -> list[dict[str, Any]]:
-        """Return outstanding pairwise transfers from unpaid bills only."""
+        """Return outstanding pairwise reimbursements between Billy payers."""
         return self._pairwise_debts()
 
     # ------------------------------------------------------------------
@@ -1118,6 +1138,64 @@ class BillTrackerManager:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    def _expense_reimbursement_state(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Return the reimbursement state for one bill, independently from provider payment."""
+        creditor = str(item.get("payer_id") or "")
+        expense_id = str(item.get("id") or "")
+        obligations: list[str] = []
+        if creditor and self.payer(creditor) is not None:
+            for part in item.get("split", []):
+                debtor = str(part.get("payer_id") or "")
+                percentage = float(part.get("percentage", 0.0) or 0.0)
+                if (
+                    debtor
+                    and debtor != creditor
+                    and percentage > 0.009
+                    and self.payer(debtor) is not None
+                    and debtor not in obligations
+                ):
+                    obligations.append(debtor)
+
+        total = len(obligations)
+        if total == 0:
+            return {
+                "status": "none",
+                "completed": 0,
+                "total": 0,
+                "manual_done": False,
+                "has_recorded_settlement": False,
+                "can_toggle": False,
+            }
+
+        manual_done = bool(item.get("reimbursement_manual_done", False))
+        linked_pairs: set[frozenset[str]] = set()
+        for settlement in self.settlements:
+            if expense_id not in {str(value) for value in settlement.get("expense_ids", []) if value}:
+                continue
+            source = str(settlement.get("from_payer_id") or "")
+            target = str(settlement.get("to_payer_id") or "")
+            if source and target and source != target:
+                linked_pairs.add(frozenset((source, target)))
+
+        completed = total if manual_done else sum(
+            1 for debtor in obligations if frozenset((debtor, creditor)) in linked_pairs
+        )
+        if completed >= total:
+            status = "done"
+        elif completed > 0:
+            status = "partial"
+        else:
+            status = "pending"
+        has_recorded_settlement = bool(linked_pairs)
+        return {
+            "status": status,
+            "completed": completed,
+            "total": total,
+            "manual_done": manual_done,
+            "has_recorded_settlement": has_recorded_settlement,
+            "can_toggle": not has_recorded_settlement,
+        }
+
     def _public_expense(self, item: dict[str, Any]) -> dict[str, Any]:
         category = self.category(str(item.get("category_id", "")))
         payer = self.payer(str(item.get("payer_id", ""))) if item.get("payer_id") else None
@@ -1125,6 +1203,7 @@ class BillTrackerManager:
         for part in item.get("split", []):
             participant = self.payer(str(part.get("payer_id", "")))
             split.append({**dict(part), "name": str(participant.get("name")) if participant else "Pagante rimosso"})
+        reimbursement = self._expense_reimbursement_state(item)
         return {
             **dict(item),
             "year": int(item["paid_year"]),
@@ -1135,6 +1214,13 @@ class BillTrackerManager:
             "currency": self.currency,
             "payer": str(payer.get("name")) if payer else "",
             "split": split,
+            "reimbursement_status": reimbursement["status"],
+            "reimbursement_done": reimbursement["status"] == "done",
+            "reimbursement_completed_count": reimbursement["completed"],
+            "reimbursement_total_count": reimbursement["total"],
+            "reimbursement_manual_done": reimbursement["manual_done"],
+            "reimbursement_has_settlement": reimbursement["has_recorded_settlement"],
+            "reimbursement_can_toggle": reimbursement["can_toggle"],
         }
 
     def _public_settlement(self, item: dict[str, Any]) -> dict[str, Any]:
@@ -1401,6 +1487,10 @@ class BillTrackerManager:
                 "period_start_year": sy, "period_start_month": sm,
                 "period_end_year": ey, "period_end_month": em,
                 "payer_id": payer_id, "split": split,
+                "reimbursement_manual_done": bool(item.get("reimbursement_manual_done", False)),
+                "reimbursement_manual_at": (
+                    str(item.get("reimbursement_manual_at")) if item.get("reimbursement_manual_at") else None
+                ),
                 "paid": bool(item.get("paid", False)),
                 "payment_date": payment_date,
                 "due_date": due_date,

@@ -13,8 +13,9 @@ from homeassistant.components import websocket_api
 from homeassistant.components.frontend import (
     add_extra_js_url,
     async_panel_exists,
-    async_register_built_in_panel,
+    async_remove_panel,
 )
+from homeassistant.components.panel_custom import async_register_panel
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ID, CONF_TYPE, CONF_URL
@@ -35,12 +36,14 @@ FRONTEND_PATH = FRONTEND_DIR / "bill-tracker-card.js"
 FRONTEND_IMPL_PATH = FRONTEND_DIR / "bill-tracker-card-impl.js"
 FRONTEND_I18N_PATH = FRONTEND_DIR / "bill-tracker-i18n.js"
 PARSER_MANAGER_PATH = FRONTEND_DIR / "billy-parser-manager.js"
+BILLY_PANEL_PATH = FRONTEND_DIR / "billy-panel.js"
 FRONTEND_URL = "/bill_tracker/bill-tracker-card.js"
 FRONTEND_IMPL_URL = "/bill_tracker/bill-tracker-card-impl.js"
 FRONTEND_I18N_URL = "/bill_tracker/bill-tracker-i18n.js"
 PARSER_MANAGER_URL = "/bill_tracker/billy-parser-manager.js"
-PARSER_MANAGER_MODULE_URL = f"{PARSER_MANAGER_URL}?v={FRONTEND_VERSION}"
-PARSER_MANAGER_PANEL_PATH = "billy-parser"
+BILLY_PANEL_URL = "/bill_tracker/billy-panel.js"
+BILLY_PANEL_MODULE_URL = f"{BILLY_PANEL_URL}?v={FRONTEND_VERSION}"
+BILLY_PANEL_ROUTE = "billy"
 FRONTEND_MODULE_URL = FRONTEND_URL
 
 
@@ -99,6 +102,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ws_delete,
         ws_update,
         ws_set_paid,
+        ws_set_reimbursement,
         ws_category_add,
         ws_category_update,
         ws_category_delete,
@@ -119,26 +123,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             StaticPathConfig(FRONTEND_IMPL_URL, str(FRONTEND_IMPL_PATH), False),
             StaticPathConfig(FRONTEND_I18N_URL, str(FRONTEND_I18N_PATH), False),
             StaticPathConfig(PARSER_MANAGER_URL, str(PARSER_MANAGER_PATH), False),
+            StaticPathConfig(BILLY_PANEL_URL, str(BILLY_PANEL_PATH), False),
         ]
     )
     add_extra_js_url(hass, FRONTEND_MODULE_URL)
-    async_register_built_in_panel(
+    # Register Billy through Home Assistant's supported custom-panel loader.
+    # Remove a previous definition first so integration reloads cannot retain stale panel metadata.
+    if async_panel_exists(hass, BILLY_PANEL_ROUTE):
+        async_remove_panel(hass, BILLY_PANEL_ROUTE, warn_if_unknown=False)
+    await async_register_panel(
         hass,
-        "custom",
-        frontend_url_path=PARSER_MANAGER_PANEL_PATH,
-        config={
-            "version": FRONTEND_VERSION,
-            "_panel_custom": {
-                "name": "billy-parser-manager",
-                "embed_iframe": False,
-                "trust_external": False,
-                "handle_safe_area": False,
-                "module_url": PARSER_MANAGER_MODULE_URL,
-            },
-        },
-        require_admin=True,
-        show_in_sidebar=False,
-        update=async_panel_exists(hass, PARSER_MANAGER_PANEL_PATH),
+        frontend_url_path=BILLY_PANEL_ROUTE,
+        webcomponent_name="billy-panel",
+        sidebar_title="Billy",
+        sidebar_icon="mdi:receipt-text-outline",
+        module_url=BILLY_PANEL_MODULE_URL,
+        require_admin=False,
+        config={"version": FRONTEND_VERSION},
     )
     await _async_register_lovelace_resource(hass)
     return True
@@ -293,6 +294,28 @@ async def ws_set_paid(hass, connection, msg):
         item = await _manager(hass).async_set_paid(msg["expense_id"], msg["paid"])
     except RuntimeError as err:
         connection.send_error(msg["id"], "not_configured", str(err))
+        return
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Spesa non trovata")
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/set_reimbursement",
+        vol.Required("expense_id"): str,
+        vol.Required("done"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_set_reimbursement(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_set_reimbursement_done(
+            msg["expense_id"], msg["done"]
+        )
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_reimbursement", str(err))
         return
     if item is None:
         connection.send_error(msg["id"], "not_found", "Spesa non trovata")

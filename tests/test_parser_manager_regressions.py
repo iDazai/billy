@@ -73,3 +73,14 @@ def test_catalog_snapshot_marks_outdated_and_removed_parsers():
     assert '"removed_from_catalog": True' in source
     assert '"outdated": sum(1 for row in rows if row.get("status") == "outdated")' in source
     assert '"compatible": compatible' in source
+
+
+def test_catalog_refresh_is_scheduled_daily_at_midnight():
+    source = MANAGER.read_text(encoding="utf-8")
+    assert "async_track_time_change" in source
+    assert "self._handle_catalog_refresh" in source
+    assert "hour=0" in source
+    assert "minute=0" in source
+    assert "second=0" in source
+    assert "self._unsubscribe_catalog_refresh()" in source
+    assert "daily parser catalog refresh failed" in source

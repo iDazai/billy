@@ -1,4 +1,4 @@
-const BILLY_PARSER_MANAGER_VERSION = '0.6.6'
+const BILLY_PARSER_MANAGER_VERSION = '0.9.1'
 
 const TEXT = {
   en: {
@@ -9,6 +9,8 @@ const TEXT = {
     search: 'Search provider, parser or type…',
     country: 'Country',
     allCountries: 'All countries',
+    billType: 'Bill type',
+    allBillTypes: 'All bill types',
     state: 'Status',
     all: 'All',
     installed: 'Installed',
@@ -64,6 +66,8 @@ const TEXT = {
     search: 'Cerca fornitore, parser o tipo…',
     country: 'Nazione',
     allCountries: 'Tutte le nazioni',
+    billType: 'Tipologia',
+    allBillTypes: 'Tutte le tipologie',
     state: 'Stato',
     all: 'Tutti',
     installed: 'Installati',
@@ -146,6 +150,7 @@ class BillyParserManagerPanel extends HTMLElement {
     this._error = ''
     this._search = ''
     this._country = 'all'
+    this._billType = 'all'
     this._status = 'all'
     this._sort = 'country'
     this._dialog = null
@@ -237,6 +242,7 @@ class BillyParserManagerPanel extends HTMLElement {
     const search = this._search.trim().toLowerCase()
     const rows = this._rows().filter(row => {
       if (this._country !== 'all' && String(row.country || '') !== this._country) return false
+      if (this._billType !== 'all' && String(row.bill_type || '') !== this._billType) return false
       if (this._status === 'installed' && !row.installed) return false
       if (this._status === 'not_installed' && row.installed) return false
       if (this._status === 'updates' && !row.update_available) return false
@@ -264,6 +270,20 @@ class BillyParserManagerPanel extends HTMLElement {
 
   _countries () {
     return [...new Set(this._rows().map(row => String(row.country || '')).filter(Boolean))].sort()
+  }
+
+  _billTypes () {
+    return [...new Set(this._rows().map(row => String(row.bill_type || '')).filter(Boolean))].sort()
+  }
+
+  _billTypeLabel (value) {
+    const labels = {
+      en: { electricity: 'Electricity', gas: 'Gas', water: 'Water', internet: 'Internet', mobile: 'Mobile', phone: 'Phone', insurance: 'Insurance' },
+      it: { electricity: 'Elettricità', gas: 'Gas', water: 'Acqua', internet: 'Internet', mobile: 'Telefonia mobile', phone: 'Telefono', insurance: 'Assicurazione' }
+    }
+    const language = languageOf(this._hass)
+    const key = String(value || '')
+    return labels[language]?.[key] || key.replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase())
   }
 
   _statusLabel (row) {
@@ -340,8 +360,12 @@ class BillyParserManagerPanel extends HTMLElement {
     const counts = this._data?.catalog?.counts || {}
     const updatedAt = this._data?.catalog?.updated_at
     const countries = this._countries()
+    const billTypes = this._billTypes()
     const countryOptions = [`<option value="all">${this._t('allCountries')}</option>`]
       .concat(countries.map(code => `<option value="${esc(code)}" ${this._country === code ? 'selected' : ''}>${countryFlag(code)} ${esc(code)}</option>`))
+      .join('')
+    const billTypeOptions = [`<option value="all">${this._t('allBillTypes')}</option>`]
+      .concat(billTypes.map(type => `<option value="${esc(type)}" ${this._billType === type ? 'selected' : ''}>${esc(this._billTypeLabel(type))}</option>`))
       .join('')
 
     this.shadowRoot.innerHTML = `
@@ -369,6 +393,7 @@ class BillyParserManagerPanel extends HTMLElement {
             <input id="search" type="search" value="${esc(this._search)}" placeholder="${esc(this._t('search'))}">
           </label>
           <label><span>${this._t('country')}</span><select id="country">${countryOptions}</select></label>
+          <label><span>${this._t('billType')}</span><select id="bill-type">${billTypeOptions}</select></label>
           <label><span>${this._t('state')}</span><select id="status">
             <option value="all" ${this._status === 'all' ? 'selected' : ''}>${this._t('all')}</option>
             <option value="installed" ${this._status === 'installed' ? 'selected' : ''}>${this._t('installed')}</option>
@@ -396,15 +421,40 @@ class BillyParserManagerPanel extends HTMLElement {
     this._wireEvents()
   }
 
+  _renderList () {
+    const list = this.shadowRoot?.querySelector('.list')
+    if (!list) return
+    const rows = this._filteredRows()
+    list.innerHTML = rows.length
+      ? rows.map(row => this._renderRow(row)).join('')
+      : `<div class="empty">${this._t('noResults')}</div>`
+    this._wireActionEvents()
+  }
+
+  _wireActionEvents () {
+    this.shadowRoot.querySelectorAll('[data-action]').forEach(button => {
+      button.addEventListener('click', event => {
+        const action = event.currentTarget.dataset.action
+        const id = event.currentTarget.dataset.id
+        this._handleAction(action, id)
+      })
+    })
+  }
+
   _wireEvents () {
     this.shadowRoot.getElementById('refresh')?.addEventListener('click', () => this._refreshCatalog())
     this.shadowRoot.getElementById('search')?.addEventListener('input', event => {
+      // Do not rebuild the input itself while the user is typing: replacing it
+      // resets the caret to position 0 and made text appear in reverse order.
       this._search = event.target.value
-      this._render()
-      this.shadowRoot.getElementById('search')?.focus()
+      this._renderList()
     })
     this.shadowRoot.getElementById('country')?.addEventListener('change', event => {
       this._country = event.target.value
+      this._render()
+    })
+    this.shadowRoot.getElementById('bill-type')?.addEventListener('change', event => {
+      this._billType = event.target.value
       this._render()
     })
     this.shadowRoot.getElementById('status')?.addEventListener('change', event => {
@@ -415,13 +465,7 @@ class BillyParserManagerPanel extends HTMLElement {
       this._sort = event.target.value
       this._render()
     })
-    this.shadowRoot.querySelectorAll('[data-action]').forEach(button => {
-      button.addEventListener('click', event => {
-        const action = event.currentTarget.dataset.action
-        const id = event.currentTarget.dataset.id
-        this._handleAction(action, id)
-      })
-    })
+    this._wireActionEvents()
     const closeDialog = () => {
       this._dialog = null
       this._render()
@@ -559,7 +603,7 @@ class BillyParserManagerPanel extends HTMLElement {
       .summary { display:flex; gap:18px; flex-wrap:wrap; align-items:center; padding:12px 14px; margin-bottom:14px; border:1px solid var(--divider-color); border-radius:12px; background:var(--card-background-color); color:var(--secondary-text-color); font-size:14px; }
       .summary strong { color:var(--primary-text-color); }
       .summary-alert { color:var(--warning-color, #f39c12); font-weight:700; }
-      .filters { display:grid; grid-template-columns:minmax(230px, 1.6fr) repeat(3, minmax(145px, .7fr)); gap:10px; margin-bottom:16px; }
+      .filters { display:grid; grid-template-columns:minmax(230px, 1.6fr) repeat(4, minmax(135px, .7fr)); gap:10px; margin-bottom:16px; }
       .filters label, .modal-field { display:flex; flex-direction:column; gap:5px; color:var(--secondary-text-color); font-size:12px; }
       .filters select, .filters input, .modal-field select { width:100%; height:42px; border:1px solid var(--divider-color); border-radius:10px; padding:0 11px; background:var(--card-background-color); color:var(--primary-text-color); }
       .search-field { position:relative; justify-content:flex-end; }

@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import yaml
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers.event import async_track_time_change
 
 from ..extractors import PdfExtractionError, extract_pdf_text
 from ..importers import BillImportCoordinator
@@ -28,7 +29,7 @@ MAX_IMPORT_HISTORY = 500
 class ParserManager:
     """Own parser state while BillTrackerManager remains the owner of expenses."""
 
-    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.6.5") -> None:
+    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.9.1") -> None:
         self.hass = hass
         self.bill_manager = bill_manager
         self.billy_version = billy_version
@@ -39,6 +40,7 @@ class ParserManager:
         self.importer = BillImportCoordinator(bill_manager)
         self.parsers: dict[str, dict[str, Any]] = {}
         self._unsubscribe = None
+        self._unsubscribe_catalog_refresh = None
 
     async def async_load(self) -> None:
         await self.storage.async_load()
@@ -47,15 +49,37 @@ class ParserManager:
     async def async_start(self) -> None:
         if self._unsubscribe is None:
             self._unsubscribe = self.hass.bus.async_listen("imap_content", self._handle_imap_event)
+        if self._unsubscribe_catalog_refresh is None:
+            self._unsubscribe_catalog_refresh = async_track_time_change(
+                self.hass,
+                self._handle_catalog_refresh,
+                hour=0,
+                minute=0,
+                second=0,
+            )
 
     async def async_stop(self) -> None:
         if self._unsubscribe is not None:
             self._unsubscribe()
             self._unsubscribe = None
+        if self._unsubscribe_catalog_refresh is not None:
+            self._unsubscribe_catalog_refresh()
+            self._unsubscribe_catalog_refresh = None
 
     @callback
     def _handle_imap_event(self, event: Event) -> None:
         self.hass.async_create_task(self.async_process_imap_event(dict(event.data)))
+
+    @callback
+    def _handle_catalog_refresh(self, _now) -> None:
+        """Refresh parser.json every day at local midnight without updating installed parsers."""
+        self.hass.async_create_task(self._async_scheduled_catalog_refresh())
+
+    async def _async_scheduled_catalog_refresh(self) -> None:
+        try:
+            await self.async_refresh_catalog()
+        except Exception as err:  # noqa: BLE001 - keep the last good catalog on network failures
+            _LOGGER.warning("Billy daily parser catalog refresh failed: %s", err)
 
     async def async_process_imap_event(self, event_data: dict[str, Any]) -> dict[str, Any] | None:
         envelope = self.imap.envelope(event_data)

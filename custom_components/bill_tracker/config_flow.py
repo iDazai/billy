@@ -113,7 +113,7 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="parser_manager",
             data_schema=vol.Schema({}),
-            description_placeholders={"parser_manager_url": "/billy-parser"},
+            description_placeholders={"parser_manager_url": "/billy?view=parsers"},
         )
 
     async def async_step_parser_refresh(self, user_input=None):

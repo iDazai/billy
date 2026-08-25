@@ -1,6 +1,44 @@
-## 0.6.6 parser management
+## Billy 0.9.1
 
-Billy 0.6.6 fixes the custom-panel registration for the dedicated parser-management page at `/billy-parser`. The catalog is rendered as a scalable item list instead of a radio-button selector, with search, country/status filters, sorting, install/configure/update/remove actions and explicit **Outdated** state when a newer parser version is available. Catalog refresh never updates an installed parser silently; parser updates remain explicit.
+Billy keeps the Lovelace `custom:bill-tracker-card`, while the `/billy` sidebar panel is the full-size application.
+
+### Sidebar application
+
+- **Panoramica / Overview**: wide dashboard with KPI, forecast, bill-type breakdown, upcoming/recent bills, parser health and a dedicated **Rimborsi tra utenti / User reimbursements** section.
+- **Bollette / Bills**: native complete bill list instead of embedding the Lovelace card. It includes search/filtering, pagination, manual bill creation, edit/delete actions and a quick provider-payment toggle.
+- **Parser**: scalable catalog with country/type/status filters, Outdated markers and explicit install/update/remove actions.
+- **Impostazioni / Settings**: bill types, payers, IMAP sources, system status and a new **Developer & support** area.
+
+### Provider payments vs user reimbursements
+
+Billy now treats these as two independent concepts:
+
+- **Bolletta pagata / Provider paid** means the configured payer actually paid the utility/provider invoice.
+- **Rimborso tra utenti / User reimbursement** means another Billy participant reimbursed their share to the payer.
+
+Confirming a reimbursement no longer marks provider bills as paid, and undoing a reimbursement no longer reopens provider bills. Split balances are calculated from bill shares independently of the provider-payment checkbox, then reduced by recorded reimbursements.
+
+The Overview provides quick **Pay with PayPal** and **Confirm reimbursement** actions, plus recent reimbursement history.
+
+### Reimbursement status in Bills
+
+The full **Bollette / Bills** tab now has an independent reimbursement filter and status for each bill. You can filter bills by **To reimburse**, **Reimbursed**, or **No reimbursement**. A bill with multiple participants can also show **Partially reimbursed**.
+
+When no reimbursement has already been recorded in the reimbursement history, the row includes a quick checkbox to mark all user reimbursements for that bill as completed or pending. This changes only the user-to-user balance; it never changes whether the provider invoice itself is paid. Bills linked to recorded reimbursement history are intentionally locked to that history to prevent double-accounting.
+
+### Developer & support
+
+The Billy Settings panel now credits **Roberto Tortora** as creator/maintainer and links to:
+
+- Billy: `https://github.com/robin994/billy`
+- billy-parser: `https://github.com/robin994/billy-parser`
+- GitHub profile: `https://github.com/robin994`
+- LinkedIn: `https://www.linkedin.com/in/roberto-tortora-379928109/`
+- optional PayPal.Me support: `https://paypal.me/rtortora94`
+
+Both repositories include an explicit action encouraging users to open the project and leave a GitHub star.
+
+The parser catalog continues to refresh automatically every day at **00:00 Home Assistant local time** without silently upgrading installed parser YAML files. The Lovelace resource stays unversioned at `/bill_tracker/bill-tracker-card.js`.
 
 ## 0.6.3 parser compatibility
 
@@ -38,3 +76,8 @@ translations, automatic parser runtime, IMAP source adapter and tests required b
   to invalidate stale browser caches.
 
 See `docs/AUTOMATIC_PARSING.md` for parser setup and privacy details.
+
+
+## Billy sidebar panel
+
+Billy 0.7.0 adds a sidebar panel at `/billy` while keeping `custom:bill-tracker-card` available for Lovelace dashboards. The panel reuses the existing bill UI and includes scalable parser management in the same application surface.

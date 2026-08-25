@@ -7,10 +7,18 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 
-from .const import DOMAIN, PROJECT_URL, SUPPORT_URL, SUPPORTED_INTERVALS
+from .const import (
+    DOMAIN,
+    PARSER_PROJECT_URL,
+    PROJECT_URL,
+    SUPPORT_URL,
+    SUPPORTED_INTERVALS,
+)
 from .localization import category_label, config_label, interval_label, normalize_language
 from .manager import BillTrackerManager
+from .parser.manager import ParserManager
 
 NO_DEFAULT_PAYER = "__none__"
 
@@ -34,20 +42,34 @@ class BillTrackerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class BillTrackerOptionsFlow(config_entries.OptionsFlow):
-    """Manage bill types and payers from native Home Assistant settings."""
+    """Manage bills, payers and automatic parsing from HA settings."""
 
     def __init__(self) -> None:
         self._category_id: str | None = None
         self._payer_id: str | None = None
+        self._parser_id: str | None = None
+        self._import_id: str | None = None
 
     def _manager(self) -> BillTrackerManager | None:
         return self.hass.data.get(DOMAIN, {}).get("manager")
+
+    def _parser_manager(self) -> ParserManager | None:
+        return self.hass.data.get(DOMAIN, {}).get("parser_manager")
 
     def _language(self) -> str:
         return normalize_language(getattr(self.hass.config, "language", "en"))
 
     def _label(self, key: str) -> str:
         return config_label(self._language(), key)
+
+    def _category_choices(self, manager: BillTrackerManager) -> dict[str, str]:
+        return {
+            str(item["id"]): (
+                category_label(self._language(), item)
+                + ("" if item.get("enabled", True) else f" — {self._label('disabled')}")
+            )
+            for item in manager.categories
+        }
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         if self._manager() is None:
@@ -59,9 +81,372 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                 "manage_payer",
                 "add_category",
                 "manage_category",
+                "automatic_parsing",
                 "support",
                 "done",
             ],
+        )
+
+    # ------------------------------------------------------------------
+    # Automatic parsing
+    # ------------------------------------------------------------------
+    async def async_step_automatic_parsing(self, user_input=None):
+        if self._parser_manager() is None:
+            return self.async_abort(reason="parser_not_setup")
+        return self.async_show_menu(
+            step_id="automatic_parsing",
+            menu_options=[
+                "parser_sources",
+                "parser_catalog",
+                "manage_parser",
+                "custom_parser",
+                "parser_imports",
+                "parser_refresh",
+                "init",
+            ],
+        )
+
+    async def async_step_parser_refresh(self, user_input=None):
+        parser_manager = self._parser_manager()
+        if parser_manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                await parser_manager.async_refresh_catalog()
+            except Exception:
+                errors["base"] = "parser_catalog_error"
+            else:
+                return await self.async_step_automatic_parsing()
+        return self.async_show_form(
+            step_id="parser_refresh",
+            data_schema=vol.Schema({}),
+            errors=errors,
+            description_placeholders={"parser_project_url": PARSER_PROJECT_URL},
+        )
+
+    async def async_step_parser_sources(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        if parser_manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        rows = parser_manager.sources_snapshot()
+        options = [
+            selector.SelectOptionDict(value=row["entry_id"], label=row["title"])
+            for row in rows
+        ]
+        selected = [row["entry_id"] for row in rows if row.get("selected")]
+        if user_input is not None:
+            await parser_manager.async_set_sources(list(user_input.get("entry_ids") or []))
+            return await self.async_step_automatic_parsing()
+        if not options:
+            return self.async_show_form(
+                step_id="parser_sources",
+                data_schema=vol.Schema({}),
+                description_placeholders={"imap_status": "missing"},
+            )
+        schema = vol.Schema(
+            {
+                vol.Optional("entry_ids", default=selected): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=options,
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="parser_sources",
+            data_schema=schema,
+            description_placeholders={"imap_status": "available"},
+        )
+
+    async def async_step_parser_catalog(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        if parser_manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        errors: dict[str, str] = {}
+        catalog = parser_manager.catalog_snapshot()
+        if not catalog.get("parsers"):
+            try:
+                catalog = await parser_manager.async_refresh_catalog()
+            except Exception:
+                errors["base"] = "parser_catalog_error"
+        choices: dict[str, str] = {}
+        for row in catalog.get("parsers", []) or []:
+            suffix = ""
+            if row.get("update_available"):
+                suffix = " · update"
+            elif row.get("installed"):
+                suffix = " · installed"
+            choices[str(row["id"])] = (
+                f"{row.get('name', row['id'])} · {row.get('country', '')}{suffix}"
+            )
+        if user_input is not None:
+            self._parser_id = str(user_input["parser_id"])
+            return await self.async_step_parser_install()
+        return self.async_show_form(
+            step_id="parser_catalog",
+            data_schema=vol.Schema(
+                {vol.Required("parser_id"): vol.In(choices)} if choices else {}
+            ),
+            errors=errors,
+        )
+
+    async def async_step_parser_install(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        manager = self._manager()
+        if parser_manager is None or manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        parser_id = self._parser_id or ""
+        item = next(
+            (
+                row
+                for row in parser_manager.catalog_snapshot().get("parsers", [])
+                if str(row.get("id")) == parser_id
+            ),
+            None,
+        )
+        if item is None:
+            return self.async_abort(reason="parser_not_found")
+        errors: dict[str, str] = {}
+        current = next(
+            (row for row in parser_manager.installed_snapshot() if row.get("id") == parser_id),
+            {},
+        )
+        categories = self._category_choices(manager)
+        default_category = str(
+            current.get("category_id")
+            or item.get("bill_type")
+            or next(iter(categories), "")
+        )
+        if default_category not in categories:
+            default_category = next(iter(categories), "")
+        if user_input is not None:
+            try:
+                await parser_manager.async_install(
+                    parser_id,
+                    category_id=str(user_input["category_id"]),
+                    enabled=bool(user_input["enabled"]),
+                    auto_import=bool(user_input["auto_import"]),
+                )
+            except Exception:
+                errors["base"] = "parser_install_error"
+            else:
+                self._parser_id = None
+                return await self.async_step_automatic_parsing()
+        return self.async_show_form(
+            step_id="parser_install",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("category_id", default=default_category): vol.In(categories),
+                    vol.Required("enabled", default=True): bool,
+                    vol.Required("auto_import", default=False): bool,
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "name": str(item.get("name") or parser_id),
+                "provider": str(item.get("provider") or ""),
+            },
+        )
+
+    async def async_step_manage_parser(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        if parser_manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        rows = parser_manager.installed_snapshot()
+        if not rows:
+            return await self.async_step_parser_catalog()
+        choices = {
+            str(row["id"]): (
+                f"{row.get('name', row['id'])} · "
+                f"{'custom' if row.get('source') == 'custom' else 'official'}"
+            )
+            for row in rows
+        }
+        if user_input is not None:
+            self._parser_id = str(user_input["parser_id"])
+            action = str(user_input["action"])
+            if action == "delete":
+                return await self.async_step_delete_parser()
+            if action == "export":
+                return await self.async_step_export_parser()
+            return await self.async_step_edit_parser()
+        return self.async_show_form(
+            step_id="manage_parser",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("parser_id"): vol.In(choices),
+                    vol.Required("action", default="edit"): vol.In(
+                        {
+                            "edit": "Edit",
+                            "delete": "Delete",
+                            "export": "Export custom YAML",
+                        }
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_edit_parser(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        manager = self._manager()
+        if parser_manager is None or manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        row = next(
+            (
+                item
+                for item in parser_manager.installed_snapshot()
+                if item.get("id") == self._parser_id
+            ),
+            None,
+        )
+        if row is None:
+            return self.async_abort(reason="parser_not_found")
+        categories = self._category_choices(manager)
+        if user_input is not None:
+            await parser_manager.async_configure(
+                str(row["id"]),
+                category_id=str(user_input["category_id"]),
+                enabled=bool(user_input["enabled"]),
+                auto_import=bool(user_input["auto_import"]),
+            )
+            self._parser_id = None
+            return await self.async_step_automatic_parsing()
+        return self.async_show_form(
+            step_id="edit_parser",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("category_id", default=str(row["category_id"])): vol.In(categories),
+                    vol.Required("enabled", default=bool(row.get("enabled", True))): bool,
+                    vol.Required("auto_import", default=bool(row.get("auto_import", False))): bool,
+                }
+            ),
+            description_placeholders={"name": str(row.get("name") or row["id"])},
+        )
+
+    async def async_step_delete_parser(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        if parser_manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        row = next(
+            (
+                item
+                for item in parser_manager.installed_snapshot()
+                if item.get("id") == self._parser_id
+            ),
+            None,
+        )
+        if row is None:
+            return self.async_abort(reason="parser_not_found")
+        if user_input is not None:
+            if row.get("source") == "custom":
+                await parser_manager.async_delete_custom(str(row["id"]))
+            else:
+                await parser_manager.async_uninstall(str(row["id"]))
+            self._parser_id = None
+            return await self.async_step_automatic_parsing()
+        return self.async_show_form(
+            step_id="delete_parser",
+            data_schema=vol.Schema({}),
+            description_placeholders={"name": str(row.get("name") or row["id"])},
+        )
+
+    async def async_step_export_parser(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        if parser_manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        row = next(
+            (
+                item
+                for item in parser_manager.installed_snapshot()
+                if item.get("id") == self._parser_id
+            ),
+            None,
+        )
+        if row is None or row.get("source") != "custom":
+            return self.async_abort(reason="custom_parser_not_found")
+        await parser_manager.async_export_custom(str(row["id"]))
+        if user_input is not None:
+            self._parser_id = None
+            return await self.async_step_automatic_parsing()
+        return self.async_show_form(
+            step_id="export_parser",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "name": str(row.get("name") or row["id"]),
+                "download_url": f"/api/bill_tracker/parser/custom/{row['id']}",
+            },
+        )
+
+    async def async_step_custom_parser(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        manager = self._manager()
+        if parser_manager is None or manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        categories = self._category_choices(manager)
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                await parser_manager.async_save_custom(
+                    str(user_input["content"]),
+                    category_id=str(user_input["category_id"]),
+                    enabled=bool(user_input["enabled"]),
+                    auto_import=bool(user_input["auto_import"]),
+                )
+            except Exception:
+                errors["base"] = "custom_parser_error"
+            else:
+                return await self.async_step_automatic_parsing()
+        yaml_selector = selector.TextSelector(
+            selector.TextSelectorConfig(multiline=True, type=selector.TextSelectorType.TEXT)
+        )
+        return self.async_show_form(
+            step_id="custom_parser",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("content", default=""): yaml_selector,
+                    vol.Required("category_id", default=next(iter(categories), "")): vol.In(categories),
+                    vol.Required("enabled", default=True): bool,
+                    vol.Required("auto_import", default=False): bool,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_parser_imports(self, user_input: dict[str, Any] | None = None):
+        parser_manager = self._parser_manager()
+        if parser_manager is None:
+            return self.async_abort(reason="parser_not_setup")
+        pending = parser_manager.imports_snapshot("pending", 100)
+        if not pending:
+            return self.async_show_form(step_id="parser_imports", data_schema=vol.Schema({}))
+        choices: dict[str, str] = {}
+        for row in pending:
+            data = row.get("data", {})
+            choices[str(row["id"])] = (
+                f"{data.get('provider') or row.get('parser_id')} · "
+                f"{data.get('amount', '?')} {data.get('currency', '')} · "
+                f"{data.get('due_date', '')}"
+            )
+        if user_input is not None:
+            import_id = str(user_input["import_id"])
+            if user_input["action"] == "approve":
+                await parser_manager.async_approve(import_id)
+            else:
+                await parser_manager.async_reject(import_id)
+            return await self.async_step_parser_imports()
+        return self.async_show_form(
+            step_id="parser_imports",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("import_id"): vol.In(choices),
+                    vol.Required("action", default="approve"): vol.In(
+                        {"approve": "Import", "reject": "Ignore"}
+                    ),
+                }
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -84,17 +469,20 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "invalid_payer"
             else:
                 return await self.async_step_init()
-        schema = vol.Schema(
-            {
-                vol.Required("name"): str,
-                vol.Required("share_percent", default=50.0): vol.All(
-                    vol.Coerce(float), vol.Range(min=0, max=100)
-                ),
-                vol.Optional("paypal_me", default=""): str,
-                vol.Required("enabled", default=True): bool,
-            }
+        return self.async_show_form(
+            step_id="add_payer",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name"): str,
+                    vol.Required("share_percent", default=50.0): vol.All(
+                        vol.Coerce(float), vol.Range(min=0, max=100)
+                    ),
+                    vol.Optional("paypal_me", default=""): str,
+                    vol.Required("enabled", default=True): bool,
+                }
+            ),
+            errors=errors,
         )
-        return self.async_show_form(step_id="add_payer", data_schema=schema, errors=errors)
 
     async def async_step_manage_payer(self, user_input: dict[str, Any] | None = None):
         manager = self._manager()
@@ -148,17 +536,20 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
             else:
                 self._payer_id = None
                 return await self.async_step_init()
-        schema = vol.Schema(
-            {
-                vol.Required("name", default=str(item["name"])): str,
-                vol.Required("share_percent", default=float(item.get("share_percent", 50.0))): vol.All(
-                    vol.Coerce(float), vol.Range(min=0, max=100)
-                ),
-                vol.Optional("paypal_me", default=str(item.get("paypal_me", ""))): str,
-                vol.Required("enabled", default=bool(item.get("enabled", True))): bool,
-            }
+        return self.async_show_form(
+            step_id="edit_payer",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name", default=str(item["name"])): str,
+                    vol.Required(
+                        "share_percent", default=float(item.get("share_percent", 50.0))
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+                    vol.Optional("paypal_me", default=str(item.get("paypal_me", ""))): str,
+                    vol.Required("enabled", default=bool(item.get("enabled", True))): bool,
+                }
+            ),
+            errors=errors,
         )
-        return self.async_show_form(step_id="edit_payer", data_schema=schema, errors=errors)
 
     async def async_step_delete_payer(self, user_input: dict[str, Any] | None = None):
         manager = self._manager()
@@ -186,21 +577,28 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
     # ------------------------------------------------------------------
     # Categories
     # ------------------------------------------------------------------
-    def _category_schema(self, manager: BillTrackerManager, item: dict[str, Any] | None = None):
-        interval_choices = {str(value): interval_label(self._language(), value) for value in SUPPORTED_INTERVALS}
-        # Home Assistant option selectors do not reliably preserve an empty-string
-        # option. Use an explicit sentinel so "no default payer" is always
-        # selectable, and expose every configured payer (disabled ones are tagged).
+    def _category_schema(
+        self, manager: BillTrackerManager, item: dict[str, Any] | None = None
+    ):
+        interval_choices = {
+            str(value): interval_label(self._language(), value)
+            for value in SUPPORTED_INTERVALS
+        }
         payer_choices = {NO_DEFAULT_PAYER: self._label("none")}
         payer_choices.update(
-            {str(p["id"]): str(p["name"]) for p in manager.payers if p.get("enabled", True)}
+            {
+                str(p["id"]): str(p["name"])
+                for p in manager.payers
+                if p.get("enabled", True)
+            }
         )
         if item and item.get("default_payer_id"):
             selected = manager.payer(str(item["default_payer_id"]))
             if selected:
                 payer_choices.setdefault(
                     str(selected["id"]),
-                    f"{selected['name']}{'' if selected.get('enabled', True) else f' — {self._label("disabled")}'}",
+                    f"{selected['name']}"
+                    f"{'' if selected.get('enabled', True) else f' — {self._label("disabled")}' }",
                 )
         return vol.Schema(
             {
@@ -211,7 +609,11 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                 ): vol.In(interval_choices),
                 vol.Required(
                     "default_payer_id",
-                    default=str(item.get("default_payer_id") or NO_DEFAULT_PAYER) if item else NO_DEFAULT_PAYER,
+                    default=(
+                        str(item.get("default_payer_id") or NO_DEFAULT_PAYER)
+                        if item
+                        else NO_DEFAULT_PAYER
+                    ),
                 ): vol.In(payer_choices),
                 vol.Optional(
                     "color",
@@ -248,7 +650,8 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                     enabled=bool(user_input["enabled"]),
                     default_payer_id=(
                         None
-                        if user_input.get("default_payer_id") in (None, "", NO_DEFAULT_PAYER)
+                        if user_input.get("default_payer_id")
+                        in (None, "", NO_DEFAULT_PAYER)
                         else str(user_input["default_payer_id"])
                     ),
                     color=user_input.get("color"),
@@ -279,7 +682,8 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_edit_category()
         categories = {
             str(item["id"]): (
-                f"{category_label(self._language(), item)} — {interval_label(self._language(), int(item['interval_months']))}"
+                f"{category_label(self._language(), item)} — "
+                f"{interval_label(self._language(), int(item['interval_months']))}"
                 + ("" if item.get("enabled", True) else f" — {self._label('disabled')}")
             )
             for item in manager.categories
@@ -313,7 +717,8 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                     enabled=bool(user_input["enabled"]),
                     default_payer_id=(
                         None
-                        if user_input.get("default_payer_id") in (None, "", NO_DEFAULT_PAYER)
+                        if user_input.get("default_payer_id")
+                        in (None, "", NO_DEFAULT_PAYER)
                         else str(user_input["default_payer_id"])
                     ),
                     color=user_input.get("color"),
@@ -356,7 +761,6 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_support(self, user_input: dict[str, Any] | None = None):
-        """Show optional ways to support Billy."""
         if user_input is not None:
             return await self.async_step_init()
         return self.async_show_form(

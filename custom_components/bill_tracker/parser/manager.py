@@ -9,7 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 import yaml
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 
 from ..extractors import PdfExtractionError, extract_pdf_text
 from ..importers import BillImportCoordinator
@@ -53,12 +53,13 @@ class ParserManager:
             self._unsubscribe()
             self._unsubscribe = None
 
+    @callback
     def _handle_imap_event(self, event: Event) -> None:
         self.hass.async_create_task(self.async_process_imap_event(dict(event.data)))
 
     async def async_process_imap_event(self, event_data: dict[str, Any]) -> dict[str, Any] | None:
         envelope = self.imap.envelope(event_data)
-        if not envelope.initial or not envelope.entry_id or not envelope.uid:
+        if not envelope.entry_id or not envelope.uid:
             return None
         enabled_entries = set(self.storage.data.get("source_entry_ids", []))
         if not enabled_entries or envelope.entry_id not in enabled_entries:

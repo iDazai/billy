@@ -34,14 +34,7 @@ FRONTEND_MODULE_URL = f"{FRONTEND_URL}?v={FRONTEND_VERSION}"
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
-    """Register Billy as a Lovelace module in addition to the global frontend URL.
-
-    Home Assistant currently does not await every custom frontend module before
-    dashboard/card-picker rendering. Registering Billy through both supported
-    paths, while keeping the globally injected module as a tiny bootstrap, makes
-    cold loads considerably more reliable. Failures here are non-fatal because
-    add_extra_js_url remains the fallback.
-    """
+    """Register Billy as a Lovelace module in addition to the global frontend URL."""
     try:
         from homeassistant.components.lovelace.const import LOVELACE_DATA
         from homeassistant.components.lovelace.resources import ResourceStorageCollection
@@ -51,16 +44,12 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
             return
         resources = lovelace_data.resources
         if not isinstance(resources, ResourceStorageCollection):
-            # YAML resource mode is read-only from an integration; the global
-            # frontend module registration below remains the fallback.
             return
 
         ensure_loaded = getattr(resources, "_async_ensure_loaded", None)
         if ensure_loaded is not None:
             await ensure_loaded()
         elif not getattr(resources, "loaded", True):
-            # Compatibility guard for HA versions before ResourceStorageCollection
-            # grew its lazy-load protection. Never mutate an unloaded collection.
             await resources.async_load()
             try:
                 resources.loaded = True
@@ -87,7 +76,7 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
             await resources.async_create_item(
                 {"res_type": "module", CONF_URL: FRONTEND_MODULE_URL}
             )
-    except Exception:  # noqa: BLE001 - frontend fallback must stay available
+    except Exception:  # noqa: BLE001
         _LOGGER.exception("Could not register Billy as a Lovelace resource")
 
 
@@ -120,10 +109,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             StaticPathConfig(FRONTEND_I18N_URL, str(FRONTEND_I18N_PATH), False),
         ]
     )
-
-    # The globally injected file is intentionally only the tiny bootstrap. It
-    # registers bill-tracker-card + its editor synchronously, then lazy-loads
-    # the larger implementation module behind those stable host elements.
     add_extra_js_url(hass, FRONTEND_MODULE_URL)
     await _async_register_lovelace_resource(hass)
     return True
@@ -160,7 +145,9 @@ def _manager(hass: HomeAssistant) -> BillTrackerManager:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "bill_tracker/list",
-        vol.Optional("forecast_months", default=12): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+        vol.Optional("forecast_months", default=12): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=24)
+        ),
     }
 )
 @websocket_api.async_response
@@ -237,12 +224,18 @@ async def ws_add(hass, connection, msg):
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "bill_tracker/update", vol.Required("expense_id"): str, **_EXPENSE_SCHEMA}
+    {
+        vol.Required("type"): "bill_tracker/update",
+        vol.Required("expense_id"): str,
+        **_EXPENSE_SCHEMA,
+    }
 )
 @websocket_api.async_response
 async def ws_update(hass, connection, msg):
     try:
-        item = await _manager(hass).async_update(msg["expense_id"], **_expense_kwargs(msg))
+        item = await _manager(hass).async_update(
+            msg["expense_id"], **_expense_kwargs(msg)
+        )
     except (ValueError, RuntimeError) as err:
         connection.send_error(msg["id"], "invalid_expense", str(err))
         return
@@ -297,7 +290,9 @@ _CATEGORY_COMMON = {
 }
 
 
-@websocket_api.websocket_command({vol.Required("type"): "bill_tracker/category/add", **_CATEGORY_COMMON})
+@websocket_api.websocket_command(
+    {vol.Required("type"): "bill_tracker/category/add", **_CATEGORY_COMMON}
+)
 @websocket_api.async_response
 async def ws_category_add(hass, connection, msg):
     try:
@@ -362,13 +357,17 @@ async def ws_category_delete(hass, connection, msg):
 
 _PAYER_COMMON = {
     vol.Required("name"): str,
-    vol.Optional("share_percent", default=50.0): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+    vol.Optional("share_percent", default=50.0): vol.All(
+        vol.Coerce(float), vol.Range(min=0, max=100)
+    ),
     vol.Optional("paypal_me", default=""): str,
     vol.Optional("enabled", default=True): bool,
 }
 
 
-@websocket_api.websocket_command({vol.Required("type"): "bill_tracker/payer/add", **_PAYER_COMMON})
+@websocket_api.websocket_command(
+    {vol.Required("type"): "bill_tracker/payer/add", **_PAYER_COMMON}
+)
 @websocket_api.async_response
 async def ws_payer_add(hass, connection, msg):
     try:
@@ -385,7 +384,11 @@ async def ws_payer_add(hass, connection, msg):
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "bill_tracker/payer/update", vol.Required("payer_id"): str, **_PAYER_COMMON}
+    {
+        vol.Required("type"): "bill_tracker/payer/update",
+        vol.Required("payer_id"): str,
+        **_PAYER_COMMON,
+    }
 )
 @websocket_api.async_response
 async def ws_payer_update(hass, connection, msg):
@@ -444,7 +447,10 @@ async def ws_settlement_add(hass, connection, msg):
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "bill_tracker/settlement/delete", vol.Required("settlement_id"): str}
+    {
+        vol.Required("type"): "bill_tracker/settlement/delete",
+        vol.Required("settlement_id"): str,
+    }
 )
 @websocket_api.async_response
 async def ws_settlement_delete(hass, connection, msg):

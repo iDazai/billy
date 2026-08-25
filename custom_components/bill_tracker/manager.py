@@ -297,8 +297,7 @@ class BillTrackerManager:
         split: list[dict[str, Any]] | None = None,
         paid: bool = False,
         payment_date: str | None = None,
-        due_date: str | None = None,
-        provider: str | None = None,
+        due_date: str | None = None,        provider: str | None = None,
         contract: str | None = None,
         consumption: float | None = None,
     ) -> dict[str, Any]:
@@ -701,8 +700,6 @@ class BillTrackerManager:
             raise ValueError("Non esiste un saldo aperto tra questi paganti")
 
         outstanding = float(debt["amount"])
-        # The UI settles a balance in full. Partial settlements would require
-        # per-share state on every bill instead of the single paid checkbox.
         if abs(float(amount) - outstanding) > 0.01:
             raise ValueError("Per ora Billy può saldare solo l'intero saldo aperto")
 
@@ -710,8 +707,6 @@ class BillTrackerManager:
         if not expense_ids:
             raise ValueError("Nessuna bolletta non pagata associata a questo saldo")
 
-        # A single paid flag represents the whole bill. Avoid silently closing
-        # a multi-party bill when only one of several participant debts is paid.
         pair = {from_payer_id, to_payer_id}
         for expense in self.expenses:
             if str(expense.get("id")) not in expense_ids:
@@ -757,7 +752,6 @@ class BillTrackerManager:
         linked = {str(x) for x in item.get("expense_ids", []) if x}
         self.settlements = [x for x in self.settlements if x.get("id") != settlement_id]
 
-        # Do not reopen a bill if another settlement still references it.
         still_settled = {
             str(expense_id)
             for settlement in self.settlements
@@ -773,13 +767,7 @@ class BillTrackerManager:
         return True
 
     def _pairwise_debts(self) -> list[dict[str, Any]]:
-        """Build pairwise debts from *unpaid* bills only.
-
-        A bill paid by A with a 50% share for B creates B -> A for half of
-        the bill. Opposite-direction bills between the same pair are netted,
-        but Billy does not create artificial cross-person transfers. This keeps
-        every displayed balance traceable to the bills that generated it.
-        """
+        """Build pairwise debts from *unpaid* bills only."""
         amounts: dict[tuple[str, str], float] = defaultdict(float)
         expense_ids: dict[tuple[str, str], set[str]] = defaultdict(set)
 
@@ -1005,14 +993,7 @@ class BillTrackerManager:
         return items
 
     def contract_savings(self) -> list[dict[str, Any]]:
-        """Estimate savings after a provider/contract change, normalized by usage.
-
-        Bills are split into contiguous contract segments per category. The latest
-        segment is compared with the immediately preceding one when both contain
-        consumption data in the same unit. Savings answer the question: what
-        would the new segment's actual consumption have cost at the old unit
-        price? This separates tariff savings from lower usage.
-        """
+        """Estimate savings after a provider/contract change, normalized by usage."""
         results: list[dict[str, Any]] = []
         for category in self.categories:
             category_id = str(category.get("id", ""))
@@ -1129,10 +1110,8 @@ class BillTrackerManager:
             "unpaid_entries": sum(1 for x in self.expenses if not bool(x.get("paid", False))),
             "active_categories": sum(1 for x in self.categories if x.get("enabled", True)),
             "active_payers": sum(1 for x in self.payers if x.get("enabled", True)),
-            # Outstanding bill balance: paid bills are explicitly excluded.
             "outstanding_total": unpaid_total,
             "unpaid_total": unpaid_total,
-            # Person-to-person balances are generated only by unpaid bills.
             "reimbursement_total": reimbursement_total,
         }
 
@@ -1240,7 +1219,6 @@ class BillTrackerManager:
         if abs(total - 100.0) > 0.05:
             raise ValueError("Le quote della bolletta devono sommare al 100%")
         result = [{"payer_id": payer_id, "percentage": round(value, 2)} for payer_id, value in combined.items() if value > 0]
-        # absorb tiny rounding errors in the last share
         if result:
             delta = round(100.0 - sum(float(x["percentage"]) for x in result), 2)
             result[-1]["percentage"] = round(float(result[-1]["percentage"]) + delta, 2)
@@ -1423,8 +1401,6 @@ class BillTrackerManager:
                 "period_start_year": sy, "period_start_month": sm,
                 "period_end_year": ey, "period_end_month": em,
                 "payer_id": payer_id, "split": split,
-                # v0.4.0 and older had no explicit payment status. Never infer it:
-                # migrated historical bills are unpaid until the user checks them.
                 "paid": bool(item.get("paid", False)),
                 "payment_date": payment_date,
                 "due_date": due_date,

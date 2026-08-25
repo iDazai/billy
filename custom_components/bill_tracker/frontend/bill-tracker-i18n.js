@@ -41,6 +41,10 @@ export const BILLY_TRANSLATIONS = {
       'Estimated at equivalent usage: {kind} {percent}%. Average spend {old_amount} → {new_amount}. Average consumption {old_consumption} → {new_consumption} {unit} ({change}%).',
     saving: 'saving',
     increase: 'increase',
+    savings_before: 'Before',
+    savings_after: 'After',
+    savings_empty:
+      'To estimate savings, enter the provider/contract and consumption in bills before and after a change. Billy compares the cost per unit at equivalent consumption.',
     upcoming_title: 'Upcoming estimated bills',
     upcoming_empty:
       'Historical bills are needed to estimate upcoming due bills.',
@@ -238,6 +242,10 @@ export const BILLY_TRANSLATIONS = {
       'Stima a consumo equivalente: {kind} {percent}%. Spesa media {old_amount} → {new_amount}. Consumo medio {old_consumption} → {new_consumption} {unit} ({change}%).',
     saving: 'risparmio',
     increase: 'aumento',
+    savings_before: 'Prima',
+    savings_after: 'Dopo',
+    savings_empty:
+      'Per stimare il risparmio, inserisci fornitore/contratto e consumo nelle bollette prima e dopo un cambio. Billy confronta il costo per unità a consumo equivalente.',
     upcoming_title: 'Prossime bollette stimate',
     upcoming_empty:
       'Servono bollette storiche per calcolare le prossime scadenze.',
@@ -436,6 +444,10 @@ export const BILLY_TRANSLATIONS = {
       'Estimación con consumo equivalente: {kind} {percent}%. Gasto medio {old_amount} → {new_amount}. Consumo medio {old_consumption} → {new_consumption} {unit} ({change}%).',
     saving: 'ahorro',
     increase: 'aumento',
+    savings_before: 'Antes',
+    savings_after: 'Después',
+    savings_empty:
+      'Para estimar el ahorro, introduce el proveedor/contrato y el consumo en las facturas antes y después de un cambio. Billy compara el coste por unidad a consumo equivalente.',
     upcoming_title: 'Próximas facturas estimadas',
     upcoming_empty:
       'Se necesitan facturas anteriores para estimar próximos vencimientos.',
@@ -636,6 +648,10 @@ export const BILLY_TRANSLATIONS = {
       'Estimation à consommation équivalente : {kind} {percent} %. Dépense moyenne {old_amount} → {new_amount}. Consommation moyenne {old_consumption} → {new_consumption} {unit} ({change} %).',
     saving: 'économie',
     increase: 'hausse',
+    savings_before: 'Avant',
+    savings_after: 'Après',
+    savings_empty:
+      'Pour estimer les économies, indiquez le fournisseur/contrat et la consommation dans les factures avant et après un changement. Billy compare le coût par unité à consommation équivalente.',
     upcoming_title: 'Prochaines factures estimées',
     upcoming_empty:
       'Des factures historiques sont nécessaires pour estimer les prochaines échéances.',
@@ -837,6 +853,10 @@ export const BILLY_TRANSLATIONS = {
       'Schätzung bei gleichem Verbrauch: {kind} {percent} %. Durchschnittskosten {old_amount} → {new_amount}. Durchschnittsverbrauch {old_consumption} → {new_consumption} {unit} ({change} %).',
     saving: 'Ersparnis',
     increase: 'Anstieg',
+    savings_before: 'Vorher',
+    savings_after: 'Nachher',
+    savings_empty:
+      'Um die Ersparnis zu schätzen, geben Sie Anbieter/Vertrag und Verbrauch in den Rechnungen vor und nach einem Wechsel an. Billy vergleicht die Kosten pro Einheit bei gleichem Verbrauch.',
     upcoming_title: 'Geschätzte nächste Rechnungen',
     upcoming_empty:
       'Für die Schätzung kommender Fälligkeiten werden historische Rechnungen benötigt.',
@@ -1035,6 +1055,10 @@ export const BILLY_TRANSLATIONS = {
       'Estimativa com consumo equivalente: {kind} {percent}%. Despesa média {old_amount} → {new_amount}. Consumo médio {old_consumption} → {new_consumption} {unit} ({change}%).',
     saving: 'poupança',
     increase: 'aumento',
+    savings_before: 'Antes',
+    savings_after: 'Depois',
+    savings_empty:
+      'Para estimar a poupança, indique o fornecedor/contrato e o consumo nas contas antes e depois de uma mudança. O Billy compara o custo por unidade a consumo equivalente.',
     upcoming_title: 'Próximas contas estimadas',
     upcoming_empty:
       'São necessárias contas anteriores para estimar os próximos vencimentos.',

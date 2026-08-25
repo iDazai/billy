@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.5.2
+-  hotfix language 
+
 ## 0.5.1
 
 ### Localization

@@ -1154,11 +1154,15 @@ class BillTrackerCard extends HTMLElement {
                     }">${saving >= 0 ? '+' : ''}${this._money(
                       saving
                     )}</div></div>
-              <div class="savings-comparison"><div><span>Prima</span><b>${this._escape(
+              <div class="savings-comparison"><div><span>${this._escape(
+                      this._t('savings_before')
+                    )}</span><b>${this._escape(
                 oldLabel
               )}</b><span>${this._escape(
                       this._unitPrice(x.old_unit_price, x.unit)
-                    )}</span></div><span>→</span><div><span>Dopo</span><b>${this._escape(
+                    )}</span></div><span>→</span><div><span>${this._escape(
+                      this._t('savings_after')
+                    )}</span><b>${this._escape(
                       newLabel
                     )}</b><span>${this._escape(
                       this._unitPrice(x.new_unit_price, x.unit)
@@ -1190,7 +1194,7 @@ class BillTrackerCard extends HTMLElement {
             </div>`
                   })
                   .join('')}</div>`
-              : '<div class="msg">Per stimare il risparmio, inserisci fornitore/contratto e consumo nelle bollette prima e dopo un cambio. Billy confronta il costo per unità a consumo equivalente.</div>'
+              : `<div class="msg">${this._escape(this._t('savings_empty'))}</div>`
           }
         </div>
 

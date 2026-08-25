@@ -22,6 +22,17 @@ from .const import (
     STORAGE_VERSION,
     SUPPORTED_INTERVALS,
 )
+from .exporter import (
+    csv_bytes,
+    csv_template_bytes,
+    filter_expenses,
+    month_tuple,
+    parse_csv_amount,
+    parse_csv_bool,
+    parse_csv_records,
+    pdf_bytes,
+    xlsx_bytes,
+)
 
 
 class BillTrackerManager:
@@ -55,6 +66,14 @@ class BillTrackerManager:
 
         if changed or data.get("schema_version") != STORAGE_SCHEMA_VERSION:
             await self._save()
+
+    @property
+    def currency(self) -> str:
+        """Return the Home Assistant configured currency (ISO-4217 style)."""
+        value = str(getattr(self.hass.config, "currency", "") or "").strip().upper()
+        if len(value) == 3 and value.isalpha():
+            return value
+        return "EUR"
 
     # ------------------------------------------------------------------
     # Payers
@@ -187,6 +206,9 @@ class BillTrackerManager:
         enabled: bool = True,
         default_payer_id: str | None = None,
         color: str | None = None,
+        consumption_unit: str = "",
+        default_provider: str = "",
+        default_contract: str = "",
     ) -> dict[str, Any]:
         name = name.strip()
         self._validate_category(name, interval_months)
@@ -200,6 +222,9 @@ class BillTrackerManager:
             "enabled": bool(enabled),
             "default_payer_id": payer_id,
             "color": self._normalize_color(color, len(self.categories)),
+            "consumption_unit": self._normalize_consumption_unit(consumption_unit),
+            "default_provider": self._normalize_optional_text(default_provider, 100),
+            "default_contract": self._normalize_optional_text(default_contract, 100),
         }
         self.categories.append(item)
         await self._save_and_notify()
@@ -214,6 +239,9 @@ class BillTrackerManager:
         enabled: bool,
         default_payer_id: str | None = None,
         color: str | None = None,
+        consumption_unit: str = "",
+        default_provider: str = "",
+        default_contract: str = "",
     ) -> dict[str, Any] | None:
         name = name.strip()
         self._validate_category(name, interval_months)
@@ -231,6 +259,9 @@ class BillTrackerManager:
                 "enabled": bool(enabled),
                 "default_payer_id": payer_id,
                 "color": self._normalize_color(color or item.get("color"), 0),
+                "consumption_unit": self._normalize_consumption_unit(consumption_unit),
+                "default_provider": self._normalize_optional_text(default_provider, 100),
+                "default_contract": self._normalize_optional_text(default_contract, 100),
             }
         )
         await self._save_and_notify()
@@ -265,6 +296,11 @@ class BillTrackerManager:
         payer_id: str | None = None,
         split: list[dict[str, Any]] | None = None,
         paid: bool = False,
+        payment_date: str | None = None,
+        due_date: str | None = None,
+        provider: str | None = None,
+        contract: str | None = None,
+        consumption: float | None = None,
     ) -> dict[str, Any]:
         category = self._resolve_category(category_id, category_name)
         self._validate_date(year, month)
@@ -275,6 +311,9 @@ class BillTrackerManager:
         )
         resolved_payer = self._resolve_expense_payer(category, payer_id)
         normalized_split = self._resolve_expense_split(split, resolved_payer)
+        normalized_payment_date = self._normalize_optional_iso_date(payment_date)
+        normalized_due_date = self._normalize_optional_iso_date(due_date)
+        normalized_consumption = self._normalize_optional_consumption(consumption)
         item = {
             "id": uuid4().hex,
             "paid_year": int(year),
@@ -288,6 +327,12 @@ class BillTrackerManager:
             "payer_id": resolved_payer,
             "split": normalized_split,
             "paid": bool(paid),
+            "payment_date": normalized_payment_date,
+            "due_date": normalized_due_date,
+            "provider": self._normalize_optional_text(category.get("default_provider", "") if provider is None else provider, 100),
+            "contract": self._normalize_optional_text(category.get("default_contract", "") if contract is None else contract, 100),
+            "consumption": normalized_consumption,
+            "consumption_unit": str(category.get("consumption_unit", "")),
             "note": note.strip(),
             "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
@@ -313,6 +358,11 @@ class BillTrackerManager:
         payer_id: str | None = None,
         split: list[dict[str, Any]] | None = None,
         paid: bool | None = None,
+        payment_date: str | None = None,
+        due_date: str | None = None,
+        provider: str | None = None,
+        contract: str | None = None,
+        consumption: float | None = None,
     ) -> dict[str, Any] | None:
         category = self._resolve_category(category_id, category_name)
         self._validate_date(year, month)
@@ -323,6 +373,13 @@ class BillTrackerManager:
         )
         resolved_payer = self._resolve_expense_payer(category, payer_id)
         normalized_split = self._resolve_expense_split(split, resolved_payer)
+        normalized_payment_date = (
+            self._normalize_optional_iso_date(payment_date) if payment_date is not None else None
+        )
+        normalized_due_date = (
+            self._normalize_optional_iso_date(due_date) if due_date is not None else None
+        )
+        normalized_consumption = self._normalize_optional_consumption(consumption)
         for item in self.expenses:
             if item.get("id") != expense_id:
                 continue
@@ -339,6 +396,14 @@ class BillTrackerManager:
                     "payer_id": resolved_payer,
                     "split": normalized_split,
                     "paid": bool(paid) if paid is not None else bool(item.get("paid", False)),
+                    "payment_date": (
+                        normalized_payment_date if payment_date is not None else item.get("payment_date")
+                    ),
+                    "due_date": normalized_due_date if due_date is not None else item.get("due_date"),
+                    "provider": self._normalize_optional_text(provider, 100) if provider is not None else str(item.get("provider", "")),
+                    "contract": self._normalize_optional_text(contract, 100) if contract is not None else str(item.get("contract", "")),
+                    "consumption": normalized_consumption,
+                    "consumption_unit": str(category.get("consumption_unit", "")),
                     "note": note.strip(),
                 }
             )
@@ -364,6 +429,241 @@ class BillTrackerManager:
         if changed:
             await self._save_and_notify()
         return changed
+
+    async def async_import_csv(
+        self,
+        csv_text: str,
+        *,
+        create_missing_categories: bool = True,
+        create_missing_payers: bool = True,
+    ) -> dict[str, Any]:
+        """Import bill rows from a CSV file and persist once at the end.
+
+        Billy's own export format is round-trip friendly, while a small set of
+        English/Italian column aliases is accepted for hand-authored files.
+        Existing IDs are skipped so re-importing the same Billy export does not
+        duplicate those rows.
+        """
+        records = parse_csv_records(csv_text)
+        if len(records) > 5000:
+            raise ValueError("Il CSV contiene più di 5000 righe")
+
+        existing_ids = {str(x.get("id")) for x in self.expenses if x.get("id")}
+        imported = 0
+        skipped = 0
+        created_categories = 0
+        created_payers = 0
+        errors: list[str] = []
+        error_count = 0
+        changed = False
+
+        def ensure_category(
+            name: str, interval: int, consumption_unit: str = "",
+            default_provider: str = "", default_contract: str = "",
+        ) -> dict[str, Any]:
+            nonlocal created_categories, changed
+            self._validate_category(name, interval)
+            category = self.category_by_name(name)
+            if category is not None:
+                return category
+            if not create_missing_categories:
+                raise ValueError(f"Tipo di bolletta sconosciuto: {name}")
+            if interval not in SUPPORTED_INTERVALS:
+                raise ValueError(f"Frequenza non supportata per {name}: {interval} mesi")
+            category = {
+                "id": uuid4().hex,
+                "name": name,
+                "interval_months": interval,
+                "enabled": True,
+                "default_payer_id": None,
+                "color": self._normalize_color(None, len(self.categories)),
+                "consumption_unit": self._normalize_consumption_unit(consumption_unit),
+                "default_provider": self._normalize_optional_text(default_provider, 100),
+                "default_contract": self._normalize_optional_text(default_contract, 100),
+            }
+            self.categories.append(category)
+            created_categories += 1
+            changed = True
+            return category
+
+        def ensure_payer(name: str, share: float = 50.0) -> dict[str, Any]:
+            nonlocal created_payers, changed
+            self._validate_payer(name, share)
+            payer = self.payer_by_name(name)
+            if payer is not None:
+                return payer
+            if not create_missing_payers:
+                raise ValueError(f"Pagante sconosciuto: {name}")
+            payer = {
+                "id": uuid4().hex,
+                "name": name,
+                "share_percent": round(max(0.0, min(100.0, float(share))), 2),
+                "paypal_me": "",
+                "enabled": True,
+            }
+            self.payers.append(payer)
+            created_payers += 1
+            changed = True
+            return payer
+
+        for line_no, row in records:
+            try:
+                incoming_id = str(row.get("id") or "").strip()
+                if incoming_id and incoming_id in existing_ids:
+                    skipped += 1
+                    continue
+
+                category_name = str(row.get("category") or "").strip()
+                if not category_name:
+                    raise ValueError("tipo bolletta mancante")
+                interval = int(row.get("interval_months") or 1)
+                category = ensure_category(
+                    category_name, interval, str(row.get("consumption_unit") or ""),
+                    str(row.get("provider") or ""), str(row.get("contract") or ""),
+                )
+
+                amount = parse_csv_amount(row.get("amount", ""))
+                self._validate_amount(amount)
+
+                billing = month_tuple(row.get("billing_month"))
+                if billing is None:
+                    billing = (int(row.get("year") or 0), int(row.get("month") or 0))
+                year, month = billing
+                self._validate_date(year, month)
+
+                period_start = month_tuple(row.get("period_start"))
+                period_end = month_tuple(row.get("period_end"))
+                sy, sm, ey, em = self._normalize_period(
+                    year, month, int(category["interval_months"]),
+                    period_start[0] if period_start else None,
+                    period_start[1] if period_start else None,
+                    period_end[0] if period_end else None,
+                    period_end[1] if period_end else None,
+                )
+
+                payer_id = None
+                payer_name = str(row.get("payer") or "").strip()
+                if payer_name:
+                    payer_id = str(ensure_payer(payer_name)["id"])
+                resolved_payer = self._resolve_expense_payer(category, payer_id)
+
+                split = None
+                raw_split = str(row.get("split") or "").strip()
+                if raw_split:
+                    parsed_split = []
+                    for token in raw_split.split("|"):
+                        token = token.strip()
+                        if not token:
+                            continue
+                        if ":" not in token:
+                            raise ValueError(f"quota non valida: {token}")
+                        split_name, pct_text = token.rsplit(":", 1)
+                        pct = float(pct_text.strip().replace(",", "."))
+                        participant = ensure_payer(split_name.strip(), pct)
+                        parsed_split.append({"payer_id": str(participant["id"]), "percentage": pct})
+                    split = parsed_split
+                normalized_split = self._resolve_expense_split(split, resolved_payer)
+
+                paid = parse_csv_bool(row.get("paid", ""))
+                payment_date = self._normalize_optional_iso_date(row.get("payment_date"))
+                due_date = self._normalize_optional_iso_date(row.get("due_date"))
+                incoming_currency = str(row.get("currency") or "").strip().upper()
+                if incoming_currency and incoming_currency != self.currency:
+                    raise ValueError(f"valuta {incoming_currency} diversa dalla valuta Home Assistant {self.currency}")
+                consumption_text = str(row.get("consumption") or "").strip()
+                consumption = self._normalize_optional_consumption(
+                    float(consumption_text.replace(",", ".")) if consumption_text else None
+                )
+                expense_id = incoming_id or uuid4().hex
+                while expense_id in existing_ids:
+                    expense_id = uuid4().hex
+
+                item = {
+                    "id": expense_id,
+                    "paid_year": int(year),
+                    "paid_month": int(month),
+                    "category_id": str(category["id"]),
+                    "amount": round(float(amount), 2),
+                    "period_start_year": sy,
+                    "period_start_month": sm,
+                    "period_end_year": ey,
+                    "period_end_month": em,
+                    "payer_id": resolved_payer,
+                    "split": normalized_split,
+                    "paid": paid,
+                    "payment_date": payment_date,
+                    "due_date": due_date,
+                    "provider": self._normalize_optional_text(row.get("provider", ""), 100),
+                    "contract": self._normalize_optional_text(row.get("contract", ""), 100),
+                    "consumption": consumption,
+                    "consumption_unit": self._normalize_consumption_unit(
+                        row.get("consumption_unit") or category.get("consumption_unit", "")
+                    ),
+                    "note": str(row.get("note") or "").strip(),
+                    "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                }
+                self.expenses.append(item)
+                existing_ids.add(expense_id)
+                imported += 1
+                changed = True
+            except (ValueError, TypeError, OverflowError) as err:
+                error_count += 1
+                if len(errors) < 30:
+                    errors.append(f"Riga {line_no}: {err}")
+
+        if changed:
+            self._sort()
+            await self._save_and_notify()
+        return {
+            "imported": imported,
+            "skipped": skipped,
+            "errors": errors,
+            "error_count": error_count,
+            "created_categories": created_categories,
+            "created_payers": created_payers,
+        }
+
+    def export_data(
+        self,
+        *,
+        file_format: str,
+        from_month: str | None = None,
+        to_month: str | None = None,
+        status: str = "all",
+        category_id: str | None = None,
+        trend: str = "both",
+    ) -> tuple[bytes, str, str]:
+        """Return exported bytes, MIME type and extension for the requested format."""
+        fmt = str(file_format or "csv").lower()
+        if fmt not in {"csv", "xlsx", "pdf"}:
+            raise ValueError("Formato export non supportato")
+        public_rows = [self._public_expense(x) for x in self.expenses]
+        rows = filter_expenses(
+            public_rows,
+            from_month=from_month,
+            to_month=to_month,
+            status=status,
+            category_id=category_id,
+        )
+        category_lookup = {str(x["id"]): dict(x) for x in self.categories}
+        if fmt == "csv":
+            return csv_bytes(rows, category_lookup, currency=self.currency), "text/csv;charset=utf-8", "csv"
+        if fmt == "xlsx":
+            return (
+                xlsx_bytes(rows, category_lookup, from_month=from_month, to_month=to_month, currency=self.currency),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "xlsx",
+            )
+        return (
+            pdf_bytes(
+                rows, category_lookup, from_month=from_month, to_month=to_month, trend=trend, currency=self.currency,
+            ),
+            "application/pdf",
+            "pdf",
+        )
+
+    def export_csv_template(self) -> bytes:
+        return csv_template_bytes()
 
     # ------------------------------------------------------------------
     # Settlements / debt netting
@@ -541,7 +841,7 @@ class BillTrackerManager:
                         "expense_ids": linked,
                         "expense_count": len(linked),
                         "paypal_me": paypal_me,
-                        "paypal_url": self._paypal_url(paypal_me, value),
+                        "paypal_url": self._paypal_url(paypal_me, value, self.currency),
                     }
                 )
         result.sort(key=lambda x: float(x["amount"]), reverse=True)
@@ -583,6 +883,7 @@ class BillTrackerManager:
         forecast_months = max(1, min(int(forecast_months), 24))
         return {
             "schema_version": STORAGE_SCHEMA_VERSION,
+            "currency": self.currency,
             "categories": [dict(x) for x in self.categories],
             "active_categories": [dict(x) for x in self.categories if x.get("enabled", True)],
             "payers": [dict(x) for x in self.payers],
@@ -597,6 +898,7 @@ class BillTrackerManager:
             "forecast": self.forecast(forecast_months),
             "normalized_forecast": self.normalized_forecast(forecast_months),
             "upcoming": self.upcoming(forecast_months),
+            "contract_savings": self.contract_savings(),
             "summary": self.summary(),
         }
 
@@ -701,6 +1003,104 @@ class BillTrackerManager:
                 items.append({"year": row["year"], "month": row["month"], "key": row["key"], "category_id": category.get("id") if category else None, "category": category_name, "amount": round(float(amount), 2)})
         return items
 
+    def contract_savings(self) -> list[dict[str, Any]]:
+        """Estimate savings after a provider/contract change, normalized by usage.
+
+        Bills are split into contiguous contract segments per category. The latest
+        segment is compared with the immediately preceding one when both contain
+        consumption data in the same unit. Savings answer the question: what
+        would the new segment's actual consumption have cost at the old unit
+        price? This separates tariff savings from lower usage.
+        """
+        results: list[dict[str, Any]] = []
+        for category in self.categories:
+            category_id = str(category.get("id", ""))
+            rows = [
+                x for x in self.expenses
+                if str(x.get("category_id", "")) == category_id
+                and (str(x.get("provider", "")).strip() or str(x.get("contract", "")).strip())
+            ]
+            rows.sort(key=lambda x: (int(x.get("paid_year", 0)), int(x.get("paid_month", 0)), str(x.get("created_at", ""))))
+            if len(rows) < 2:
+                continue
+
+            segments: list[dict[str, Any]] = []
+            for row in rows:
+                provider = str(row.get("provider", "")).strip()
+                contract = str(row.get("contract", "")).strip()
+                key = (provider.casefold(), contract.casefold())
+                if not segments or segments[-1]["key"] != key:
+                    segments.append({"key": key, "provider": provider, "contract": contract, "rows": []})
+                segments[-1]["rows"].append(row)
+            if len(segments) < 2:
+                continue
+
+            old_segment, new_segment = segments[-2], segments[-1]
+            units = {
+                str(x.get("consumption_unit", "")).strip()
+                for segment in (old_segment, new_segment) for x in segment["rows"]
+                if str(x.get("consumption_unit", "")).strip()
+            }
+            unit = str(category.get("consumption_unit", "")).strip()
+            if not unit and len(units) == 1:
+                unit = next(iter(units))
+            old_usage_rows = [
+                x for x in old_segment["rows"]
+                if x.get("consumption") is not None and (not unit or str(x.get("consumption_unit", unit)) == unit)
+            ]
+            new_usage_rows = [
+                x for x in new_segment["rows"]
+                if x.get("consumption") is not None and (not unit or str(x.get("consumption_unit", unit)) == unit)
+            ]
+            if not unit or not old_usage_rows or not new_usage_rows:
+                continue
+
+            old_consumption = sum(float(x.get("consumption", 0) or 0) for x in old_usage_rows)
+            new_consumption = sum(float(x.get("consumption", 0) or 0) for x in new_usage_rows)
+            if old_consumption <= 0 or new_consumption <= 0:
+                continue
+            old_amount = sum(float(x.get("amount", 0) or 0) for x in old_usage_rows)
+            new_amount = sum(float(x.get("amount", 0) or 0) for x in new_usage_rows)
+            old_unit_price = old_amount / old_consumption
+            new_unit_price = new_amount / new_consumption
+            baseline_new_cost = old_unit_price * new_consumption
+            estimated_savings = baseline_new_cost - new_amount
+            savings_pct = estimated_savings / baseline_new_cost * 100 if baseline_new_cost > 0 else 0.0
+
+            old_avg_amount = old_amount / len(old_usage_rows)
+            new_avg_amount = new_amount / len(new_usage_rows)
+            old_avg_consumption = old_consumption / len(old_usage_rows)
+            new_avg_consumption = new_consumption / len(new_usage_rows)
+            consumption_change_pct = (
+                (new_avg_consumption - old_avg_consumption) / old_avg_consumption * 100
+                if old_avg_consumption > 0 else 0.0
+            )
+            results.append({
+                "category_id": category_id,
+                "category": str(category.get("name", "")),
+                "unit": unit,
+                "currency": self.currency,
+                "old_provider": old_segment["provider"],
+                "old_contract": old_segment["contract"],
+                "new_provider": new_segment["provider"],
+                "new_contract": new_segment["contract"],
+                "old_bill_count": len(old_usage_rows),
+                "new_bill_count": len(new_usage_rows),
+                "old_unit_price": round(old_unit_price, 6),
+                "new_unit_price": round(new_unit_price, 6),
+                "old_avg_amount": round(old_avg_amount, 2),
+                "new_avg_amount": round(new_avg_amount, 2),
+                "old_avg_consumption": round(old_avg_consumption, 4),
+                "new_avg_consumption": round(new_avg_consumption, 4),
+                "consumption_change_percent": round(consumption_change_pct, 2),
+                "estimated_savings": round(estimated_savings, 2),
+                "estimated_savings_percent": round(savings_pct, 2),
+                "new_period_consumption": round(new_consumption, 4),
+                "baseline_new_cost": round(baseline_new_cost, 2),
+            })
+        results.sort(key=lambda x: abs(float(x.get("estimated_savings", 0))), reverse=True)
+        return results
+
     def summary(self) -> dict[str, Any]:
         monthly = self.monthly_totals()
         normalized = self.normalized_monthly_totals()
@@ -751,6 +1151,8 @@ class BillTrackerManager:
             "month": int(item["paid_month"]),
             "category": str(category.get("name")) if category else "Bolletta rimossa",
             "category_color": str(category.get("color", "#A0A7B4")) if category else "#A0A7B4",
+            "consumption_unit": str(item.get("consumption_unit") or (category.get("consumption_unit", "") if category else "")),
+            "currency": self.currency,
             "payer": str(payer.get("name")) if payer else "",
             "split": split,
         }
@@ -924,6 +1326,11 @@ class BillTrackerManager:
                 "enabled": bool(raw.get("enabled", True)),
                 "default_payer_id": default_payer,
                 "color": self._normalize_color(raw.get("color"), index),
+                "consumption_unit": self._normalize_consumption_unit(
+                    raw.get("consumption_unit") or self._default_consumption_unit(category_id, name)
+                ),
+                "default_provider": self._normalize_optional_text(raw.get("default_provider", ""), 100),
+                "default_contract": self._normalize_optional_text(raw.get("default_contract", ""), 100),
             }
             if item != raw:
                 changed = True
@@ -955,6 +1362,9 @@ class BillTrackerManager:
                     "id": uuid4().hex, "name": legacy_name or "Altro", "interval_months": 1,
                     "enabled": True, "default_payer_id": None,
                     "color": self._normalize_color(None, len(self.categories)),
+                    "consumption_unit": self._default_consumption_unit("", legacy_name or "Altro"),
+                    "default_provider": "",
+                    "default_contract": "",
                 }
                 duplicate = self.category_by_name(category["name"])
                 if duplicate:
@@ -990,6 +1400,21 @@ class BillTrackerManager:
                 except (ValueError, TypeError):
                     split = []
                     changed = True
+            try:
+                payment_date = self._normalize_optional_iso_date(item.get("payment_date"))
+            except ValueError:
+                payment_date = None
+                changed = True
+            try:
+                due_date = self._normalize_optional_iso_date(item.get("due_date") or item.get("expiration_date"))
+            except ValueError:
+                due_date = None
+                changed = True
+            try:
+                consumption = self._normalize_optional_consumption(item.get("consumption"))
+            except (ValueError, TypeError, OverflowError):
+                consumption = None
+                changed = True
             new_item = {
                 "id": str(item.get("id") or uuid4().hex),
                 "paid_year": paid_year, "paid_month": paid_month,
@@ -1000,6 +1425,14 @@ class BillTrackerManager:
                 # v0.4.0 and older had no explicit payment status. Never infer it:
                 # migrated historical bills are unpaid until the user checks them.
                 "paid": bool(item.get("paid", False)),
+                "payment_date": payment_date,
+                "due_date": due_date,
+                "provider": self._normalize_optional_text(item.get("provider", ""), 100),
+                "contract": self._normalize_optional_text(item.get("contract", item.get("plan", "")), 100),
+                "consumption": consumption,
+                "consumption_unit": self._normalize_consumption_unit(
+                    item.get("consumption_unit") or category.get("consumption_unit", "")
+                ),
                 "note": str(item.get("note", "")).strip(),
                 "created_at": str(item.get("created_at") or datetime.now().astimezone().isoformat(timespec="seconds")),
             }
@@ -1061,6 +1494,45 @@ class BillTrackerManager:
         return value
 
     @staticmethod
+    def _normalize_optional_iso_date(value: Any) -> str | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            parsed = date.fromisoformat(text)
+        except ValueError as err:
+            raise ValueError("Data non valida") from err
+        if parsed.year < 2000 or parsed.year > 2200:
+            raise ValueError("Data non valida")
+        return parsed.isoformat()
+
+    @staticmethod
+    def _normalize_optional_text(value: Any, max_length: int) -> str:
+        return str(value or "").strip()[:max_length]
+
+    @staticmethod
+    def _normalize_consumption_unit(value: Any) -> str:
+        return str(value or "").strip()[:20]
+
+    @staticmethod
+    def _default_consumption_unit(category_id: str, name: str) -> str:
+        key = f"{category_id} {name}".casefold()
+        if "electric" in key or "elettr" in key or "power" in key:
+            return "kWh"
+        if "gas" in key or "water" in key or "acqua" in key:
+            return "m³"
+        return ""
+
+    @staticmethod
+    def _normalize_optional_consumption(value: Any) -> float | None:
+        if value is None or str(value).strip() == "":
+            return None
+        amount = float(value)
+        if not isfinite(amount) or amount < 0:
+            raise ValueError("Consumo non valido")
+        return round(amount, 4)
+
+    @staticmethod
     def _validate_payer(name: str, share_percent: float) -> None:
         if not name:
             raise ValueError("Nome obbligatorio")
@@ -1103,10 +1575,11 @@ class BillTrackerManager:
         return "".join(ch for ch in text if ch.isalnum() or ch in "._-")[:80]
 
     @staticmethod
-    def _paypal_url(handle: str, amount: float) -> str:
+    def _paypal_url(handle: str, amount: float, currency: str = "EUR") -> str:
         if not handle:
             return ""
-        return f"https://paypal.me/{quote(handle, safe='._-')}/{float(amount):.2f}EUR"
+        code = str(currency or "EUR").upper()
+        return f"https://paypal.me/{quote(handle, safe='._-')}/{float(amount):.2f}{quote(code)}"
 
     @staticmethod
     def _normalize_color(value: Any, index: int) -> str:

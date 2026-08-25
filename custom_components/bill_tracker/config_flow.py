@@ -11,6 +11,8 @@ from homeassistant.core import callback
 from .const import DOMAIN, INTERVAL_LABELS, SUPPORTED_INTERVALS
 from .manager import BillTrackerManager
 
+NO_DEFAULT_PAYER = "__none__"
+
 
 class BillTrackerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle the initial Bill Tracker setup."""
@@ -178,14 +180,20 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
     # ------------------------------------------------------------------
     def _category_schema(self, manager: BillTrackerManager, item: dict[str, Any] | None = None):
         interval_choices = {str(value): INTERVAL_LABELS[value] for value in SUPPORTED_INTERVALS}
-        payer_choices = {"": "Nessuno / primo pagante attivo"}
+        # Home Assistant option selectors do not reliably preserve an empty-string
+        # option. Use an explicit sentinel so "no default payer" is always
+        # selectable, and expose every configured payer (disabled ones are tagged).
+        payer_choices = {NO_DEFAULT_PAYER: "Nessuno"}
         payer_choices.update(
             {str(p["id"]): str(p["name"]) for p in manager.payers if p.get("enabled", True)}
         )
         if item and item.get("default_payer_id"):
             selected = manager.payer(str(item["default_payer_id"]))
             if selected:
-                payer_choices.setdefault(str(selected["id"]), str(selected["name"]))
+                payer_choices.setdefault(
+                    str(selected["id"]),
+                    f"{selected['name']}{'' if selected.get('enabled', True) else ' — disattivato'}",
+                )
         return vol.Schema(
             {
                 vol.Required("name", default=str(item["name"]) if item else ""): str,
@@ -195,11 +203,23 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                 ): vol.In(interval_choices),
                 vol.Required(
                     "default_payer_id",
-                    default=str(item.get("default_payer_id") or "") if item else "",
+                    default=str(item.get("default_payer_id") or NO_DEFAULT_PAYER) if item else NO_DEFAULT_PAYER,
                 ): vol.In(payer_choices),
                 vol.Optional(
                     "color",
                     default=str(item.get("color", "#5B8FF9")) if item else "#5B8FF9",
+                ): str,
+                vol.Optional(
+                    "consumption_unit",
+                    default=str(item.get("consumption_unit", "")) if item else "",
+                ): str,
+                vol.Optional(
+                    "default_provider",
+                    default=str(item.get("default_provider", "")) if item else "",
+                ): str,
+                vol.Optional(
+                    "default_contract",
+                    default=str(item.get("default_contract", "")) if item else "",
                 ): str,
                 vol.Required(
                     "enabled", default=bool(item.get("enabled", True)) if item else True
@@ -218,8 +238,15 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                     name=user_input["name"],
                     interval_months=int(user_input["interval_months"]),
                     enabled=bool(user_input["enabled"]),
-                    default_payer_id=user_input.get("default_payer_id") or None,
+                    default_payer_id=(
+                        None
+                        if user_input.get("default_payer_id") in (None, "", NO_DEFAULT_PAYER)
+                        else str(user_input["default_payer_id"])
+                    ),
                     color=user_input.get("color"),
+                    consumption_unit=user_input.get("consumption_unit", ""),
+                    default_provider=user_input.get("default_provider", ""),
+                    default_contract=user_input.get("default_contract", ""),
                 )
             except ValueError:
                 errors["base"] = "invalid_category"
@@ -276,8 +303,15 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                     name=user_input["name"],
                     interval_months=int(user_input["interval_months"]),
                     enabled=bool(user_input["enabled"]),
-                    default_payer_id=user_input.get("default_payer_id") or None,
+                    default_payer_id=(
+                        None
+                        if user_input.get("default_payer_id") in (None, "", NO_DEFAULT_PAYER)
+                        else str(user_input["default_payer_id"])
+                    ),
                     color=user_input.get("color"),
+                    consumption_unit=user_input.get("consumption_unit", ""),
+                    default_provider=user_input.get("default_provider", ""),
+                    default_contract=user_input.get("default_contract", ""),
                 )
             except ValueError:
                 errors["base"] = "invalid_category"

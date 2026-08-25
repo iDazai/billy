@@ -1,8 +1,15 @@
 {
   "title": "Bill Tracker",
   "config": {
-    "abort": {"already_configured": "Bill Tracker è già configurato."},
-    "step": {"user": {"title": "Bill Tracker", "description": "Crea il database locale delle bollette e abilita la scheda per la dashboard."}}
+    "abort": {
+      "already_configured": "Bill Tracker è già configurato."
+    },
+    "step": {
+      "user": {
+        "title": "Bill Tracker",
+        "description": "Crea il database locale delle bollette e abilita la scheda per la dashboard."
+      }
+    }
   },
   "options": {
     "abort": {
@@ -17,15 +24,86 @@
       "payer_in_use": "Questo pagante è usato da bollette, impostazioni o rimborsi. Disattivalo invece di eliminarlo."
     },
     "step": {
-      "init": {"title": "Impostazioni Bill Tracker", "menu_options": {"add_payer": "Aggiungi pagante", "manage_payer": "Gestisci paganti", "add_category": "Aggiungi tipo di bolletta", "manage_category": "Gestisci tipi di bolletta", "done": "Fine"}},
-      "add_payer": {"title": "Aggiungi pagante", "description": "La quota predefinita viene usata come peso quando Billy divide automaticamente una bolletta tra i paganti attivi.", "data": {"name": "Nome", "share_percent": "Quota predefinita (%)", "paypal_me": "Username o link PayPal.Me", "enabled": "Usa nelle nuove bollette"}},
-      "manage_payer": {"title": "Gestisci pagante", "data": {"payer_id": "Pagante", "action": "Azione"}},
-      "edit_payer": {"title": "Modifica pagante", "description": "Disattivandolo mantieni tutto lo storico ma non verrà incluso nelle nuove divisioni automatiche.", "data": {"name": "Nome", "share_percent": "Quota predefinita (%)", "paypal_me": "Username o link PayPal.Me", "enabled": "Usa nelle nuove bollette"}},
-      "delete_payer": {"title": "Elimina {name}", "description": "Puoi eliminare solo un pagante che non è mai stato utilizzato."},
-      "add_category": {"title": "Aggiungi tipo di bolletta", "description": "Scegli periodicità, pagatore predefinito e colore usato nel grafico stacked.", "data": {"name": "Nome", "interval_months": "Periodicità", "default_payer_id": "Pagatore predefinito", "color": "Colore grafico (#RRGGBB)", "enabled": "Mostra tra le scelte"}},
-      "manage_category": {"title": "Gestisci tipo di bolletta", "data": {"category_id": "Tipo di bolletta", "action": "Azione"}},
-      "edit_category": {"title": "Modifica tipo di bolletta", "description": "Il pagatore predefinito viene preselezionato quando aggiungi questa bolletta. Disattivandola lo storico resta intatto.", "data": {"name": "Nome", "interval_months": "Periodicità", "default_payer_id": "Pagatore predefinito", "color": "Colore grafico (#RRGGBB)", "enabled": "Mostra tra le scelte"}},
-      "delete_category": {"title": "Elimina {name}", "description": "Puoi eliminare solo tipi di bolletta senza storico."}
+      "init": {
+        "title": "Impostazioni Bill Tracker",
+        "menu_options": {
+          "add_payer": "Aggiungi pagante",
+          "manage_payer": "Gestisci paganti",
+          "add_category": "Aggiungi tipo di bolletta",
+          "manage_category": "Gestisci tipi di bolletta",
+          "done": "Fine"
+        }
+      },
+      "add_payer": {
+        "title": "Aggiungi pagante",
+        "description": "La quota predefinita viene usata come peso quando Billy divide automaticamente una bolletta tra i paganti attivi.",
+        "data": {
+          "name": "Nome",
+          "share_percent": "Quota predefinita (%)",
+          "paypal_me": "Username o link PayPal.Me",
+          "enabled": "Usa nelle nuove bollette"
+        }
+      },
+      "manage_payer": {
+        "title": "Gestisci pagante",
+        "data": {
+          "payer_id": "Pagante",
+          "action": "Azione"
+        }
+      },
+      "edit_payer": {
+        "title": "Modifica pagante",
+        "description": "Disattivandolo mantieni tutto lo storico ma non verrà incluso nelle nuove divisioni automatiche.",
+        "data": {
+          "name": "Nome",
+          "share_percent": "Quota predefinita (%)",
+          "paypal_me": "Username o link PayPal.Me",
+          "enabled": "Usa nelle nuove bollette"
+        }
+      },
+      "delete_payer": {
+        "title": "Elimina {name}",
+        "description": "Puoi eliminare solo un pagante che non è mai stato utilizzato."
+      },
+      "add_category": {
+        "title": "Aggiungi tipo di bolletta",
+        "description": "Scegli periodicità, pagatore predefinito, colore e unità di consumo opzionale. Il consumo permette a Billy di confrontare cambi di fornitore/contratto sul costo per unità.",
+        "data": {
+          "name": "Nome",
+          "interval_months": "Periodicità",
+          "default_payer_id": "Pagatore predefinito",
+          "color": "Colore grafico (#RRGGBB)",
+          "enabled": "Mostra tra le scelte",
+          "consumption_unit": "Unità di consumo (es. kWh, m³)",
+          "default_provider": "Fornitore/compagnia predefinita",
+          "default_contract": "Contratto/offerta predefinita"
+        }
+      },
+      "manage_category": {
+        "title": "Gestisci tipo di bolletta",
+        "data": {
+          "category_id": "Tipo di bolletta",
+          "action": "Azione"
+        }
+      },
+      "edit_category": {
+        "title": "Modifica tipo di bolletta",
+        "description": "Il pagatore predefinito viene preselezionato. Imposta un’unità come kWh o m³ per abilitare la stima del risparmio tra contratti. Disattivando il tipo lo storico resta intatto.",
+        "data": {
+          "name": "Nome",
+          "interval_months": "Periodicità",
+          "default_payer_id": "Pagatore predefinito",
+          "color": "Colore grafico (#RRGGBB)",
+          "enabled": "Mostra tra le scelte",
+          "consumption_unit": "Unità di consumo (es. kWh, m³)",
+          "default_provider": "Fornitore/compagnia predefinita",
+          "default_contract": "Contratto/offerta predefinita"
+        }
+      },
+      "delete_category": {
+        "title": "Elimina {name}",
+        "description": "Puoi eliminare solo tipi di bolletta senza storico."
+      }
     }
   }
 }

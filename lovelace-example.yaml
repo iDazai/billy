@@ -1,6 +1,5 @@
 type: custom:bill-tracker-card
 title: Bollette di casa
 columns: full
-recent: 10
 history_months: 12
 forecast_months: 12

@@ -67,13 +67,16 @@
       },
       "add_category": {
         "title": "Add bill type",
-        "description": "Choose recurrence, default payer and the color used in stacked spending charts.",
+        "description": "Choose recurrence, default payer, chart color and optional consumption unit. Consumption lets Billy compare provider/contract changes using cost per unit.",
         "data": {
           "name": "Name",
           "interval_months": "Recurrence",
           "default_payer_id": "Default payer",
           "color": "Chart color (#RRGGBB)",
-          "enabled": "Show in bill selection list"
+          "enabled": "Show in bill selection list",
+          "consumption_unit": "Consumption unit (e.g. kWh, m³)",
+          "default_provider": "Default provider/company",
+          "default_contract": "Default contract/plan"
         }
       },
       "manage_category": {
@@ -85,13 +88,16 @@
       },
       "edit_category": {
         "title": "Edit bill type",
-        "description": "The default payer is preselected when adding this bill. Disabling the type keeps its history.",
+        "description": "The default payer is preselected for new bills. Set a consumption unit such as kWh or m³ to enable contract savings estimates. Disabling the type keeps its history.",
         "data": {
           "name": "Name",
           "interval_months": "Recurrence",
           "default_payer_id": "Default payer",
           "color": "Chart color (#RRGGBB)",
-          "enabled": "Show in bill selection list"
+          "enabled": "Show in bill selection list",
+          "consumption_unit": "Consumption unit (e.g. kWh, m³)",
+          "default_provider": "Default provider/company",
+          "default_contract": "Default contract/plan"
         }
       },
       "delete_category": {

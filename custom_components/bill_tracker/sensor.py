@@ -25,7 +25,6 @@ class BillTrackerSensor(SensorEntity):
 
     _attr_name = "Totale bollette"
     _attr_unique_id = "bill_tracker_total"
-    _attr_native_unit_of_measurement = "EUR"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:receipt-text"
 
@@ -39,6 +38,11 @@ class BillTrackerSensor(SensorEntity):
     @callback
     def _on_update(self, _event) -> None:
         self.async_write_ha_state()
+
+    @property
+    def native_unit_of_measurement(self):
+        """Use the currency configured in Home Assistant."""
+        return self.manager.currency
 
     @property
     def native_value(self):

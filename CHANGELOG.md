@@ -1,5 +1,74 @@
 # Changelog
 
+## 0.5.0
+
+### Consumption, contracts and savings
+
+- Added optional **provider/company**, **contract/plan** and **consumption** fields to each bill.
+- Bill types can define a consumption unit plus a default provider/company and contract/plan; built-in Electricity uses `kWh`, Gas and Water use `m³`, and custom units are supported. New bills inherit these defaults while historical bills keep their original provider/contract.
+- Added a **provider/contract savings** panel that detects the latest contract change per bill type and compares weighted cost per unit before/after the change.
+- Savings are normalized to the new period's actual consumption, so Billy distinguishes tariff savings from changes caused only by using less/more energy or water.
+- Added provider, contract, consumption and consumption unit to CSV/XLSX round-trip exports/imports.
+- Storage schema upgraded to v8 with automatic migration of existing bills/categories.
+
+### Currency
+
+- Removed the hard-coded EUR assumption from the Lovelace card and monetary sensor.
+- Billy now uses Home Assistant's configured currency for totals, forecasts, PayPal.Me amounts and CSV/XLSX/PDF exports.
+- CSV imports with an explicit currency different from the Home Assistant currency are rejected to avoid silently aggregating incompatible amounts.
+
+### Import / Export
+
+- Added a dedicated **Import / Export** dialog to the Billy dashboard card.
+- CSV import supports Billy exports plus common English/Italian column aliases.
+- Re-importing rows with an existing Billy expense ID skips them instead of duplicating them.
+- Import can optionally create missing bill types and payer profiles and returns a row-level error summary.
+- Added a downloadable CSV template for migrations from spreadsheets or other trackers.
+- Added filtered export by bill type, paid/unpaid status and billing-month range.
+- CSV export is round-trip friendly and includes recurrence, competence dates, payer/split, payment date, due date and notes.
+- Excel export creates an `.xlsx` workbook with **Bills** and **Monthly summary** sheets.
+- PDF export creates a printable report with KPIs, category totals, bill details and selectable **Payments**, **Normalized monthly cost**, or both trends.
+- CSV, XLSX and PDF files are generated locally by Billy with no external cloud service.
+
+## 0.4.8
+
+### Paid / unpaid history filter
+
+- Added a **Status** filter to **All bills**.
+- History can now show **All**, **Unpaid** or **Paid** bills only.
+- The status filter combines with bill type, year/month-range filters and pagination.
+- Changing the status filter resets pagination to the first page.
+
+## 0.4.7
+
+### Optional bill dates
+
+- Added an optional exact **payment date** to every bill.
+- Added an optional **due/expiration date** to every bill.
+- Both dates are persisted, editable and shown in the current-month list and complete history.
+- Storage schema upgraded to v7; existing bills migrate with both dates empty.
+
+### Default payer selector fix
+
+- Fixed bill-type create/edit flows where the default payer selector could fail to expose a usable payer choice.
+- Replaced the empty-string choice with a stable internal `None` sentinel and list active configured payers while preserving an already-selected disabled payer for editing.
+
+### Compact current-month list
+
+- Replaced the generic recent-bills list with bills whose payment month is the current month.
+- Added a **Show / Hide** control so the section can be collapsed without losing access to **All bills**.
+- Removed the obsolete “recent bills count” option from the visual card editor. Existing YAML containing `recent` remains harmless.
+
+## 0.4.6
+
+### Frontend loading reliability
+
+- Fixed the Home Assistant card picker getting stuck with `Custom element not found: bill-tracker-card` on cold/clean installs.
+- Added a tiny frontend bootstrap that registers `bill-tracker-card` and its visual editor immediately, before lazy-loading the full Billy UI.
+- Billy is now registered through both Home Assistant's global frontend module mechanism and the Lovelace resource collection when storage resources are available.
+- Added a safe fallback for YAML resource mode and older resource collections without mutating unloaded Lovelace storage.
+- The existing `/bill_tracker/bill-tracker-card.js` URL remains valid, so manual dashboard resources do not need to be changed.
+
 ## 0.4.5
 
 ### Bill history modal

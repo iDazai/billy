@@ -1,3 +1,14 @@
+# Billy 0.6.1
+
+## Fixed
+
+- Restored bill-history filtering and pagination in the Lovelace card.
+- Restored the styled PayPal payment action and localized bill counts in reimbursements.
+- Fixed IMAP callback scheduling for current Home Assistant thread-safety checks.
+- Fixed hassfest manifest key order and config-entry-only schema warning.
+- Delayed Lovelace resource registration until Lovelace setup completes.
+- Bumped frontend asset version to 0.6.1 to avoid stale cached UI files.
+
 # Billy 0.6.0
 
 ## Added

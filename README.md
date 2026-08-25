@@ -1,25 +1,32 @@
-# Billy 0.6.0 automatic parsing upgrade
+# Billy 0.6.1
 
-This package contains the files added or changed by Billy 0.6.0 and is based on
-`robin994/billy` **0.5.2** (`0ea179929a8ac295fb072d0792606e5f4c16ad73`).
+Billy is a Home Assistant custom integration for tracking recurring household bills,
+forecasting upcoming costs, splitting expenses between payers and importing bill data.
 
-Extract it over a clean 0.5.2 checkout. Files not present in this archive are
-unchanged from 0.5.2 and must be kept (for example `manager.py`, the existing
-large Lovelace implementation and existing translations/assets).
+This archive is a **complete source package** for the integration. It is not an overlay:
+`custom_components/bill_tracker` contains the full Python integration, Lovelace frontend,
+translations, automatic parser runtime, IMAP source adapter and tests required by this build.
 
-## What 0.6.0 adds
+## 0.6.x automatic parsing
 
 - External `billy-parser` catalog (`parser.json`) with SHA-256 verified downloads.
-- Declarative YAML parser schema v1. No downloaded Python/JavaScript/shell code.
+- Declarative YAML parser schema v1; downloaded parsers cannot execute Python/JavaScript/shell code.
 - Official parsers stored under `/config/billy/parsers/official`.
-- Custom parsers stored under `/config/billy/parsers/custom` and exportable again.
-- Home Assistant IMAP source with privacy-first metadata prefiltering.
-- Email body and PDF attachment retrieval only after a parser prefilter matches.
-- PDF text extraction through `pypdf`; OCR is intentionally out of scope for 0.6.0.
-- Email/PDF cross-verification and a review queue.
-- Optional auto-import, disabled by default and blocked when verification conflicts.
+- Custom parsers stored under `/config/billy/parsers/custom` and exportable.
+- Home Assistant IMAP integration using metadata prefiltering before message-body fetching.
+- PDF text extraction via `pypdf`; OCR is intentionally out of scope.
+- Email/PDF cross-verification, confidence scoring, review queue and optional verified auto-import.
 - Source and semantic deduplication.
-- Parser/source/review management in the native Billy options flow.
-- WebSocket API for frontend integrations and an authenticated custom-parser download route.
+- Parser/source/review management through the native Billy options flow.
 
-See `docs/AUTOMATIC_PARSING.md` for setup and privacy details.
+## 0.6.1 fixes
+
+- Restored the bill-history filters removed by the first 0.6 frontend rewrite:
+  bill type, paid/unpaid status, all history/year/month range, page size and pagination.
+- Restored the styled **Pay with PayPal** action and localized reimbursement counts.
+- Fixed IMAP event scheduling so parser processing runs on the Home Assistant event loop.
+- Fixed hassfest manifest ordering and the config-entry-only `CONFIG_SCHEMA`.
+- Registers the Lovelace resource after Lovelace setup and bumps frontend assets to 0.6.1
+  to invalidate stale browser caches.
+
+See `docs/AUTOMATIC_PARSING.md` for parser setup and privacy details.

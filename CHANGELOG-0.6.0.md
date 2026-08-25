@@ -1,3 +1,13 @@
+# 0.6.1 hotfix
+
+- Restored bill history filtering by type, status, year/month range and pagination.
+- Restored the styled PayPal payment action and localized reimbursement bill counts.
+- Kept automatic parser status/settings integration in the card.
+- Fixed IMAP event scheduling on the Home Assistant event loop.
+- Fixed hassfest manifest ordering and config-entry-only schema warning.
+- Delayed Lovelace resource registration until Lovelace setup completes.
+- Bumped frontend assets to 0.6.1 to invalidate stale browser/Lovelace caches.
+
 # Billy 0.6.0
 
 ## Added

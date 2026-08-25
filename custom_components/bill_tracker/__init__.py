@@ -15,12 +15,16 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ID, CONF_TYPE, CONF_URL
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.setup import async_when_setup
 
 from .const import DOMAIN, FRONTEND_VERSION, SUPPORTED_INTERVALS
 from .manager import BillTrackerManager
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = ["sensor"]
 FRONTEND_DIR = Path(__file__).parent / "frontend"
@@ -80,6 +84,11 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
         _LOGGER.exception("Could not register Billy as a Lovelace resource")
 
 
+async def _async_lovelace_ready(hass: HomeAssistant, _component: str) -> None:
+    """Register Billy after Lovelace has finished setting up."""
+    await _async_register_lovelace_resource(hass)
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up Bill Tracker and its frontend module."""
     for command in (
@@ -110,7 +119,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ]
     )
     add_extra_js_url(hass, FRONTEND_MODULE_URL)
-    await _async_register_lovelace_resource(hass)
+    async_when_setup(hass, "lovelace", _async_lovelace_ready)
     return True
 
 
@@ -154,6 +163,11 @@ def _manager(hass: HomeAssistant) -> BillTrackerManager:
 async def ws_list(hass, connection, msg):
     try:
         result = _manager(hass).snapshot(msg["forecast_months"])
+        parser_manager = hass.data.get(DOMAIN, {}).get("parser_manager")
+        if parser_manager is not None:
+            result.setdefault("summary", {})["automatic_import_pending"] = len(
+                parser_manager.imports_snapshot("pending", 500)
+            )
     except RuntimeError as err:
         connection.send_error(msg["id"], "not_configured", str(err))
         return

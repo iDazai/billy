@@ -1,4 +1,4 @@
-const BILLY_FRONTEND_VERSION = '0.6.1'
+const BILLY_FRONTEND_VERSION = '0.6.2'
 const BILLY_IMPL_URL = `/bill_tracker/bill-tracker-card-impl.js?v=${BILLY_FRONTEND_VERSION}`
 
 let billyImplementationPromise = null
@@ -170,6 +170,9 @@ class BillyCardEditorHost extends HTMLElement {
   }
 }
 
+// Register the lightweight host elements before exposing Billy to HA's card picker.
+// This avoids the picker trying to instantiate the full card while its implementation
+// module is still downloading/evaluating on a cold frontend load.
 if (!customElements.get('bill-tracker-card')) {
   customElements.define('bill-tracker-card', BillyCardHost)
 }
@@ -188,6 +191,8 @@ if (!window.customCards.some(card => card.type === 'bill-tracker-card')) {
   })
 }
 
+// Start preloading immediately, but the custom element hosts above are already
+// available even if the implementation takes longer to arrive.
 loadBillyImplementation().catch(error => {
   console.error('Billy implementation preload failed', error)
 })

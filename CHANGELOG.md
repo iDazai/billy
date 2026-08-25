@@ -1,4 +1,4 @@
-# Billy 0.6.1
+# Billy 0.6.2
 
 ## Fixed
 
@@ -7,7 +7,7 @@
 - Fixed IMAP callback scheduling for current Home Assistant thread-safety checks.
 - Fixed hassfest manifest key order and config-entry-only schema warning.
 - Delayed Lovelace resource registration until Lovelace setup completes.
-- Bumped frontend asset version to 0.6.1 to avoid stale cached UI files.
+- Bumped frontend asset version to 0.6.2 to avoid stale cached UI files.
 
 # Billy 0.6.0
 

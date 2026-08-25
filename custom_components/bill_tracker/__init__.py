@@ -17,7 +17,6 @@ from homeassistant.const import CONF_ID, CONF_TYPE, CONF_URL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
-from homeassistant.setup import async_when_setup
 
 from .const import DOMAIN, FRONTEND_VERSION, SUPPORTED_INTERVALS
 from .manager import BillTrackerManager
@@ -84,11 +83,6 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
         _LOGGER.exception("Could not register Billy as a Lovelace resource")
 
 
-async def _async_lovelace_ready(hass: HomeAssistant, _component: str) -> None:
-    """Register Billy after Lovelace has finished setting up."""
-    await _async_register_lovelace_resource(hass)
-
-
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up Bill Tracker and its frontend module."""
     for command in (
@@ -119,7 +113,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ]
     )
     add_extra_js_url(hass, FRONTEND_MODULE_URL)
-    async_when_setup(hass, "lovelace", _async_lovelace_ready)
+    await _async_register_lovelace_resource(hass)
     return True
 
 

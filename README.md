@@ -1,4 +1,4 @@
-# Billy 0.6.1
+# Billy 0.6.2
 
 Billy is a Home Assistant custom integration for tracking recurring household bills,
 forecasting upcoming costs, splitting expenses between payers and importing bill data.
@@ -19,14 +19,14 @@ translations, automatic parser runtime, IMAP source adapter and tests required b
 - Source and semantic deduplication.
 - Parser/source/review management through the native Billy options flow.
 
-## 0.6.1 fixes
+## 0.6.2 fixes
 
 - Restored the bill-history filters removed by the first 0.6 frontend rewrite:
   bill type, paid/unpaid status, all history/year/month range, page size and pagination.
 - Restored the styled **Pay with PayPal** action and localized reimbursement counts.
 - Fixed IMAP event scheduling so parser processing runs on the Home Assistant event loop.
 - Fixed hassfest manifest ordering and the config-entry-only `CONFIG_SCHEMA`.
-- Registers the Lovelace resource after Lovelace setup and bumps frontend assets to 0.6.1
+- Registers the Lovelace resource after Lovelace setup and bumps frontend assets to 0.6.2
   to invalidate stale browser caches.
 
 See `docs/AUTOMATIC_PARSING.md` for parser setup and privacy details.

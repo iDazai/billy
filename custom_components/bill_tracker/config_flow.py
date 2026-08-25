@@ -97,13 +97,23 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
             step_id="automatic_parsing",
             menu_options=[
                 "parser_sources",
-                "parser_catalog",
-                "manage_parser",
+                "parser_manager",
                 "custom_parser",
                 "parser_imports",
-                "parser_refresh",
                 "init",
             ],
+        )
+
+    async def async_step_parser_manager(self, user_input=None):
+        """Point users to the scalable parser management panel."""
+        if self._parser_manager() is None:
+            return self.async_abort(reason="parser_not_setup")
+        if user_input is not None:
+            return await self.async_step_automatic_parsing()
+        return self.async_show_form(
+            step_id="parser_manager",
+            data_schema=vol.Schema({}),
+            description_placeholders={"parser_manager_url": "/billy-parser"},
         )
 
     async def async_step_parser_refresh(self, user_input=None):

@@ -28,7 +28,7 @@ MAX_IMPORT_HISTORY = 500
 class ParserManager:
     """Own parser state while BillTrackerManager remains the owner of expenses."""
 
-    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.6.4") -> None:
+    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.6.5") -> None:
         self.hass = hass
         self.bill_manager = bill_manager
         self.billy_version = billy_version
@@ -149,21 +149,101 @@ class ParserManager:
         return self.catalog_snapshot()
 
     def catalog_snapshot(self) -> dict[str, Any]:
+        """Return the remote catalog enriched with local installation state."""
         catalog = dict(self.storage.data.get("catalog") or {})
         installed = self.storage.data.get("installed", {})
         custom = self.storage.data.get("custom", {})
-        rows = []
+        rows: list[dict[str, Any]] = []
+        catalog_ids: set[str] = set()
+
         for item in catalog.get("parsers", []) or []:
             row = dict(item)
-            state = installed.get(str(item.get("id")))
-            row["installed"] = bool(state)
-            row["installed_version"] = int(state.get("version", 0)) if state else None
-            row["update_available"] = bool(state and int(item.get("version", 0)) > int(state.get("version", 0)))
-            row["enabled"] = bool(state.get("enabled", True)) if state else False
-            row["category_id"] = state.get("category_id") if state else None
-            row["auto_import"] = bool(state.get("auto_import", False)) if state else False
+            parser_id = str(item.get("id") or "")
+            catalog_ids.add(parser_id)
+            state = installed.get(parser_id)
+            remote_version = int(item.get("version", 0) or 0)
+            installed_version = int(state.get("version", 0) or 0) if state else None
+            minimum = str(item.get("min_billy_version") or "0.0.0")
+            compatible = self._version_supported(minimum)
+            deprecated = bool(item.get("deprecated", False))
+            update_available = bool(
+                state and remote_version > int(installed_version or 0)
+            )
+            load_error = str(state.get("load_error") or "") if state else ""
+
+            if load_error:
+                status = "error"
+            elif state and update_available:
+                status = "outdated"
+            elif state:
+                status = "installed"
+            elif deprecated:
+                status = "deprecated"
+            elif not compatible:
+                status = "incompatible"
+            else:
+                status = "available"
+
+            row.update(
+                {
+                    "installed": bool(state),
+                    "installed_version": installed_version,
+                    "update_available": update_available,
+                    "compatible": compatible,
+                    "deprecated": deprecated,
+                    "status": status,
+                    "enabled": bool(state.get("enabled", True)) if state else False,
+                    "category_id": state.get("category_id") if state else None,
+                    "auto_import": bool(state.get("auto_import", False)) if state else False,
+                    "load_error": load_error,
+                    "source": "official",
+                }
+            )
             rows.append(row)
+
+        # Keep locally installed parsers visible even if a catalog refresh removes them.
+        for parser_id, state in installed.items():
+            if parser_id in catalog_ids:
+                continue
+            parser = self.parsers.get(parser_id, {})
+            metadata = parser.get("metadata", {}) if isinstance(parser, dict) else {}
+            rows.append(
+                {
+                    "id": parser_id,
+                    "version": int(state.get("version", 0) or 0),
+                    "name": metadata.get("name", parser_id),
+                    "country": metadata.get("country", ""),
+                    "language": metadata.get("language", ""),
+                    "provider": metadata.get("provider", ""),
+                    "bill_type": metadata.get("bill_type", ""),
+                    "min_billy_version": metadata.get("min_billy_version", ""),
+                    "installed": True,
+                    "installed_version": int(state.get("version", 0) or 0),
+                    "update_available": False,
+                    "compatible": True,
+                    "deprecated": False,
+                    "removed_from_catalog": True,
+                    "status": "error" if state.get("load_error") else "removed",
+                    "enabled": bool(state.get("enabled", True)),
+                    "category_id": state.get("category_id"),
+                    "auto_import": bool(state.get("auto_import", False)),
+                    "load_error": str(state.get("load_error") or ""),
+                    "source": "official",
+                }
+            )
+
+        counts = {
+            "total": len(rows),
+            "installed": sum(1 for row in rows if row.get("installed")),
+            "available": sum(1 for row in rows if row.get("status") == "available"),
+            "outdated": sum(1 for row in rows if row.get("status") == "outdated"),
+            "incompatible": sum(1 for row in rows if not row.get("compatible", True)),
+            "deprecated": sum(1 for row in rows if row.get("deprecated")),
+            "errors": sum(1 for row in rows if row.get("status") == "error"),
+            "removed": sum(1 for row in rows if row.get("status") == "removed"),
+        }
         catalog["parsers"] = rows
+        catalog["counts"] = counts
         catalog["custom_count"] = len(custom)
         return catalog
 

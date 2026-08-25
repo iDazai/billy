@@ -104,3 +104,11 @@ contains no customer data.
   prefilter before fetching content.
 - Existing emails are handled when Home Assistant emits an `imap_content` event;
   0.6.0 does not implement a general mailbox-history crawler.
+
+## Parser management UI (0.6.5+)
+
+Billy exposes a dedicated parser-management page at `/billy-parser`. The page is linked from the integration options under **Automatic parsing → Parser management** and is intentionally hidden from the Home Assistant sidebar.
+
+The page supports search, country/status filters and sorting. Installed parser versions are compared with the refreshed remote catalog. When `catalog.version > installed_version`, Billy marks the parser **Outdated** and shows an explicit **Update** action. Refreshing the catalog never updates installed parser YAML automatically.
+
+Additional states are surfaced when relevant: incompatible with the current Billy version, deprecated, load error, custom parser, and installed parser removed from the remote catalog. Catalog entries may optionally provide `deprecated`, `replacement` and `changelog` metadata; these fields do not change parser schema v1.

@@ -46,11 +46,9 @@
         "title": "Automatic bill parsing",
         "menu_options": {
           "parser_sources": "Email sources",
-          "parser_catalog": "Parser catalog",
-          "manage_parser": "Installed parsers",
+          "parser_manager": "Parser management",
           "custom_parser": "Create custom parser",
           "parser_imports": "Bills waiting for review",
-          "parser_refresh": "Refresh parser catalog",
           "init": "Back"
         }
       },
@@ -196,6 +194,10 @@
       "support": {
         "title": "Support Billy",
         "description": "If Billy is useful to you, you can [⭐ star the project on GitHub]({project_url}) or [☕ buy me a coffee with PayPal.Me]({support_url}). Both are completely optional — thanks for using Billy!"
+      },
+      "parser_manager": {
+        "title": "Parser management",
+        "description": "Open the dedicated [parser management page]({parser_manager_url}) to install, update, configure or remove parsers. The page supports country/status filters, search, sorting and marks outdated parsers. Return here when you are done."
       }
     }
   },

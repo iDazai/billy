@@ -46,11 +46,9 @@
         "title": "Parsing automatico bollette",
         "menu_options": {
           "parser_sources": "Sorgenti email",
-          "parser_catalog": "Catalogo parser",
-          "manage_parser": "Parser installati",
+          "parser_manager": "Gestione parser",
           "custom_parser": "Crea parser personalizzato",
           "parser_imports": "Bollette da verificare",
-          "parser_refresh": "Aggiorna catalogo parser",
           "init": "Indietro"
         }
       },
@@ -196,6 +194,10 @@
       "support": {
         "title": "Supporta Billy",
         "description": "Se Billy ti è utile, puoi [⭐ lasciare una stella al progetto su GitHub]({project_url}) oppure [☕ offrirmi un caffè con PayPal.Me]({support_url}). Entrambe le cose sono completamente facoltative — grazie per usare Billy!"
+      },
+      "parser_manager": {
+        "title": "Gestione parser",
+        "description": "Apri la [pagina Gestione parser]({parser_manager_url}) per installare, aggiornare, configurare o eliminare i parser. La pagina offre filtri per nazione/stato, ricerca, ordinamento e segnala i parser outdated. Torna qui quando hai finito."
       }
     }
   },

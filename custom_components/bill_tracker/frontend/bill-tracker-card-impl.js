@@ -3,9 +3,9 @@ import {
   billyLanguage,
   billyLocale,
   billyT
-} from './bill-tracker-i18n.js?v=0.6.4'
+} from './bill-tracker-i18n.js?v=0.6.6'
 
-const BILL_TRACKER_VERSION = '0.6.4'
+const BILL_TRACKER_VERSION = '0.6.6'
 
 class BillTrackerCard extends HTMLElement {
   constructor () {

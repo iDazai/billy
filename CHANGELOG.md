@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.6
+
+- Fix the blank `/billy-parser` page by registering the parser manager through Home Assistant's supported **custom panel** loader instead of declaring a non-existent built-in panel type.
+- Make panel registration update-safe so an integration reload can replace the stale 0.6.5 panel definition.
+- Register the Lovelace card resource as `/bill_tracker/bill-tracker-card.js` with no manifest-version query string.
+- Keep the parser-manager module independently versioned for browser cache invalidation.
+- Preserve all parser catalog, filtering, install/update/remove and Outdated-state functionality introduced in 0.6.5.
+
 ## 0.6.4
 
 - Fix automatic parsing of PDF attachments exposed by IMAP as `application/octet-stream` when the parser filename rule matches.

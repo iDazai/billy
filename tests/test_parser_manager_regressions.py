@@ -65,3 +65,11 @@ def test_fetched_parts_preserve_original_metadata():
     source = MANAGER.read_text(encoding="utf-8")
     assert "merged: dict[str, MailPart] = {part.part: part for part in envelope.parts}" in source
     assert "previous.filename if previous else" in source
+
+
+def test_catalog_snapshot_marks_outdated_and_removed_parsers():
+    source = MANAGER.read_text(encoding="utf-8")
+    assert 'status = "outdated"' in source
+    assert '"removed_from_catalog": True' in source
+    assert '"outdated": sum(1 for row in rows if row.get("status") == "outdated")' in source
+    assert '"compatible": compatible' in source

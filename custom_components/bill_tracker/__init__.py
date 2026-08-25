@@ -10,7 +10,11 @@ from pathlib import Path
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
-from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.frontend import (
+    add_extra_js_url,
+    async_panel_exists,
+    async_register_built_in_panel,
+)
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ID, CONF_TYPE, CONF_URL
@@ -30,10 +34,14 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 FRONTEND_PATH = FRONTEND_DIR / "bill-tracker-card.js"
 FRONTEND_IMPL_PATH = FRONTEND_DIR / "bill-tracker-card-impl.js"
 FRONTEND_I18N_PATH = FRONTEND_DIR / "bill-tracker-i18n.js"
+PARSER_MANAGER_PATH = FRONTEND_DIR / "billy-parser-manager.js"
 FRONTEND_URL = "/bill_tracker/bill-tracker-card.js"
 FRONTEND_IMPL_URL = "/bill_tracker/bill-tracker-card-impl.js"
 FRONTEND_I18N_URL = "/bill_tracker/bill-tracker-i18n.js"
-FRONTEND_MODULE_URL = f"{FRONTEND_URL}?v={FRONTEND_VERSION}"
+PARSER_MANAGER_URL = "/bill_tracker/billy-parser-manager.js"
+PARSER_MANAGER_MODULE_URL = f"{PARSER_MANAGER_URL}?v={FRONTEND_VERSION}"
+PARSER_MANAGER_PANEL_PATH = "billy-parser"
+FRONTEND_MODULE_URL = FRONTEND_URL
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
@@ -110,9 +118,28 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             StaticPathConfig(FRONTEND_URL, str(FRONTEND_PATH), False),
             StaticPathConfig(FRONTEND_IMPL_URL, str(FRONTEND_IMPL_PATH), False),
             StaticPathConfig(FRONTEND_I18N_URL, str(FRONTEND_I18N_PATH), False),
+            StaticPathConfig(PARSER_MANAGER_URL, str(PARSER_MANAGER_PATH), False),
         ]
     )
     add_extra_js_url(hass, FRONTEND_MODULE_URL)
+    async_register_built_in_panel(
+        hass,
+        "custom",
+        frontend_url_path=PARSER_MANAGER_PANEL_PATH,
+        config={
+            "version": FRONTEND_VERSION,
+            "_panel_custom": {
+                "name": "billy-parser-manager",
+                "embed_iframe": False,
+                "trust_external": False,
+                "handle_safe_area": False,
+                "module_url": PARSER_MANAGER_MODULE_URL,
+            },
+        },
+        require_admin=True,
+        show_in_sidebar=False,
+        update=async_panel_exists(hass, PARSER_MANAGER_PANEL_PATH),
+    )
     await _async_register_lovelace_resource(hass)
     return True
 

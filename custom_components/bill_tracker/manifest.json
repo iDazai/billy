@@ -10,16 +10,11 @@
     "http",
     "lovelace"
   ],
-  "after_dependencies": [
-    "imap"
-  ],
   "documentation": "https://github.com/robin994/billy",
   "integration_type": "service",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/robin994/billy/issues",
-  "requirements": [
-    "pypdf==6.16.1"
-  ],
+  "requirements": [],
   "single_config_entry": true,
-  "version": "0.6.0"
+  "version": "0.5.2"
 }

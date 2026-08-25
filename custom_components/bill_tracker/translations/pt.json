@@ -1,0 +1,121 @@
+{
+  "title": "Bill Tracker",
+  "config": {
+    "abort": {
+      "already_configured": "O Bill Tracker já está configurado."
+    },
+    "step": {
+      "user": {
+        "title": "Bill Tracker",
+        "description": "Crie a base de dados local de contas e ative o cartão do painel."
+      }
+    }
+  },
+  "options": {
+    "abort": {
+      "not_setup": "O Bill Tracker não está carregado. Reinicie o Home Assistant e tente novamente.",
+      "category_not_found": "O tipo de conta selecionado já não existe.",
+      "payer_not_found": "O pagador selecionado já não existe."
+    },
+    "error": {
+      "invalid_category": "Verifique os dados do tipo de conta. O nome, periodicidade, pagador predefinido ou cor podem ser inválidos.",
+      "category_in_use": "Este tipo de conta tem histórico e não pode ser eliminado. Desative-o em vez disso.",
+      "invalid_payer": "Verifique o nome e a quota predefinida. Pode já existir um pagador com este nome.",
+      "payer_in_use": "Este pagador é usado em contas, predefinições ou liquidações. Desative-o em vez de o eliminar."
+    },
+    "step": {
+      "init": {
+        "title": "Definições do Bill Tracker",
+        "menu_options": {
+          "add_payer": "Adicionar pagador",
+          "manage_payer": "Gerir pagadores",
+          "add_category": "Adicionar tipo de conta",
+          "manage_category": "Gerir tipos de conta",
+          "done": "Concluído",
+          "support": "Apoiar o Billy"
+        }
+      },
+      "add_payer": {
+        "title": "Adicionar pagador",
+        "description": "A quota predefinida é usada como peso quando o Billy divide automaticamente uma conta entre os pagadores ativos.",
+        "data": {
+          "name": "Nome",
+          "share_percent": "Quota predefinida (%)",
+          "paypal_me": "Utilizador ou link PayPal.Me",
+          "enabled": "Usar em novas contas"
+        }
+      },
+      "manage_payer": {
+        "title": "Gerir pagador",
+        "data": {
+          "payer_id": "Pagador",
+          "action": "Ação"
+        }
+      },
+      "edit_payer": {
+        "title": "Editar pagador",
+        "description": "Desativar um pagador mantém todo o histórico mas remove-o de novas divisões automáticas.",
+        "data": {
+          "name": "Nome",
+          "share_percent": "Quota predefinida (%)",
+          "paypal_me": "Utilizador ou link PayPal.Me",
+          "enabled": "Usar em novas contas"
+        }
+      },
+      "delete_payer": {
+        "title": "Eliminar {name}",
+        "description": "Só pode ser eliminado um pagador que nunca tenha sido utilizado."
+      },
+      "add_category": {
+        "title": "Adicionar tipo de conta",
+        "description": "Escolha periodicidade, pagador predefinido, cor do gráfico e uma unidade de consumo opcional. O consumo permite ao Billy comparar mudanças de fornecedor/contrato através do custo por unidade.",
+        "data": {
+          "name": "Nome",
+          "interval_months": "Periodicidade",
+          "default_payer_id": "Pagador predefinido",
+          "color": "Cor do gráfico (#RRGGBB)",
+          "enabled": "Mostrar na lista de contas",
+          "consumption_unit": "Unidade de consumo (ex. kWh, m³)",
+          "default_provider": "Fornecedor/empresa predefinido",
+          "default_contract": "Contrato/plano predefinido"
+        }
+      },
+      "manage_category": {
+        "title": "Gerir tipo de conta",
+        "data": {
+          "category_id": "Tipo de conta",
+          "action": "Ação"
+        }
+      },
+      "edit_category": {
+        "title": "Editar tipo de conta",
+        "description": "O pagador predefinido é pré-selecionado para novas contas. Defina uma unidade como kWh ou m³ para ativar estimativas de poupança entre contratos. Desativar o tipo mantém o histórico.",
+        "data": {
+          "name": "Nome",
+          "interval_months": "Periodicidade",
+          "default_payer_id": "Pagador predefinido",
+          "color": "Cor do gráfico (#RRGGBB)",
+          "enabled": "Mostrar na lista de contas",
+          "consumption_unit": "Unidade de consumo (ex. kWh, m³)",
+          "default_provider": "Fornecedor/empresa predefinido",
+          "default_contract": "Contrato/plano predefinido"
+        }
+      },
+      "delete_category": {
+        "title": "Eliminar {name}",
+        "description": "Só podem ser eliminados tipos de conta sem histórico."
+      },
+      "support": {
+        "title": "Apoiar o Billy",
+        "description": "Se o Billy é útil para si, pode [⭐ dar uma estrela ao projeto no GitHub]({project_url}) ou [☕ oferecer-me um café através do PayPal.Me]({support_url}). Ambas as opções são totalmente facultativas — obrigado por usar o Billy!"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_bills": {
+        "name": "Total de contas"
+      }
+    }
+  }
+}

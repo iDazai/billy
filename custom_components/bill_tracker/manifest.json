@@ -1,6 +1,9 @@
 {
   "domain": "bill_tracker",
   "name": "Bill Tracker",
+  "after_dependencies": [
+    "imap"
+  ],
   "codeowners": [
     "@robin994"
   ],
@@ -9,9 +12,6 @@
     "frontend",
     "http",
     "lovelace"
-  ],
-  "after_dependencies": [
-    "imap"
   ],
   "documentation": "https://github.com/robin994/billy",
   "integration_type": "service",

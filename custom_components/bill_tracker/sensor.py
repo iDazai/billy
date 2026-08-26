@@ -6,8 +6,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, EVENT_UPDATED
+from .const import DOMAIN, EVENT_UPDATED, FRONTEND_VERSION
 from .manager import BillTrackerManager
+from .parser.manager import EVENT_IMPORT_UPDATED, ParserManager
+from .parser_api import register_parser_websockets
+from .parser_http import register_parser_http
 
 
 async def async_setup_entry(
@@ -15,9 +18,20 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the Bill Tracker sensor."""
+    """Set up the Bill Tracker sensor and the optional parser subsystem."""
     manager: BillTrackerManager = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([BillTrackerSensor(manager)])
+    parser_manager = ParserManager(
+        hass,
+        manager,
+        billy_version=FRONTEND_VERSION,
+        config_entry=entry,
+    )
+    await parser_manager.async_load()
+    await parser_manager.async_start()
+    hass.data[DOMAIN]["parser_manager"] = parser_manager
+    register_parser_websockets(hass)
+    register_parser_http(hass)
+    async_add_entities([BillTrackerSensor(manager, parser_manager)])
 
 
 class BillTrackerSensor(SensorEntity):
@@ -28,12 +42,22 @@ class BillTrackerSensor(SensorEntity):
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:receipt-text"
 
-    def __init__(self, manager: BillTrackerManager) -> None:
+    def __init__(self, manager: BillTrackerManager, parser_manager: ParserManager) -> None:
         self.manager = manager
+        self.parser_manager = parser_manager
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to Bill Tracker updates."""
         self.async_on_remove(self.hass.bus.async_listen(EVENT_UPDATED, self._on_update))
+        self.async_on_remove(
+            self.hass.bus.async_listen(EVENT_IMPORT_UPDATED, self._on_update)
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        await self.parser_manager.async_stop()
+        domain_data = self.hass.data.get(DOMAIN, {})
+        if domain_data.get("parser_manager") is self.parser_manager:
+            domain_data.pop("parser_manager", None)
 
     @callback
     def _on_update(self, _event) -> None:
@@ -52,4 +76,6 @@ class BillTrackerSensor(SensorEntity):
     @property
     def extra_state_attributes(self):
         """Expose compact summary data without duplicating the full database in Recorder."""
-        return self.manager.summary()
+        summary = self.manager.summary()
+        summary["automatic_import_pending"] = len(self.parser_manager.imports_snapshot("pending", 500))
+        return summary

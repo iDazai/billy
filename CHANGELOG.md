@@ -1,194 +1,172 @@
 # Changelog
 
-## 0.5.2
--  hotfix language 
+## 0.11.3
 
-## 0.5.1
+- Fixed the Overview spending chart so recurring expenses are visible instead of being hidden inside forecast totals.
+- Actual 12-month chart bars now combine paid provider bills with materialized recurring charges due in the same month.
+- Forecast bars now visibly split provider-bill estimates from recurring charges.
+- Added a dedicated recurring-expense legend/segment while preserving the existing bill-category stacks.
 
-### Localization
+## 0.11.2
 
-- Added **English, Italian, Spanish, French, German and Portuguese** localization.
-- The Lovelace card and visual editor now automatically follow the language selected in Home Assistant, with English fallback for unsupported languages.
-- Localized bill forms, filters, status labels, import/export UI, savings views, recurrence labels and built-in bill type names.
-- Localized Home Assistant config/options flows and the Billy sensor entity name.
-- Generated Excel and PDF reports now use the selected Home Assistant language.
-- User-created bill types, payer names, providers, contracts and notes remain untouched and are never translated.
+- Fixed Billy panel modals being destroyed by normal Home Assistant state refreshes.
+- The Recurring add/edit and reimbursement dialogs now stay open while the Home Assistant `hass` object is refreshed.
+- Applied the same lifecycle fix to Dashboard, Bills and Settings data components so their UI is not unnecessarily reloaded on every HA state change.
+- Data is still reloaded when the Billy update event fires or the Home Assistant websocket connection changes.
 
-### Support
+## 0.11.1
 
-- Added an optional **Support Billy** entry to the native Home Assistant integration settings.
-- Provides direct links to star the project on GitHub or buy the developer a coffee through PayPal.Me.
-- Support links are informational only and never interrupt normal Billy usage.
+- Apply Billy's payer/split model to recurring expenses as well as provider bills.
+- Add payer selection and editable split percentages to the Recurring create/edit dialog.
+- Materialize each due recurring charge with an amount/payer/split snapshot so reimbursements are tracked per occurrence without creating fake provider bills.
+- Add a reimbursement filter and reimbursement status badges to the Recurring tab.
+- Add a per-occurrence reimbursement manager with quick reimbursed/pending checkboxes.
+- Include due recurring charges in Overview/Lovelace split balances, PayPal quick-pay and recorded reimbursement history.
+- Extend settlements with recurring occurrence IDs while keeping provider-payment status independent.
+- Preserve completed reimbursement history when recurring rules are edited; open occurrences follow updated amount/payer/split values.
+- Avoid retroactive debt when enabling an existing long-running recurring rule: tracking begins at the latest due occurrence, and paused periods are not backfilled when resumed.
+- Refresh due recurring occurrences at Home Assistant local midnight.
+- Upgrade storage schema to v11 with the new `recurring_occurrences` ledger.
 
-## 0.5.0
+## 0.11.0
 
-### Consumption, contracts and savings
+- Added a first-class **Recurring** tab to the Billy sidebar application for subscriptions, mortgages, installment plans and other predictable charges.
+- Recurring items support amount, billing frequency, activation date, optional expiration/renewal date, automatic renewal, renewal interval, provider, contract and notes.
+- Installment plans can define a total number of installments; Billy derives the final due date and exposes remaining installments and remaining committed amount.
+- Added pause/resume, edit, delete, search, kind and status filters for recurring items.
+- Exact recurring due months are merged into the standard forecast, while normalized forecast includes their monthly-equivalent cost.
+- Added recurring forecast totals to the Overview: monthly equivalent, next-month recurring charges, active recurring count and remaining installment commitment.
+- Upcoming expenses now include individual recurring charges alongside estimated provider bills.
+- Storage schema upgraded to v10 and persists recurring-expense rules independently from normal provider bills.
+- Preserved the Lovelace card and its unversioned `/bill_tracker/bill-tracker-card.js` resource.
+- Kept custom parser creation/edit/test/export/publish directly inside the Parser tab.
 
-- Added optional **provider/company**, **contract/plan** and **consumption** fields to each bill.
-- Bill types can define a consumption unit plus a default provider/company and contract/plan; built-in Electricity uses `kWh`, Gas and Water use `m³`, and custom units are supported. New bills inherit these defaults while historical bills keep their original provider/contract.
-- Added a **provider/contract savings** panel that detects the latest contract change per bill type and compares weighted cost per unit before/after the change.
-- Savings are normalized to the new period's actual consumption, so Billy distinguishes tariff savings from changes caused only by using less/more energy or water.
-- Added provider, contract, consumption and consumption unit to CSV/XLSX round-trip exports/imports.
-- Storage schema upgraded to v8 with automatic migration of existing bills/categories.
+## 0.10.1
 
-### Currency
+- Added custom parser authoring directly in the Billy Parser tab.
+- Added create/edit, validate/test, save, export, delete and Experimental publishing actions for local custom parsers.
+- Kept custom parser IDs immutable while editing to protect installed-parser identity.
 
-- Removed the hard-coded EUR assumption from the Lovelace card and monetary sensor.
-- Billy now uses Home Assistant's configured currency for totals, forecasts, PayPal.Me amounts and CSV/XLSX/PDF exports.
-- CSV imports with an explicit currency different from the Home Assistant currency are rejected to avoid silently aggregating incompatible amounts.
+## 0.10.0
 
-### Import / Export
+- Added community Experimental parser publishing from Billy → Parser.
+- Custom parsers can open a pre-filled GitHub submission containing only parser YAML.
+- Added parser quality badges and filter: Verified, Tested, Experimental and Custom.
+- Experimental publishing does not upload invoices, email bodies or attachments.
+- Kept `/bill_tracker/bill-tracker-card.js` as the unversioned Lovelace resource.
 
-- Added a dedicated **Import / Export** dialog to the Billy dashboard card.
-- CSV import supports Billy exports plus common English/Italian column aliases.
-- Re-importing rows with an existing Billy expense ID skips them instead of duplicating them.
-- Import can optionally create missing bill types and payer profiles and returns a row-level error summary.
-- Added a downloadable CSV template for migrations from spreadsheets or other trackers.
-- Added filtered export by bill type, paid/unpaid status and billing-month range.
-- CSV export is round-trip friendly and includes recurrence, competence dates, payer/split, payment date, due date and notes.
-- Excel export creates an `.xlsx` workbook with **Bills** and **Monthly summary** sheets.
-- PDF export creates a printable report with KPIs, category totals, bill details and selectable **Payments**, **Normalized monthly cost**, or both trends.
-- CSV, XLSX and PDF files are generated locally by Billy with no external cloud service.
+## 0.9.1
 
-## 0.4.8
+- Add a **User reimbursements** filter to the full Bills tab: all, pending/partial, reimbursed, or not applicable.
+- Show a reimbursement badge on every bill independently from the provider-payment badge.
+- Add a quick reimbursement checkbox for bills that have not already been settled through reimbursement history.
+- Manual reimbursement flags update the outstanding user-reimbursement balances without changing provider payment state.
+- Bills linked to recorded settlements remain controlled by reimbursement history to avoid double-accounting.
+- Reset a manual reimbursement flag when amount, payer, or split shares are edited.
+- Migrate storage schema to v9 with explicit manual reimbursement state.
 
-### Paid / unpaid history filter
+## 0.9.0
 
-- Added a **Status** filter to **All bills**.
-- History can now show **All**, **Unpaid** or **Paid** bills only.
-- The status filter combines with bill type, year/month-range filters and pagination.
-- Changing the status filter resets pagination to the first page.
+- Replace the sidebar **Bills** tab embedded Lovelace card with a full-width native bill list.
+- Add manual bill creation plus edit, delete, search, bill-type/status/year filters, pagination and one-click provider payment status.
+- Keep `custom:bill-tracker-card` available independently for normal Lovelace dashboards.
+- Separate **provider bill payment** from **user reimbursements** in the data model.
+- Rename the shared-payment concept to **Rimborsi tra utenti / User reimbursements**.
+- Reimbursement confirmation no longer marks the underlying provider bills as paid; undoing a reimbursement does not change provider bill status.
+- Calculate reimbursement balances from split shares independently of `expense.paid`, then subtract recorded reimbursements.
+- Add a wide Overview reimbursement section with PayPal quick-pay, confirm reimbursement and recent reimbursement history.
+- Add **Developer & support** to Billy Settings with Roberto Tortora credits, Billy/billy-parser repository links, GitHub and LinkedIn profiles, star calls-to-action and optional PayPal.Me donation.
+- Preserve the parser catalog UI, Outdated markers, midnight refresh and unversioned Lovelace card resource.
 
-## 0.4.7
+## 0.8.0
 
-### Optional bill dates
+- Redesign the Billy sidebar panel as a full application instead of using the Lovelace card as its Dashboard.
+- Add a wide **Overview** dashboard with KPI summaries, actual/forecast spending chart, current-month category breakdown, upcoming bills, recent bills and parser-health indicators.
+- Add a dedicated **Bills** tab that keeps the existing Lovelace card and all of its mature bill-management features intact.
+- Move core Billy settings into the panel with native CRUD for bill types and payers.
+- Add IMAP source selection directly under Billy Settings using the existing parser source API.
+- Add a system/status settings section showing Billy version, currency, configured entities and parser update health.
+- Keep the existing Home Assistant Options Flow as a fallback instead of making it the primary Billy UI.
+- Preserve parser search, bill-type filtering, Outdated states, daily catalog refresh and the unversioned Lovelace resource URL.
 
-- Added an optional exact **payment date** to every bill.
-- Added an optional **due/expiration date** to every bill.
-- Both dates are persisted, editable and shown in the current-month list and complete history.
-- Storage schema upgraded to v7; existing bills migrate with both dates empty.
+## 0.7.0
 
-### Default payer selector fix
+- Add a first-class **Billy** sidebar panel at `/billy` while keeping `custom:bill-tracker-card` available for Lovelace dashboards.
+- Reuse the existing full Billy card in the panel Dashboard and expose parser management as a dedicated tab.
+- Fix parser search typing backwards by updating only the result list while the search input keeps focus/caret state.
+- Add a **bill type** filter to parser management in addition to country, install state and sorting.
+- Refresh the remote parser catalog automatically every day at **00:00 Home Assistant local time**; this refreshes only `parser.json` and never silently updates installed parser YAML files.
+- Keep explicit Outdated/update states and manual per-parser updates.
+- Register the sidebar through Home Assistant's supported custom-panel loader.
+- Keep the Lovelace resource URL unversioned: `/bill_tracker/bill-tracker-card.js`.
 
-- Fixed bill-type create/edit flows where the default payer selector could fail to expose a usable payer choice.
-- Replaced the empty-string choice with a stable internal `None` sentinel and list active configured payers while preserving an already-selected disabled payer for editing.
+## 0.6.6
 
-### Compact current-month list
+- Fix the blank `/billy-parser` page by registering the parser manager through Home Assistant's supported **custom panel** loader instead of declaring a non-existent built-in panel type.
+- Make panel registration update-safe so an integration reload can replace the stale 0.6.5 panel definition.
+- Register the Lovelace card resource as `/bill_tracker/bill-tracker-card.js` with no manifest-version query string.
+- Keep the parser-manager module independently versioned for browser cache invalidation.
+- Preserve all parser catalog, filtering, install/update/remove and Outdated-state functionality introduced in 0.6.5.
 
-- Replaced the generic recent-bills list with bills whose payment month is the current month.
-- Added a **Show / Hide** control so the section can be collapsed without losing access to **All bills**.
-- Removed the obsolete “recent bills count” option from the visual card editor. Existing YAML containing `recent` remains harmless.
+## 0.6.4
 
-## 0.4.6
+- Fix automatic parsing of PDF attachments exposed by IMAP as `application/octet-stream` when the parser filename rule matches.
+- Preserve `imap_content` attachment metadata when merging the later `imap.fetch` response.
+- Allow failed IMAP parse attempts to be retried after updating a parser instead of permanently deduplicating the UID.
+- Include available attachment metadata in parser failure logs for easier diagnosis.
 
-### Frontend loading reliability
+# Billy 0.6.3
 
-- Fixed the Home Assistant card picker getting stuck with `Custom element not found: bill-tracker-card` on cold/clean installs.
-- Added a tiny frontend bootstrap that registers `bill-tracker-card` and its visual editor immediately, before lazy-loading the full Billy UI.
-- Billy is now registered through both Home Assistant's global frontend module mechanism and the Lovelace resource collection when storage resources are available.
-- Added a safe fallback for YAML resource mode and older resource collections without mutating unloaded Lovelace storage.
-- The existing `/bill_tracker/bill-tracker-card.js` URL remains valid, so manual dashboard resources do not need to be changed.
+## Added
 
-## 0.4.5
+- Parser-engine support for abbreviated Italian month names and two-digit years used by provider PDFs such as `01 lug 26 - 31 lug 26`.
 
-### Bill history modal
+## Fixed
 
-- **Tutte le bollette** now opens in a dedicated modal instead of expanding the dashboard card.
-- The modal is paginated (10/20/50 items per page).
-- Added filters by bill type, single year, or an arbitrary month/year range.
-- Payment checkmarks remain editable directly from the paginated list.
-- Editing a bill opens the existing edit modal above the history modal and preserves filters/page context.
+- Automatic imports now anchor the bill to the parsed competence/billing month first, then the invoice issue date, instead of incorrectly preferring a later due date.
 
-### Outstanding split balance fix
+# Billy 0.6.2
 
-- Fixed payer balances so they are calculated **only from unpaid bills**.
-- Paid bills are excluded from the person-to-person balance.
-- Pairwise debts are netted only between the people actually involved, keeping every displayed balance traceable to its source bills.
-- Example: two unpaid bills of €179 and €25 at 50/50 now correctly produce a €102 balance.
+## Fixed
 
-### Settle balance closes the underlying bills
+- Restored bill-history filtering and pagination in the Lovelace card.
+- Restored the styled PayPal payment action and localized bill counts in reimbursements.
+- Fixed IMAP callback scheduling for current Home Assistant thread-safety checks.
+- Fixed hassfest manifest key order and config-entry-only schema warning.
+- Delayed Lovelace resource registration until Lovelace setup completes.
+- Bumped frontend asset version to 0.6.2 to avoid stale cached UI files.
 
-- Clicking **Segna saldato** now marks every unpaid bill contributing to that balance as paid.
-- Those bills immediately show the paid checkmark in recent/history lists and disappear from the outstanding balance.
-- Settlement history stores the linked bill IDs.
-- Undoing a settlement reopens its linked bills as unpaid (unless another settlement still references them).
-- Storage schema upgraded to v6.
+# Billy 0.6.0
 
-## 0.4.4
+## Added
 
-- Editing a bill now opens in a centered modal instead of moving the shared add/edit form above the dashboard content.
-- The all-bills view keeps the active category filter and scroll context while editing.
-- The edit dialog can be closed with Annulla, the close button, the backdrop, or Escape.
-- Mobile edit view uses a bottom-aligned dialog for easier touch interaction.
+- Automatic email bill parsing subsystem.
+- External parser catalog support via `billy-parser/parser.json`.
+- SHA-256, size, identity, schema and minimum-version validation for downloaded parsers.
+- Declarative YAML parser engine with weighted detection and metadata prefilters.
+- Home Assistant IMAP source adapter using `imap.fetch` and `imap.fetch_part`.
+- PDF text extraction with `pypdf`.
+- Email/PDF field cross-verification and confidence scoring.
+- Pending import queue with approve/reject actions.
+- Optional verified auto-import, disabled by default.
+- Source and invoice-level deduplication.
+- Official/custom parser persistence outside the HACS integration directory.
+- Custom parser creation, validation and authenticated YAML export.
+- Native options-flow pages for source, catalog, installed parser and review management.
+- Parser WebSocket API for future frontend surfaces.
 
-## 0.4.3
+## Privacy
 
-### Complete bill history and quick payment status
+- Message bodies are fetched only after sender/subject metadata passes at least one
+  installed parser prefilter.
+- Attachments are fetched only when required by the selected parser.
+- Raw message bodies and PDF bytes are not persisted by Billy.
+- No mail or invoice content is sent to the parser repository.
 
-- Added **Tutte le bollette** next to the recent-bills section.
-- The complete history can be filtered by bill type, including disabled types that still have history.
-- Every item in the complete list has an interactive payment checkmark.
-- Toggling the checkmark saves `paid` immediately without opening the edit form.
-- Added a dedicated `bill_tracker/set_paid` WebSocket command so changing payment status never rewrites amount, category, payer, split or competence period.
-- Recent bills keep the read-only green checkmark for paid entries.
-- Payment status changes immediately recalculate unpaid totals, payment charts and payer reimbursements.
+## Not included yet
 
-## 0.4.2
+- OCR/scanned-PDF support.
+- Gmail API or Outlook OAuth source adapters.
+- Historical mailbox crawling.
 
-### Outstanding balance fix
 
-- Fixed the dashboard balance logic: **Bollette da pagare** now sums only bills where `paid = false`.
-- Paid bills are excluded from the outstanding bill balance.
-- Person-to-person split reimbursements remain separate and are shown under **Rimborsi tra paganti**.
-- Added separate `unpaid_total` and `reimbursement_total` summary attributes; `outstanding_total` now follows the unpaid-bills meaning for compatibility with the dashboard.
-
-## 0.4.1
-
-### Explicit bill payment status
-
-- Added an explicit **Bolletta pagata** checkbox to the add/edit form.
-- New bills default to unpaid until the checkbox is selected.
-- Existing v0.4.0 and older bills migrate as unpaid when no explicit status exists; editing them does not mark them paid automatically.
-- Recent bills show a green checkmark only when they are marked paid.
-- “Pagata da” is now treated as the configured payer/advance owner, independently from the paid/unpaid status.
-- Only paid bills affect payer balances and outstanding split debts.
-- The **Pagamenti** monthly series and “Pagato questo mese” summary include only bills explicitly marked paid.
-- Forecasting and normalized competence costs continue to use the bill history regardless of payment status.
-- Storage schema upgraded to v5.
-
-## 0.4.0
-
-### Bill splitting and payers
-
-- Added persistent payer profiles managed from **Settings → Devices & services → Bill Tracker → Configure**.
-- Each payer can have a default split share, PayPal.Me username/link and active/disabled state.
-- Each bill type can define a default payer.
-- Every bill can override both the payer and the percentage split.
-- Added automatic netting: Billy calculates the minimum outstanding transfers between payers instead of showing reciprocal debts separately.
-- Added **Pay with PayPal** links with the outstanding EUR amount pre-filled through PayPal.Me.
-- Added **Mark as settled** and persistent settlement history.
-- Settlements can be removed to recalculate the balance after a mistake.
-- Payers referenced by history cannot be deleted accidentally; they can be disabled instead.
-
-### Dashboard and chart
-
-- Added an outstanding-balance panel to the Lovelace card.
-- Added payer/split information to recent bill rows.
-- Monthly bars are now stacked by bill type, with a stable color per category and percentage details in SVG tooltips.
-- Bill type settings now include a chart color.
-- Default Sections width is now `full`; numeric widths remain supported.
-- Updated the visual card editor to include full-width mode.
-
-### Data model
-
-- Storage schema upgraded to v4.
-- v0.3 databases are migrated automatically. Existing bills remain intact and are left unassigned to payers until edited, avoiding invented historical splits.
-- Existing recurrence, competence-period, normalized-cost and forecast features are preserved.
-
-## 0.3.0
-
-- Added centrally managed bill types.
-- Added monthly, bimonthly, quarterly, four-monthly, half-yearly and yearly recurrences.
-- Added competence periods and normalized monthly costs.
-- Added category-aware forecasts and upcoming bills.
-- Added HACS-ready frontend packaging.

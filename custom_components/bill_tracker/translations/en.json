@@ -15,13 +15,19 @@
     "abort": {
       "not_setup": "Bill Tracker is not loaded. Restart Home Assistant and try again.",
       "category_not_found": "The selected bill type no longer exists.",
-      "payer_not_found": "The selected payer no longer exists."
+      "payer_not_found": "The selected payer no longer exists.",
+      "parser_not_setup": "Billy's automatic parser subsystem is not loaded. Restart Home Assistant and try again.",
+      "parser_not_found": "The selected parser no longer exists.",
+      "custom_parser_not_found": "The selected parser is not a custom parser."
     },
     "error": {
       "invalid_category": "Check the bill type data. The name, recurrence, default payer or color may be invalid.",
       "category_in_use": "This bill type has history and cannot be deleted. Disable it instead.",
       "invalid_payer": "Check payer name and default share. A payer with this name may already exist.",
-      "payer_in_use": "This payer is referenced by bills, bill defaults or settlements. Disable the payer instead."
+      "payer_in_use": "This payer is referenced by bills, bill defaults or settlements. Disable the payer instead.",
+      "parser_catalog_error": "Billy could not download or validate parser.json from billy-parser.",
+      "parser_install_error": "The parser could not be downloaded or installed. Check its checksum, schema and Billy compatibility.",
+      "custom_parser_error": "The custom YAML parser is invalid or uses an unsupported instruction."
     },
     "step": {
       "init": {
@@ -31,8 +37,88 @@
           "manage_payer": "Manage payers",
           "add_category": "Add bill type",
           "manage_category": "Manage bill types",
+          "automatic_parsing": "Automatic bill parsing",
           "done": "Done",
           "support": "Support Billy"
+        }
+      },
+      "automatic_parsing": {
+        "title": "Automatic bill parsing",
+        "menu_options": {
+          "parser_sources": "Email sources",
+          "parser_manager": "Parser management",
+          "custom_parser": "Create custom parser",
+          "parser_imports": "Bills waiting for review",
+          "init": "Back"
+        }
+      },
+      "parser_sources": {
+        "title": "Email sources",
+        "description": "Select the Home Assistant IMAP entries Billy may observe. Billy first checks sender/subject metadata against installed parser prefilters and fetches the body or PDF only after a match. Nothing is sent to the parser repository. If no IMAP entry is listed, add the IMAP integration first. Status: {imap_status}.",
+        "data": {
+          "entry_ids": "Allowed IMAP accounts/folders"
+        }
+      },
+      "parser_refresh": {
+        "title": "Refresh parser catalog",
+        "description": "Download and validate parser.json from [billy-parser]({parser_project_url}). Parser YAML files are downloaded only when you explicitly install one."
+      },
+      "parser_catalog": {
+        "title": "Parser catalog",
+        "description": "Choose a parser to install or update. Billy verifies the downloaded file size, SHA-256 checksum, parser ID and version.",
+        "data": {
+          "parser_id": "Parser"
+        }
+      },
+      "parser_install": {
+        "title": "Install {name}",
+        "description": "Provider: {provider}. Map this parser to one of your Billy bill types. Automatic import is off by default; with it off, parsed bills wait for your review.",
+        "data": {
+          "category_id": "Billy bill type",
+          "enabled": "Enable parser",
+          "auto_import": "Automatically import verified bills"
+        }
+      },
+      "manage_parser": {
+        "title": "Installed parsers",
+        "data": {
+          "parser_id": "Parser",
+          "action": "Action"
+        }
+      },
+      "edit_parser": {
+        "title": "Configure {name}",
+        "description": "Automatic import only runs when the parser result has no email/PDF verification conflict.",
+        "data": {
+          "category_id": "Billy bill type",
+          "enabled": "Enable parser",
+          "auto_import": "Automatically import verified bills"
+        }
+      },
+      "delete_parser": {
+        "title": "Remove {name}",
+        "description": "Removing a parser does not remove bills that were already imported."
+      },
+      "custom_parser": {
+        "title": "Create or update a custom parser",
+        "description": "Paste a Billy parser schema v1 YAML document. Custom parsers are validated with the same restricted declarative engine as community parsers: no Python, JavaScript, shell, filesystem or arbitrary network access.",
+        "data": {
+          "content": "Parser YAML",
+          "category_id": "Billy bill type",
+          "enabled": "Enable parser",
+          "auto_import": "Automatically import verified bills"
+        }
+      },
+      "export_parser": {
+        "title": "Export {name}",
+        "description": "You can [download the YAML file directly]({download_url}) and submit it manually to billy-parser if you want to share it. The WebSocket endpoint `bill_tracker/parser/custom/export` also returns it as a Base64 payload."
+      },
+      "parser_imports": {
+        "title": "Bills waiting for review",
+        "description": "Approve a parsed bill to add it to Billy, or ignore it. If there are no choices, the review queue is empty.",
+        "data": {
+          "import_id": "Parsed bill",
+          "action": "Action"
         }
       },
       "add_payer": {
@@ -108,6 +194,10 @@
       "support": {
         "title": "Support Billy",
         "description": "If Billy is useful to you, you can [⭐ star the project on GitHub]({project_url}) or [☕ buy me a coffee with PayPal.Me]({support_url}). Both are completely optional — thanks for using Billy!"
+      },
+      "parser_manager": {
+        "title": "Parser management",
+        "description": "Open the dedicated [parser management page]({parser_manager_url}) to install, update, configure or remove parsers. The page supports country/status filters, search, sorting and marks outdated parsers. Return here when you are done."
       }
     }
   },

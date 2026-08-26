@@ -1,7 +1,9 @@
-const BILLY_FRONTEND_VERSION = '0.5.1'
+const BILLY_FRONTEND_VERSION = '0.11.3'
 const BILLY_IMPL_URL = `/bill_tracker/bill-tracker-card-impl.js?v=${BILLY_FRONTEND_VERSION}`
+const BILLY_WIDGETS_URL = `/bill_tracker/billy-widgets.js?v=${BILLY_FRONTEND_VERSION}`
 
 let billyImplementationPromise = null
+let billyWidgetsPromise = null
 
 function loadBillyImplementation () {
   if (!billyImplementationPromise) {
@@ -11,6 +13,16 @@ function loadBillyImplementation () {
     })
   }
   return billyImplementationPromise
+}
+
+function loadBillyWidgets () {
+  if (!billyWidgetsPromise) {
+    billyWidgetsPromise = import(BILLY_WIDGETS_URL).catch(error => {
+      billyWidgetsPromise = null
+      throw error
+    })
+  }
+  return billyWidgetsPromise
 }
 
 class BillyCardHost extends HTMLElement {
@@ -195,6 +207,9 @@ if (!window.customCards.some(card => card.type === 'bill-tracker-card')) {
 // available even if the implementation takes longer to arrive.
 loadBillyImplementation().catch(error => {
   console.error('Billy implementation preload failed', error)
+})
+loadBillyWidgets().catch(error => {
+  console.error('Billy widgets preload failed', error)
 })
 
 console.info(`Billy frontend bootstrap v${BILLY_FRONTEND_VERSION} loaded`)

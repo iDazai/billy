@@ -10,38 +10,54 @@ from pathlib import Path
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
-from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.frontend import (
+    add_extra_js_url,
+    async_panel_exists,
+    async_remove_panel,
+)
+from homeassistant.components.panel_custom import async_register_panel
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ID, CONF_TYPE, CONF_URL
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, FRONTEND_VERSION, SUPPORTED_INTERVALS
+from .const import (
+    DOMAIN,
+    FRONTEND_VERSION,
+    RECURRING_INTERVALS,
+    RECURRING_KINDS,
+    SUPPORTED_INTERVALS,
+)
 from .manager import BillTrackerManager
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = ["sensor"]
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 FRONTEND_PATH = FRONTEND_DIR / "bill-tracker-card.js"
 FRONTEND_IMPL_PATH = FRONTEND_DIR / "bill-tracker-card-impl.js"
 FRONTEND_I18N_PATH = FRONTEND_DIR / "bill-tracker-i18n.js"
+PARSER_MANAGER_PATH = FRONTEND_DIR / "billy-parser-manager.js"
+BILLY_PANEL_PATH = FRONTEND_DIR / "billy-panel.js"
+BILLY_WIDGETS_PATH = FRONTEND_DIR / "billy-widgets.js"
 FRONTEND_URL = "/bill_tracker/bill-tracker-card.js"
 FRONTEND_IMPL_URL = "/bill_tracker/bill-tracker-card-impl.js"
 FRONTEND_I18N_URL = "/bill_tracker/bill-tracker-i18n.js"
-FRONTEND_MODULE_URL = f"{FRONTEND_URL}?v={FRONTEND_VERSION}"
+PARSER_MANAGER_URL = "/bill_tracker/billy-parser-manager.js"
+BILLY_PANEL_URL = "/bill_tracker/billy-panel.js"
+BILLY_WIDGETS_URL = "/bill_tracker/billy-widgets.js"
+BILLY_PANEL_MODULE_URL = f"{BILLY_PANEL_URL}?v={FRONTEND_VERSION}"
+BILLY_PANEL_ROUTE = "billy"
+FRONTEND_MODULE_URL = FRONTEND_URL
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
-    """Register Billy as a Lovelace module in addition to the global frontend URL.
-
-    Home Assistant currently does not await every custom frontend module before
-    dashboard/card-picker rendering. Registering Billy through both supported
-    paths, while keeping the globally injected module as a tiny bootstrap, makes
-    cold loads considerably more reliable. Failures here are non-fatal because
-    add_extra_js_url remains the fallback.
-    """
+    """Register Billy as a Lovelace module in addition to the global frontend URL."""
     try:
         from homeassistant.components.lovelace.const import LOVELACE_DATA
         from homeassistant.components.lovelace.resources import ResourceStorageCollection
@@ -51,16 +67,12 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
             return
         resources = lovelace_data.resources
         if not isinstance(resources, ResourceStorageCollection):
-            # YAML resource mode is read-only from an integration; the global
-            # frontend module registration below remains the fallback.
             return
 
         ensure_loaded = getattr(resources, "_async_ensure_loaded", None)
         if ensure_loaded is not None:
             await ensure_loaded()
         elif not getattr(resources, "loaded", True):
-            # Compatibility guard for HA versions before ResourceStorageCollection
-            # grew its lazy-load protection. Never mutate an unloaded collection.
             await resources.async_load()
             try:
                 resources.loaded = True
@@ -87,7 +99,7 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
             await resources.async_create_item(
                 {"res_type": "module", CONF_URL: FRONTEND_MODULE_URL}
             )
-    except Exception:  # noqa: BLE001 - frontend fallback must stay available
+    except Exception:  # noqa: BLE001
         _LOGGER.exception("Could not register Billy as a Lovelace resource")
 
 
@@ -99,6 +111,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ws_delete,
         ws_update,
         ws_set_paid,
+        ws_set_reimbursement,
+        ws_recurring_add,
+        ws_recurring_update,
+        ws_recurring_set_active,
+        ws_recurring_set_reimbursement,
+        ws_recurring_delete,
         ws_category_add,
         ws_category_update,
         ws_category_delete,
@@ -109,7 +127,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ws_settlement_delete,
         ws_import_csv,
         ws_export,
+        ws_export_recurring,
         ws_export_template,
+        ws_backup_export,
+        ws_backup_import,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -118,13 +139,26 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             StaticPathConfig(FRONTEND_URL, str(FRONTEND_PATH), False),
             StaticPathConfig(FRONTEND_IMPL_URL, str(FRONTEND_IMPL_PATH), False),
             StaticPathConfig(FRONTEND_I18N_URL, str(FRONTEND_I18N_PATH), False),
+            StaticPathConfig(PARSER_MANAGER_URL, str(PARSER_MANAGER_PATH), False),
+            StaticPathConfig(BILLY_PANEL_URL, str(BILLY_PANEL_PATH), False),
+            StaticPathConfig(BILLY_WIDGETS_URL, str(BILLY_WIDGETS_PATH), False),
         ]
     )
-
-    # The globally injected file is intentionally only the tiny bootstrap. It
-    # registers bill-tracker-card + its editor synchronously, then lazy-loads
-    # the larger implementation module behind those stable host elements.
     add_extra_js_url(hass, FRONTEND_MODULE_URL)
+    # Register Billy through Home Assistant's supported custom-panel loader.
+    # Remove a previous definition first so integration reloads cannot retain stale panel metadata.
+    if async_panel_exists(hass, BILLY_PANEL_ROUTE):
+        async_remove_panel(hass, BILLY_PANEL_ROUTE, warn_if_unknown=False)
+    await async_register_panel(
+        hass,
+        frontend_url_path=BILLY_PANEL_ROUTE,
+        webcomponent_name="billy-panel",
+        sidebar_title="Billy",
+        sidebar_icon="mdi:receipt-text-outline",
+        module_url=BILLY_PANEL_MODULE_URL,
+        require_admin=False,
+        config={"version": FRONTEND_VERSION},
+    )
     await _async_register_lovelace_resource(hass)
     return True
 
@@ -133,6 +167,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Bill Tracker from a config entry."""
     manager = BillTrackerManager(hass)
     await manager.async_load()
+
+    async def _sync_recurring_at_midnight(_now) -> None:
+        await manager.async_sync_recurring_occurrences()
+
+    entry.async_on_unload(
+        async_track_time_change(
+            hass,
+            _sync_recurring_at_midnight,
+            hour=0,
+            minute=0,
+            second=0,
+        )
+    )
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = manager
     hass.data[DOMAIN]["manager"] = manager
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -160,13 +207,20 @@ def _manager(hass: HomeAssistant) -> BillTrackerManager:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "bill_tracker/list",
-        vol.Optional("forecast_months", default=12): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+        vol.Optional("forecast_months", default=12): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=24)
+        ),
     }
 )
 @websocket_api.async_response
 async def ws_list(hass, connection, msg):
     try:
         result = _manager(hass).snapshot(msg["forecast_months"])
+        parser_manager = hass.data.get(DOMAIN, {}).get("parser_manager")
+        if parser_manager is not None:
+            result.setdefault("summary", {})["automatic_import_pending"] = len(
+                parser_manager.imports_snapshot("pending", 500)
+            )
     except RuntimeError as err:
         connection.send_error(msg["id"], "not_configured", str(err))
         return
@@ -237,12 +291,18 @@ async def ws_add(hass, connection, msg):
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "bill_tracker/update", vol.Required("expense_id"): str, **_EXPENSE_SCHEMA}
+    {
+        vol.Required("type"): "bill_tracker/update",
+        vol.Required("expense_id"): str,
+        **_EXPENSE_SCHEMA,
+    }
 )
 @websocket_api.async_response
 async def ws_update(hass, connection, msg):
     try:
-        item = await _manager(hass).async_update(msg["expense_id"], **_expense_kwargs(msg))
+        item = await _manager(hass).async_update(
+            msg["expense_id"], **_expense_kwargs(msg)
+        )
     except (ValueError, RuntimeError) as err:
         connection.send_error(msg["id"], "invalid_expense", str(err))
         return
@@ -273,6 +333,28 @@ async def ws_set_paid(hass, connection, msg):
 
 
 @websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/set_reimbursement",
+        vol.Required("expense_id"): str,
+        vol.Required("done"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_set_reimbursement(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_set_reimbursement_done(
+            msg["expense_id"], msg["done"]
+        )
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_reimbursement", str(err))
+        return
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Spesa non trovata")
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
     {vol.Required("type"): "bill_tracker/delete", vol.Required("expense_id"): str}
 )
 @websocket_api.async_response
@@ -281,6 +363,146 @@ async def ws_delete(hass, connection, msg):
         deleted = await _manager(hass).async_delete(msg["expense_id"])
     except RuntimeError as err:
         connection.send_error(msg["id"], "not_configured", str(err))
+        return
+    connection.send_result(msg["id"], {"deleted": deleted})
+
+
+_RECURRING_COMMON = {
+    vol.Required("name"): str,
+    vol.Required("kind"): vol.In(RECURRING_KINDS),
+    vol.Required("amount"): vol.Coerce(float),
+    vol.Required("interval_months"): vol.In(RECURRING_INTERVALS),
+    vol.Required("start_date"): str,
+    vol.Optional("end_date", default=""): str,
+    vol.Optional("auto_renew", default=False): bool,
+    vol.Optional("renewal_interval_months", default=12): vol.All(
+        vol.Coerce(int), vol.Range(min=1, max=120)
+    ),
+    vol.Optional("installment_count"): vol.All(
+        vol.Coerce(int), vol.Range(min=1, max=1200)
+    ),
+    vol.Optional("payer_id"): str,
+    vol.Optional("split"): [_SPLIT_ITEM_SCHEMA],
+    vol.Optional("provider", default=""): str,
+    vol.Optional("contract", default=""): str,
+    vol.Optional("color", default=""): str,
+    vol.Optional("note", default=""): str,
+    vol.Optional("active", default=True): bool,
+}
+
+
+def _recurring_kwargs(msg):
+    return {
+        "name": msg["name"],
+        "kind": msg["kind"],
+        "amount": msg["amount"],
+        "interval_months": msg["interval_months"],
+        "start_date": msg["start_date"],
+        "end_date": msg.get("end_date") or None,
+        "auto_renew": msg.get("auto_renew", False),
+        "renewal_interval_months": msg.get("renewal_interval_months", 12),
+        "installment_count": msg.get("installment_count"),
+        "payer_id": msg.get("payer_id"),
+        "split": msg.get("split"),
+        "provider": msg.get("provider", ""),
+        "contract": msg.get("contract", ""),
+        "color": msg.get("color", ""),
+        "note": msg.get("note", ""),
+        "active": msg.get("active", True),
+    }
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "bill_tracker/recurring/add", **_RECURRING_COMMON}
+)
+@websocket_api.async_response
+async def ws_recurring_add(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_add_recurring(**_recurring_kwargs(msg))
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_recurring", str(err))
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/recurring/update",
+        vol.Required("recurring_id"): str,
+        **_RECURRING_COMMON,
+    }
+)
+@websocket_api.async_response
+async def ws_recurring_update(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_update_recurring(
+            msg["recurring_id"], **_recurring_kwargs(msg)
+        )
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_recurring", str(err))
+        return
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Spesa ricorrente non trovata")
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/recurring/set_active",
+        vol.Required("recurring_id"): str,
+        vol.Required("active"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_recurring_set_active(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_set_recurring_active(
+            msg["recurring_id"], msg["active"]
+        )
+    except RuntimeError as err:
+        connection.send_error(msg["id"], "not_configured", str(err))
+        return
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Spesa ricorrente non trovata")
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/recurring/set_reimbursement",
+        vol.Required("occurrence_id"): str,
+        vol.Required("done"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_recurring_set_reimbursement(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_set_recurring_reimbursement_done(
+            msg["occurrence_id"], msg["done"]
+        )
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_reimbursement", str(err))
+        return
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Scadenza ricorrente non trovata")
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/recurring/delete",
+        vol.Required("recurring_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_recurring_delete(hass, connection, msg):
+    try:
+        deleted = await _manager(hass).async_delete_recurring(msg["recurring_id"])
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_recurring", str(err))
         return
     connection.send_result(msg["id"], {"deleted": deleted})
 
@@ -297,7 +519,9 @@ _CATEGORY_COMMON = {
 }
 
 
-@websocket_api.websocket_command({vol.Required("type"): "bill_tracker/category/add", **_CATEGORY_COMMON})
+@websocket_api.websocket_command(
+    {vol.Required("type"): "bill_tracker/category/add", **_CATEGORY_COMMON}
+)
 @websocket_api.async_response
 async def ws_category_add(hass, connection, msg):
     try:
@@ -362,13 +586,17 @@ async def ws_category_delete(hass, connection, msg):
 
 _PAYER_COMMON = {
     vol.Required("name"): str,
-    vol.Optional("share_percent", default=50.0): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+    vol.Optional("share_percent", default=50.0): vol.All(
+        vol.Coerce(float), vol.Range(min=0, max=100)
+    ),
     vol.Optional("paypal_me", default=""): str,
     vol.Optional("enabled", default=True): bool,
 }
 
 
-@websocket_api.websocket_command({vol.Required("type"): "bill_tracker/payer/add", **_PAYER_COMMON})
+@websocket_api.websocket_command(
+    {vol.Required("type"): "bill_tracker/payer/add", **_PAYER_COMMON}
+)
 @websocket_api.async_response
 async def ws_payer_add(hass, connection, msg):
     try:
@@ -385,7 +613,11 @@ async def ws_payer_add(hass, connection, msg):
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "bill_tracker/payer/update", vol.Required("payer_id"): str, **_PAYER_COMMON}
+    {
+        vol.Required("type"): "bill_tracker/payer/update",
+        vol.Required("payer_id"): str,
+        **_PAYER_COMMON,
+    }
 )
 @websocket_api.async_response
 async def ws_payer_update(hass, connection, msg):
@@ -444,7 +676,10 @@ async def ws_settlement_add(hass, connection, msg):
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "bill_tracker/settlement/delete", vol.Required("settlement_id"): str}
+    {
+        vol.Required("type"): "bill_tracker/settlement/delete",
+        vol.Required("settlement_id"): str,
+    }
 )
 @websocket_api.async_response
 async def ws_settlement_delete(hass, connection, msg):
@@ -519,6 +754,42 @@ async def ws_export(hass, connection, msg):
     )
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/export_recurring",
+        vol.Required("format"): vol.In(("csv", "xlsx", "pdf")),
+        vol.Optional("status", default="all"): vol.In(("all", "active", "inactive", "ended")),
+        vol.Optional("kind", default="all"): str,
+        vol.Optional("from_date", default=""): str,
+        vol.Optional("to_date", default=""): str,
+        vol.Optional("language", default="en"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_export_recurring(hass, connection, msg):
+    try:
+        payload, mime_type, extension = _manager(hass).export_recurring_data(
+            file_format=msg["format"],
+            status=msg["status"],
+            kind=msg.get("kind") or "all",
+            from_date=msg.get("from_date") or None,
+            to_date=msg.get("to_date") or None,
+            language=msg.get("language", "en"),
+        )
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "export_failed", str(err))
+        return
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    connection.send_result(
+        msg["id"],
+        {
+            "filename": f"billy-recurring-{stamp}.{extension}",
+            "mime_type": mime_type,
+            "content_base64": base64.b64encode(payload).decode("ascii"),
+        },
+    )
+
+
 @websocket_api.websocket_command({vol.Required("type"): "bill_tracker/export_template"})
 @websocket_api.async_response
 async def ws_export_template(hass, connection, msg):
@@ -535,3 +806,38 @@ async def ws_export_template(hass, connection, msg):
             "content_base64": base64.b64encode(payload).decode("ascii"),
         },
     )
+
+
+@websocket_api.websocket_command({vol.Required("type"): "bill_tracker/backup/export"})
+@websocket_api.async_response
+async def ws_backup_export(hass, connection, msg):
+    try:
+        payload = _manager(hass).export_backup()
+    except RuntimeError as err:
+        connection.send_error(msg["id"], "not_configured", str(err))
+        return
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    connection.send_result(
+        msg["id"],
+        {
+            "filename": f"billy-backup-{stamp}.json",
+            "mime_type": "application/json;charset=utf-8",
+            "content_base64": base64.b64encode(payload).decode("ascii"),
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/backup/import",
+        vol.Required("content"): vol.All(str, vol.Length(max=10_000_000)),
+    }
+)
+@websocket_api.async_response
+async def ws_backup_import(hass, connection, msg):
+    try:
+        result = await _manager(hass).async_import_backup(msg["content"])
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_backup", str(err))
+        return
+    connection.send_result(msg["id"], result)

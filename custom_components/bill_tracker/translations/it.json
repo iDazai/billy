@@ -15,13 +15,19 @@
     "abort": {
       "not_setup": "Bill Tracker non è caricato. Riavvia Home Assistant e riprova.",
       "category_not_found": "Il tipo di bolletta selezionato non esiste più.",
-      "payer_not_found": "Il pagante selezionato non esiste più."
+      "payer_not_found": "Il pagante selezionato non esiste più.",
+      "parser_not_setup": "Il sottosistema di parsing automatico di Billy non è caricato. Riavvia Home Assistant e riprova.",
+      "parser_not_found": "Il parser selezionato non esiste più.",
+      "custom_parser_not_found": "Il parser selezionato non è un parser personalizzato."
     },
     "error": {
       "invalid_category": "Controlla i dati della bolletta: nome, periodicità, pagatore predefinito o colore potrebbero non essere validi.",
       "category_in_use": "Questa bolletta ha uno storico e non può essere eliminata. Disattivala invece.",
       "invalid_payer": "Controlla nome e quota predefinita. Potrebbe esistere già un pagante con questo nome.",
-      "payer_in_use": "Questo pagante è usato da bollette, impostazioni o rimborsi. Disattivalo invece di eliminarlo."
+      "payer_in_use": "Questo pagante è usato da bollette, impostazioni o rimborsi. Disattivalo invece di eliminarlo.",
+      "parser_catalog_error": "Billy non è riuscito a scaricare o validare parser.json da billy-parser.",
+      "parser_install_error": "Il parser non può essere scaricato o installato. Controlla checksum, schema e compatibilità con Billy.",
+      "custom_parser_error": "Il parser YAML personalizzato non è valido o usa un'istruzione non supportata."
     },
     "step": {
       "init": {
@@ -31,8 +37,88 @@
           "manage_payer": "Gestisci paganti",
           "add_category": "Aggiungi tipo di bolletta",
           "manage_category": "Gestisci tipi di bolletta",
+          "automatic_parsing": "Parsing automatico bollette",
           "done": "Fine",
           "support": "Supporta Billy"
+        }
+      },
+      "automatic_parsing": {
+        "title": "Parsing automatico bollette",
+        "menu_options": {
+          "parser_sources": "Sorgenti email",
+          "parser_manager": "Gestione parser",
+          "custom_parser": "Crea parser personalizzato",
+          "parser_imports": "Bollette da verificare",
+          "init": "Indietro"
+        }
+      },
+      "parser_sources": {
+        "title": "Sorgenti email",
+        "description": "Seleziona le configurazioni IMAP di Home Assistant che Billy può osservare. Billy controlla prima mittente e oggetto usando il pre-filtro del parser e scarica corpo o PDF solo dopo una corrispondenza. Nessun contenuto viene inviato alla repository dei parser. Se non compare alcuna voce, configura prima l'integrazione IMAP. Stato: {imap_status}.",
+        "data": {
+          "entry_ids": "Account/cartelle IMAP consentiti"
+        }
+      },
+      "parser_refresh": {
+        "title": "Aggiorna catalogo parser",
+        "description": "Scarica e valida parser.json da [billy-parser]({parser_project_url}). I file YAML vengono scaricati soltanto quando scegli esplicitamente di installare un parser."
+      },
+      "parser_catalog": {
+        "title": "Catalogo parser",
+        "description": "Scegli un parser da installare o aggiornare. Billy verifica dimensione, checksum SHA-256, ID e versione del file scaricato.",
+        "data": {
+          "parser_id": "Parser"
+        }
+      },
+      "parser_install": {
+        "title": "Installa {name}",
+        "description": "Fornitore: {provider}. Associa il parser a uno dei tuoi tipi di bolletta Billy. L'import automatico è disattivato per impostazione predefinita: le bollette rilevate resteranno in revisione.",
+        "data": {
+          "category_id": "Tipo di bolletta Billy",
+          "enabled": "Abilita parser",
+          "auto_import": "Importa automaticamente bollette verificate"
+        }
+      },
+      "manage_parser": {
+        "title": "Parser installati",
+        "data": {
+          "parser_id": "Parser",
+          "action": "Azione"
+        }
+      },
+      "edit_parser": {
+        "title": "Configura {name}",
+        "description": "L'import automatico viene eseguito solo se non ci sono conflitti nella verifica tra email e PDF.",
+        "data": {
+          "category_id": "Tipo di bolletta Billy",
+          "enabled": "Abilita parser",
+          "auto_import": "Importa automaticamente bollette verificate"
+        }
+      },
+      "delete_parser": {
+        "title": "Rimuovi {name}",
+        "description": "La rimozione del parser non elimina le bollette già importate."
+      },
+      "custom_parser": {
+        "title": "Crea o aggiorna un parser personalizzato",
+        "description": "Incolla un documento YAML Billy parser schema v1. I parser personalizzati usano lo stesso motore dichiarativo limitato dei parser community: niente Python, JavaScript, shell, filesystem o accesso di rete arbitrario.",
+        "data": {
+          "content": "Parser YAML",
+          "category_id": "Tipo di bolletta Billy",
+          "enabled": "Abilita parser",
+          "auto_import": "Importa automaticamente bollette verificate"
+        }
+      },
+      "export_parser": {
+        "title": "Esporta {name}",
+        "description": "Puoi [scaricare direttamente il file YAML]({download_url}) e inviarlo manualmente a billy-parser se vuoi condividerlo. L'endpoint WebSocket `bill_tracker/parser/custom/export` restituisce anche il file come payload Base64."
+      },
+      "parser_imports": {
+        "title": "Bollette da verificare",
+        "description": "Approva una bolletta rilevata per aggiungerla a Billy oppure ignorala. Se non ci sono scelte, la coda è vuota.",
+        "data": {
+          "import_id": "Bolletta rilevata",
+          "action": "Azione"
         }
       },
       "add_payer": {
@@ -108,6 +194,10 @@
       "support": {
         "title": "Supporta Billy",
         "description": "Se Billy ti è utile, puoi [⭐ lasciare una stella al progetto su GitHub]({project_url}) oppure [☕ offrirmi un caffè con PayPal.Me]({support_url}). Entrambe le cose sono completamente facoltative — grazie per usare Billy!"
+      },
+      "parser_manager": {
+        "title": "Gestione parser",
+        "description": "Apri la [pagina Gestione parser]({parser_manager_url}) per installare, aggiornare, configurare o eliminare i parser. La pagina offre filtri per nazione/stato, ricerca, ordinamento e segnala i parser outdated. Torna qui quando hai finito."
       }
     }
   },

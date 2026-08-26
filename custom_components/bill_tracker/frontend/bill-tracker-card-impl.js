@@ -3,9 +3,9 @@ import {
   billyLanguage,
   billyLocale,
   billyT
-} from './bill-tracker-i18n.js?v=0.5.1'
+} from './bill-tracker-i18n.js?v=0.11.3'
 
-const BILL_TRACKER_VERSION = '0.5.1'
+const BILL_TRACKER_VERSION = '0.11.3'
 
 class BillTrackerCard extends HTMLElement {
   constructor () {
@@ -620,12 +620,14 @@ class BillTrackerCard extends HTMLElement {
           debt.to_name
         )}</strong><span>${this._escape(
           this._t('balance_to_settle', {
-            count: Number(debt.expense_count || 0),
-            bills: this._t(
-              Number(debt.expense_count || 0) === 1
-                ? 'bill_singular'
-                : 'bill_plural'
-            )
+            count: Number(debt.item_count ?? debt.expense_count ?? 0),
+            bills: Number(debt.recurring_count || 0) > 0
+              ? this._t('expense_items')
+              : this._t(
+                  Number(debt.expense_count || 0) === 1
+                    ? 'bill_singular'
+                    : 'bill_plural'
+                )
           })
         )}</span></div>
         <b>${this._money(debt.amount)}</b>
@@ -645,7 +647,7 @@ class BillTrackerCard extends HTMLElement {
             debt.from_payer_id
           )}" data-to="${this._escape(debt.to_payer_id)}" data-amount="${Number(
           debt.amount
-        )}" data-count="${Number(debt.expense_count || 0)}">${this._escape(
+        )}" data-count="${Number(debt.item_count ?? debt.expense_count ?? 0)}">${this._escape(
           this._t('mark_settled')
         )}</button>
         </div>
@@ -1197,7 +1199,6 @@ class BillTrackerCard extends HTMLElement {
               : `<div class="msg">${this._escape(this._t('savings_empty'))}</div>`
           }
         </div>
-
         <div class="section"><div class="section-title">${this._escape(
           this._t('upcoming_title')
         )}</div>
@@ -2473,3 +2474,4 @@ if (!customElements.get('bill-tracker-card-editor-impl'))
 console.info(
   `Billy / Bill Tracker implementation v${BILL_TRACKER_VERSION} loaded`
 )
+

@@ -37,6 +37,32 @@ CSV_HEADERS = [
     "note",
 ]
 
+RECURRING_HEADERS = [
+    "id",
+    "name",
+    "kind",
+    "amount",
+    "currency",
+    "interval_months",
+    "start_date",
+    "end_date",
+    "active",
+    "auto_renew",
+    "renewal_interval_months",
+    "installment_count",
+    "provider",
+    "contract",
+    "payer",
+    "split",
+    "next_due_date",
+    "next_renewal_date",
+    "monthly_equivalent",
+    "remaining_installments",
+    "remaining_amount",
+    "reimbursement_status",
+    "note",
+]
+
 
 def month_key(year: int, month: int) -> str:
     return f"{int(year):04d}-{int(month):02d}"
@@ -152,6 +178,43 @@ def csv_template_bytes() -> bytes:
     stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=CSV_HEADERS)
     writer.writeheader()
+    return ("\ufeff" + stream.getvalue()).encode("utf-8")
+
+
+def recurring_to_export_row(item: dict[str, Any], *, currency: str = "EUR") -> dict[str, Any]:
+    return {
+        "id": str(item.get("id", "")),
+        "name": str(item.get("name", "")),
+        "kind": str(item.get("kind", "recurring")),
+        "amount": f"{float(item.get('amount', 0) or 0):.2f}",
+        "currency": str(item.get("currency") or currency),
+        "interval_months": int(item.get("interval_months", 1) or 1),
+        "start_date": str(item.get("start_date") or ""),
+        "end_date": str(item.get("end_date") or ""),
+        "active": "true" if bool(item.get("active", True)) else "false",
+        "auto_renew": "true" if bool(item.get("auto_renew", False)) else "false",
+        "renewal_interval_months": int(item.get("renewal_interval_months", 12) or 12),
+        "installment_count": item.get("installment_count") or "",
+        "provider": str(item.get("provider") or ""),
+        "contract": str(item.get("contract") or ""),
+        "payer": str(item.get("payer") or ""),
+        "split": _split_text(item),
+        "next_due_date": str(item.get("next_due_date") or ""),
+        "next_renewal_date": str(item.get("next_renewal_date") or ""),
+        "monthly_equivalent": f"{float(item.get('monthly_equivalent', 0) or 0):.2f}",
+        "remaining_installments": item.get("remaining_installments") if item.get("remaining_installments") is not None else "",
+        "remaining_amount": f"{float(item.get('remaining_amount', 0) or 0):.2f}" if item.get("remaining_amount") is not None else "",
+        "reimbursement_status": str(item.get("reimbursement_status") or "none"),
+        "note": str(item.get("note") or ""),
+    }
+
+
+def recurring_csv_bytes(rows: list[dict[str, Any]], *, currency: str = "EUR") -> bytes:
+    stream = io.StringIO(newline="")
+    writer = csv.DictWriter(stream, fieldnames=RECURRING_HEADERS, extrasaction="ignore")
+    writer.writeheader()
+    for item in rows:
+        writer.writerow(recurring_to_export_row(item, currency=currency))
     return ("\ufeff" + stream.getvalue()).encode("utf-8")
 
 
@@ -298,6 +361,48 @@ def xlsx_bytes(rows: list[dict[str, Any]], category_lookup: dict[str, dict[str, 
     return out.getvalue()
 
 
+def recurring_xlsx_bytes(rows: list[dict[str, Any]], *, currency: str = "EUR") -> bytes:
+    table = [RECURRING_HEADERS]
+    for item in rows:
+        exported = recurring_to_export_row(item, currency=currency)
+        table.append([exported[key] for key in RECURRING_HEADERS])
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>''')
+        zf.writestr("_rels/.rels", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>''')
+        zf.writestr("xl/workbook.xml", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Recurring" sheetId="1" r:id="rId1"/></sheets>
+</workbook>''')
+        zf.writestr("xl/_rels/workbook.xml.rels", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>''')
+        zf.writestr("xl/styles.xml", '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1976D2"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>''')
+        zf.writestr("xl/worksheets/sheet1.xml", _sheet_xml(table, [28, 24, 16, 14, 10, 15, 16, 16, 10, 12, 18, 18, 22, 22, 20, 28, 16, 16, 20, 20, 18, 20, 36]))
+    return out.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # Lightweight PDF report writer (standard PDF fonts, no dependency)
 # ---------------------------------------------------------------------------
@@ -368,7 +473,6 @@ def _pdf_chart(title: str, months: list[tuple[int, int]], values: list[float], *
             cmd.append("S")
             out.extend((" ".join(cmd) + "\n").encode())
             for px, py in points:
-                # Draw a tiny square marker (standard PDF graphics has no arc operator).
                 out.extend(f"0.12 0.47 0.82 rg {px-1.7:.1f} {py-1.7:.1f} 3.4 3.4 re f\n".encode())
     else:
         bar_w = max(2.0, min(18.0, step_w * 0.58))
@@ -404,7 +508,6 @@ def _wrap(text: str, width: int) -> list[str]:
 
 
 def _build_pdf(contents: list[bytes]) -> bytes:
-    # 1 regular font, 2 bold font, 3 pages tree, 4 catalog, then page/content pairs.
     objects: dict[int, bytes] = {
         1: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
         2: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
@@ -440,6 +543,50 @@ def _build_pdf(contents: list[bytes]) -> bytes:
         result.extend(f"{offsets[obj_id]:010d} 00000 n \n".encode())
     result.extend(f"trailer\n<< /Size {max_id+1} /Root 4 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
     return bytes(result)
+
+
+def recurring_pdf_bytes(rows: list[dict[str, Any]], *, currency: str = "EUR", language: str = "en") -> bytes:
+    title = "Spese ricorrenti" if str(language).lower().startswith("it") else "Recurring expenses"
+    pages: list[bytes] = []
+    current = bytearray()
+    y = A4_H - 54
+    current.extend(_pdf_text(42, y, title, 18, True))
+    y -= 28
+    if not rows:
+        current.extend(_pdf_text(42, y, "Nessuna spesa ricorrente" if str(language).lower().startswith("it") else "No recurring expenses", 10))
+        return _build_pdf([bytes(current)])
+
+    for item in rows:
+        if y < 95:
+            pages.append(bytes(current))
+            current = bytearray()
+            y = A4_H - 54
+            current.extend(_pdf_text(42, y, title, 16, True))
+            y -= 28
+        exported = recurring_to_export_row(item, currency=currency)
+        current.extend(_pdf_text(42, y, exported["name"] or "-", 11, True))
+        current.extend(_pdf_text(330, y, f"{exported['amount']} {exported['currency']}", 10, True))
+        y -= 15
+        meta = " · ".join(
+            part
+            for part in (
+                exported["kind"],
+                f"{exported['interval_months']}m",
+                exported["provider"],
+                exported["payer"],
+            )
+            if part
+        )
+        current.extend(_pdf_text(42, y, meta, 8))
+        y -= 13
+        dates = f"{exported['start_date']} -> {exported['end_date'] or '-'} · next {exported['next_due_date'] or '-'}"
+        current.extend(_pdf_text(42, y, dates, 8))
+        y -= 13
+        status = f"{exported['reimbursement_status']} · monthly {exported['monthly_equivalent']} {exported['currency']}"
+        current.extend(_pdf_text(42, y, status, 8))
+        y -= 19
+    pages.append(bytes(current))
+    return _build_pdf(pages)
 
 
 def pdf_bytes(
@@ -513,7 +660,6 @@ def pdf_bytes(
     p.extend(_pdf_text(42, 190, labels["report_note"], 7))
     pages.append(bytes(p))
 
-    # Detail pages.
     detail_rows = rows or []
     per_page = 20
     for offset in range(0, len(detail_rows), per_page):

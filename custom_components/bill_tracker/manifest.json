@@ -1,6 +1,9 @@
 {
   "domain": "bill_tracker",
   "name": "Bill Tracker",
+  "after_dependencies": [
+    "imap"
+  ],
   "codeowners": [
     "@robin994"
   ],
@@ -8,13 +11,16 @@
   "dependencies": [
     "frontend",
     "http",
-    "lovelace"
+    "lovelace",
+    "panel_custom"
   ],
   "documentation": "https://github.com/robin994/billy",
   "integration_type": "service",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/robin994/billy/issues",
-  "requirements": [],
+  "requirements": [
+    "pypdf==6.16.1"
+  ],
   "single_config_entry": true,
-  "version": "0.5.2"
+  "version": "0.11.3"
 }

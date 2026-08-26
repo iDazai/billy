@@ -2,119 +2,209 @@
   "title": "Bill Tracker",
   "config": {
     "abort": {
-      "already_configured": "O Bill Tracker já está configurado."
+      "already_configured": "Bill Tracker is already configured."
     },
     "step": {
       "user": {
         "title": "Bill Tracker",
-        "description": "Crie a base de dados local de contas e ative o cartão do painel."
+        "description": "Create the local bill database and enable the dashboard card."
       }
     }
   },
   "options": {
     "abort": {
-      "not_setup": "O Bill Tracker não está carregado. Reinicie o Home Assistant e tente novamente.",
-      "category_not_found": "O tipo de conta selecionado já não existe.",
-      "payer_not_found": "O pagador selecionado já não existe."
+      "not_setup": "Bill Tracker is not loaded. Restart Home Assistant and try again.",
+      "category_not_found": "The selected bill type no longer exists.",
+      "payer_not_found": "The selected payer no longer exists.",
+      "parser_not_setup": "Billy's automatic parser subsystem is not loaded. Restart Home Assistant and try again.",
+      "parser_not_found": "The selected parser no longer exists.",
+      "custom_parser_not_found": "The selected parser is not a custom parser."
     },
     "error": {
-      "invalid_category": "Verifique os dados do tipo de conta. O nome, periodicidade, pagador predefinido ou cor podem ser inválidos.",
-      "category_in_use": "Este tipo de conta tem histórico e não pode ser eliminado. Desative-o em vez disso.",
-      "invalid_payer": "Verifique o nome e a quota predefinida. Pode já existir um pagador com este nome.",
-      "payer_in_use": "Este pagador é usado em contas, predefinições ou liquidações. Desative-o em vez de o eliminar."
+      "invalid_category": "Check the bill type data. The name, recurrence, default payer or color may be invalid.",
+      "category_in_use": "This bill type has history and cannot be deleted. Disable it instead.",
+      "invalid_payer": "Check payer name and default share. A payer with this name may already exist.",
+      "payer_in_use": "This payer is referenced by bills, bill defaults or settlements. Disable the payer instead.",
+      "parser_catalog_error": "Billy could not download or validate parser.json from billy-parser.",
+      "parser_install_error": "The parser could not be downloaded or installed. Check its checksum, schema and Billy compatibility.",
+      "custom_parser_error": "The custom YAML parser is invalid or uses an unsupported instruction."
     },
     "step": {
       "init": {
-        "title": "Definições do Bill Tracker",
+        "title": "Bill Tracker settings",
         "menu_options": {
-          "add_payer": "Adicionar pagador",
-          "manage_payer": "Gerir pagadores",
-          "add_category": "Adicionar tipo de conta",
-          "manage_category": "Gerir tipos de conta",
-          "done": "Concluído",
-          "support": "Apoiar o Billy"
+          "add_payer": "Add payer",
+          "manage_payer": "Manage payers",
+          "add_category": "Add bill type",
+          "manage_category": "Manage bill types",
+          "automatic_parsing": "Automatic bill parsing",
+          "done": "Done",
+          "support": "Support Billy"
+        }
+      },
+      "automatic_parsing": {
+        "title": "Automatic bill parsing",
+        "menu_options": {
+          "parser_sources": "Email sources",
+          "parser_manager": "Gestão de parsers",
+          "custom_parser": "Create custom parser",
+          "parser_imports": "Bills waiting for review",
+          "init": "Back"
+        }
+      },
+      "parser_sources": {
+        "title": "Email sources",
+        "description": "Select the Home Assistant IMAP entries Billy may observe. Billy first checks sender/subject metadata against installed parser prefilters and fetches the body or PDF only after a match. Nothing is sent to the parser repository. If no IMAP entry is listed, add the IMAP integration first. Status: {imap_status}.",
+        "data": {
+          "entry_ids": "Allowed IMAP accounts/folders"
+        }
+      },
+      "parser_refresh": {
+        "title": "Refresh parser catalog",
+        "description": "Download and validate parser.json from [billy-parser]({parser_project_url}). Parser YAML files are downloaded only when you explicitly install one."
+      },
+      "parser_catalog": {
+        "title": "Parser catalog",
+        "description": "Choose a parser to install or update. Billy verifies the downloaded file size, SHA-256 checksum, parser ID and version.",
+        "data": {
+          "parser_id": "Parser"
+        }
+      },
+      "parser_install": {
+        "title": "Install {name}",
+        "description": "Provider: {provider}. Map this parser to one of your Billy bill types. Automatic import is off by default; with it off, parsed bills wait for your review.",
+        "data": {
+          "category_id": "Billy bill type",
+          "enabled": "Enable parser",
+          "auto_import": "Automatically import verified bills"
+        }
+      },
+      "manage_parser": {
+        "title": "Installed parsers",
+        "data": {
+          "parser_id": "Parser",
+          "action": "Action"
+        }
+      },
+      "edit_parser": {
+        "title": "Configure {name}",
+        "description": "Automatic import only runs when the parser result has no email/PDF verification conflict.",
+        "data": {
+          "category_id": "Billy bill type",
+          "enabled": "Enable parser",
+          "auto_import": "Automatically import verified bills"
+        }
+      },
+      "delete_parser": {
+        "title": "Remove {name}",
+        "description": "Removing a parser does not remove bills that were already imported."
+      },
+      "custom_parser": {
+        "title": "Create or update a custom parser",
+        "description": "Paste a Billy parser schema v1 YAML document. Custom parsers are validated with the same restricted declarative engine as community parsers: no Python, JavaScript, shell, filesystem or arbitrary network access.",
+        "data": {
+          "content": "Parser YAML",
+          "category_id": "Billy bill type",
+          "enabled": "Enable parser",
+          "auto_import": "Automatically import verified bills"
+        }
+      },
+      "export_parser": {
+        "title": "Export {name}",
+        "description": "You can [download the YAML file directly]({download_url}) and submit it manually to billy-parser if you want to share it. The WebSocket endpoint `bill_tracker/parser/custom/export` also returns it as a Base64 payload."
+      },
+      "parser_imports": {
+        "title": "Bills waiting for review",
+        "description": "Approve a parsed bill to add it to Billy, or ignore it. If there are no choices, the review queue is empty.",
+        "data": {
+          "import_id": "Parsed bill",
+          "action": "Action"
         }
       },
       "add_payer": {
-        "title": "Adicionar pagador",
-        "description": "A quota predefinida é usada como peso quando o Billy divide automaticamente uma conta entre os pagadores ativos.",
+        "title": "Add payer",
+        "description": "The default share is used as a weight when Billy automatically splits a bill between active payers.",
         "data": {
-          "name": "Nome",
-          "share_percent": "Quota predefinida (%)",
-          "paypal_me": "Utilizador ou link PayPal.Me",
-          "enabled": "Usar em novas contas"
+          "name": "Name",
+          "share_percent": "Default share (%)",
+          "paypal_me": "PayPal.Me username or link",
+          "enabled": "Use for new bills"
         }
       },
       "manage_payer": {
-        "title": "Gerir pagador",
+        "title": "Manage payer",
         "data": {
-          "payer_id": "Pagador",
-          "action": "Ação"
+          "payer_id": "Payer",
+          "action": "Action"
         }
       },
       "edit_payer": {
-        "title": "Editar pagador",
-        "description": "Desativar um pagador mantém todo o histórico mas remove-o de novas divisões automáticas.",
+        "title": "Edit payer",
+        "description": "Disabling a payer keeps all history but removes the payer from new automatic splits.",
         "data": {
-          "name": "Nome",
-          "share_percent": "Quota predefinida (%)",
-          "paypal_me": "Utilizador ou link PayPal.Me",
-          "enabled": "Usar em novas contas"
+          "name": "Name",
+          "share_percent": "Default share (%)",
+          "paypal_me": "PayPal.Me username or link",
+          "enabled": "Use for new bills"
         }
       },
       "delete_payer": {
-        "title": "Eliminar {name}",
-        "description": "Só pode ser eliminado um pagador que nunca tenha sido utilizado."
+        "title": "Delete {name}",
+        "description": "Only a payer that has never been referenced can be deleted."
       },
       "add_category": {
-        "title": "Adicionar tipo de conta",
-        "description": "Escolha periodicidade, pagador predefinido, cor do gráfico e uma unidade de consumo opcional. O consumo permite ao Billy comparar mudanças de fornecedor/contrato através do custo por unidade.",
+        "title": "Add bill type",
+        "description": "Choose recurrence, default payer, chart color and optional consumption unit. Consumption lets Billy compare provider/contract changes using cost per unit.",
         "data": {
-          "name": "Nome",
-          "interval_months": "Periodicidade",
-          "default_payer_id": "Pagador predefinido",
-          "color": "Cor do gráfico (#RRGGBB)",
-          "enabled": "Mostrar na lista de contas",
-          "consumption_unit": "Unidade de consumo (ex. kWh, m³)",
-          "default_provider": "Fornecedor/empresa predefinido",
-          "default_contract": "Contrato/plano predefinido"
+          "name": "Name",
+          "interval_months": "Recurrence",
+          "default_payer_id": "Default payer",
+          "color": "Chart color (#RRGGBB)",
+          "enabled": "Show in bill selection list",
+          "consumption_unit": "Consumption unit (e.g. kWh, m³)",
+          "default_provider": "Default provider/company",
+          "default_contract": "Default contract/plan"
         }
       },
       "manage_category": {
-        "title": "Gerir tipo de conta",
+        "title": "Manage bill type",
         "data": {
-          "category_id": "Tipo de conta",
-          "action": "Ação"
+          "category_id": "Bill type",
+          "action": "Action"
         }
       },
       "edit_category": {
-        "title": "Editar tipo de conta",
-        "description": "O pagador predefinido é pré-selecionado para novas contas. Defina uma unidade como kWh ou m³ para ativar estimativas de poupança entre contratos. Desativar o tipo mantém o histórico.",
+        "title": "Edit bill type",
+        "description": "The default payer is preselected for new bills. Set a consumption unit such as kWh or m³ to enable contract savings estimates. Disabling the type keeps its history.",
         "data": {
-          "name": "Nome",
-          "interval_months": "Periodicidade",
-          "default_payer_id": "Pagador predefinido",
-          "color": "Cor do gráfico (#RRGGBB)",
-          "enabled": "Mostrar na lista de contas",
-          "consumption_unit": "Unidade de consumo (ex. kWh, m³)",
-          "default_provider": "Fornecedor/empresa predefinido",
-          "default_contract": "Contrato/plano predefinido"
+          "name": "Name",
+          "interval_months": "Recurrence",
+          "default_payer_id": "Default payer",
+          "color": "Chart color (#RRGGBB)",
+          "enabled": "Show in bill selection list",
+          "consumption_unit": "Consumption unit (e.g. kWh, m³)",
+          "default_provider": "Default provider/company",
+          "default_contract": "Default contract/plan"
         }
       },
       "delete_category": {
-        "title": "Eliminar {name}",
-        "description": "Só podem ser eliminados tipos de conta sem histórico."
+        "title": "Delete {name}",
+        "description": "Only bill types with no history can be deleted."
       },
       "support": {
-        "title": "Apoiar o Billy",
-        "description": "Se o Billy é útil para si, pode [⭐ dar uma estrela ao projeto no GitHub]({project_url}) ou [☕ oferecer-me um café através do PayPal.Me]({support_url}). Ambas as opções são totalmente facultativas — obrigado por usar o Billy!"
+        "title": "Support Billy",
+        "description": "If Billy is useful to you, you can [⭐ star the project on GitHub]({project_url}) or [☕ buy me a coffee with PayPal.Me]({support_url}). Both are completely optional — thanks for using Billy!"
+      },
+      "parser_manager": {
+        "title": "Gestão de parsers",
+        "description": "Abra a [página de gestão de parsers]({parser_manager_url}) para instalar, atualizar, configurar ou remover parsers. A página inclui filtros por país/estado, pesquisa, ordenação e indicação de parsers desatualizados."
       }
     }
   },
   "entity": {
     "sensor": {
       "total_bills": {
-        "name": "Total de contas"
+        "name": "Total bills"
       }
     }
   }

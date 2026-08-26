@@ -1,0 +1,4 @@
+Billy 0.6.0 automatic-parsing upgrade
+Base repository: https://github.com/robin994/billy
+Base version: 0.5.2
+Base commit: 0ea179929a8ac295fb072d0792606e5f4c16ad73

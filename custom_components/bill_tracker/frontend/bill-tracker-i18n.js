@@ -16,14 +16,15 @@ export const BILLY_TRANSLATIONS = {
     reimbursements: 'Payer balances',
     configure_two_payers:
       'Configure at least two payers in Settings to use expense splitting.',
-    no_balance: 'No balance to settle',
-    balance_to_settle: 'Balance to settle · {count} {bills} unpaid',
+    no_balance: 'No reimbursements due',
+    balance_to_settle: 'Reimbursement due · {count} {bills}',
     bill_singular: 'bill',
     bill_plural: 'bills',
+    expense_items: 'expense items',
     pay_with_paypal: 'Pay with PayPal',
     paypal_missing: 'PayPal.Me not configured',
     paypal_missing_hint: 'Add the creditor PayPal.Me in Settings',
-    mark_settled: 'Mark settled',
+    mark_settled: 'Confirm reimbursement',
     trend_forecast: 'Trend and forecast',
     cashflow_help:
       'Colored bars by expense type + estimated upcoming due bills',
@@ -48,8 +49,8 @@ export const BILLY_TRANSLATIONS = {
     upcoming_title: 'Upcoming estimated bills',
     upcoming_empty:
       'Historical bills are needed to estimate upcoming due bills.',
-    recent_settlements: 'Recent settlements',
-    cancel_settlement: 'Undo settlement',
+    recent_settlements: 'Recent reimbursements',
+    cancel_settlement: 'Undo reimbursement',
     current_month_bills: 'Bills this month · {month} {year} ({count})',
     hide: 'Hide',
     show_count: 'Show ({count})',
@@ -119,7 +120,7 @@ export const BILLY_TRANSLATIONS = {
     unit_not_configured: 'unit not configured',
     configure_unit: 'Configure the unit in the bill type',
     paid_checkbox: 'Bill paid',
-    paid_checkbox_help: 'Enable only when the bill has actually been settled.',
+    paid_checkbox_help: 'Enable only when the payer has actually paid the provider bill.',
     payment_date_optional: 'Payment date (optional)',
     due_date_optional: 'Due date (optional)',
     paid_by: 'Paid by',
@@ -167,10 +168,10 @@ export const BILLY_TRANSLATIONS = {
     debtor: 'The debtor',
     creditor: 'the creditor',
     settle_confirm:
-      'Mark {amount} from {from} to {to} as settled? The {count} bills included in this balance will be marked as paid.',
-    settlement_note: 'Balance recorded by Billy; linked bills marked as paid',
+      'Confirm the {amount} reimbursement from {from} to {to}? This does not change the provider bill payment status.',
+    settlement_note: 'Reimbursement recorded by Billy',
     undo_settlement_confirm:
-      'Undo this settlement? Linked bills will be marked as unpaid again.',
+      'Undo this reimbursement? Provider bill payment status will not change.',
     editor_title: 'Title',
     editor_width: 'Default width',
     editor_full: 'Full section',
@@ -215,15 +216,16 @@ export const BILLY_TRANSLATIONS = {
     reimbursements: 'Rimborsi tra paganti',
     configure_two_payers:
       'Configura almeno due paganti nelle impostazioni per usare la divisione delle spese.',
-    no_balance: 'Nessun saldo da regolare',
-    balance_to_settle: 'Saldo da regolare · {count} {bills} non pagate',
+    no_balance: 'Nessun rimborso da regolare',
+    balance_to_settle: 'Rimborso da regolare · {count} {bills}',
     bill_singular: 'bolletta',
     bill_plural: 'bollette',
+    expense_items: 'voci di spesa',
     pay_with_paypal: 'Paga con PayPal',
     paypal_missing: 'PayPal.Me non configurato',
     paypal_missing_hint:
       'Aggiungi il PayPal.Me del creditore nelle impostazioni',
-    mark_settled: 'Segna saldato',
+    mark_settled: 'Conferma rimborso',
     trend_forecast: 'Andamento e previsione',
     cashflow_help:
       'Colonne colorate per tipo di spesa + prossime scadenze stimate',
@@ -334,7 +336,7 @@ export const BILLY_TRANSLATIONS = {
     no_payers:
       'Nessun pagante configurato: la bolletta verrà salvata senza divisione. Puoi aggiungere i paganti dalle impostazioni.',
     form_help:
-      'La periodicità precompila il periodo di competenza. Fornitore, contratto e consumo sono facoltativi; il consumo usa l’unità configurata nel tipo di bolletta (es. kWh o m³) e permette a Billy di stimare il risparmio dopo un cambio contratto. Data pagamento e scadenza sono facoltative. Solo le bollette NON pagate entrano nel saldo tra persone.',
+      'La periodicità precompila il periodo di competenza. Fornitore, contratto e consumo sono facoltativi. Il pagamento della bolletta al fornitore e i rimborsi tra utenti sono stati separati: la divisione genera rimborsi indipendentemente dallo stato pagata/non pagata.',
     cancel: 'Annulla',
     save_changes: 'Salva modifiche',
     add: 'Aggiungi',
@@ -370,11 +372,11 @@ export const BILLY_TRANSLATIONS = {
     debtor: 'Il debitore',
     creditor: 'il creditore',
     settle_confirm:
-      'Segnare come saldato {amount} da {from} a {to}? Le {count} bollette incluse nel saldo verranno marcate come pagate.',
+      'Confermare il rimborso di {amount} da {from} a {to}? Lo stato di pagamento delle bollette al fornitore non verrà modificato.',
     settlement_note:
-      'Saldo registrato da Billy; bollette collegate marcate come pagate',
+      'Rimborso registrato da Billy',
     undo_settlement_confirm:
-      'Annullare questo saldo? Le bollette collegate verranno nuovamente segnate come non pagate.',
+      'Annullare questo rimborso? Lo stato di pagamento delle bollette al fornitore non verrà modificato.',
     editor_title: 'Titolo',
     editor_width: 'Larghezza predefinita',
     editor_full: 'Tutta la sezione',
@@ -419,14 +421,15 @@ export const BILLY_TRANSLATIONS = {
     reimbursements: 'Saldos entre pagadores',
     configure_two_payers:
       'Configura al menos dos pagadores en Ajustes para usar la división de gastos.',
-    no_balance: 'No hay saldos pendientes',
-    balance_to_settle: 'Saldo pendiente · {count} {bills} sin pagar',
+    no_balance: 'No hay reembolsos pendientes',
+    balance_to_settle: 'Reembolso pendiente · {count} {bills}',
     bill_singular: 'factura',
     bill_plural: 'facturas',
+    expense_items: 'gastos',
     pay_with_paypal: 'Pagar con PayPal',
     paypal_missing: 'PayPal.Me no configurado',
     paypal_missing_hint: 'Añade el PayPal.Me del acreedor en Ajustes',
-    mark_settled: 'Marcar saldado',
+    mark_settled: 'Confirmar reembolso',
     trend_forecast: 'Evolución y previsión',
     cashflow_help: 'Barras por tipo de gasto + próximos vencimientos estimados',
     normalized_help: 'Coste distribuido entre los meses de competencia',
@@ -573,11 +576,11 @@ export const BILLY_TRANSLATIONS = {
     debtor: 'El deudor',
     creditor: 'el acreedor',
     settle_confirm:
-      '¿Marcar como saldados {amount} de {from} a {to}? Las {count} facturas incluidas se marcarán como pagadas.',
+      '¿Confirmar el reembolso de {amount} de {from} a {to}? El estado de pago de las facturas al proveedor no cambiará.',
     settlement_note:
-      'Saldo registrado por Billy; facturas vinculadas marcadas como pagadas',
+      'Reembolso registrado por Billy',
     undo_settlement_confirm:
-      '¿Deshacer esta liquidación? Las facturas vinculadas volverán a marcarse como no pagadas.',
+      '¿Deshacer este reembolso? El estado de pago de las facturas al proveedor no cambiará.',
     editor_title: 'Título',
     editor_width: 'Anchura predeterminada',
     editor_full: 'Sección completa',
@@ -622,14 +625,15 @@ export const BILLY_TRANSLATIONS = {
     reimbursements: 'Soldes entre payeurs',
     configure_two_payers:
       'Configurez au moins deux payeurs dans Paramètres pour utiliser le partage des dépenses.',
-    no_balance: 'Aucun solde à régler',
-    balance_to_settle: 'Solde à régler · {count} {bills} impayées',
+    no_balance: 'Aucun remboursement à régler',
+    balance_to_settle: 'Remboursement à régler · {count} {bills}',
     bill_singular: 'facture',
     bill_plural: 'factures',
+    expense_items: 'dépenses',
     pay_with_paypal: 'Payer avec PayPal',
     paypal_missing: 'PayPal.Me non configuré',
     paypal_missing_hint: 'Ajoutez le PayPal.Me du créancier dans Paramètres',
-    mark_settled: 'Marquer réglé',
+    mark_settled: 'Confirmer le remboursement',
     trend_forecast: 'Évolution et prévision',
     cashflow_help:
       'Barres colorées par type de dépense + prochaines échéances estimées',
@@ -741,7 +745,7 @@ export const BILLY_TRANSLATIONS = {
     no_payers:
       'Aucun payeur configuré : la facture sera enregistrée sans partage. Ajoutez des payeurs depuis Paramètres.',
     form_help:
-      'La périodicité préremplit la période de compétence. Fournisseur, contrat et consommation sont facultatifs ; la consommation utilise l’unité configurée pour le type de facture (ex. kWh ou m³) et permet d’estimer les économies après un changement de contrat. La date de paiement et l’échéance sont facultatives. Seules les factures NON PAYÉES entrent dans les soldes entre payeurs.',
+      'La périodicité préremplit la période de compétence. Le paiement de la facture au fournisseur et les remboursements entre utilisateurs sont indépendants ; le partage génère les remboursements quel que soit le statut payé/non payé.',
     cancel: 'Annuler',
     save_changes: 'Enregistrer',
     add: 'Ajouter',
@@ -777,11 +781,11 @@ export const BILLY_TRANSLATIONS = {
     debtor: 'Le débiteur',
     creditor: 'le créancier',
     settle_confirm:
-      'Marquer {amount} de {from} à {to} comme réglé ? Les {count} factures incluses seront marquées comme payées.',
+      'Confirmer le remboursement de {amount} de {from} à {to} ? Le statut de paiement des factures au fournisseur ne changera pas.',
     settlement_note:
-      'Solde enregistré par Billy ; factures liées marquées comme payées',
+      'Remboursement enregistré par Billy',
     undo_settlement_confirm:
-      'Annuler ce règlement ? Les factures liées seront de nouveau marquées comme impayées.',
+      'Annuler ce remboursement ? Le statut de paiement des factures au fournisseur ne changera pas.',
     editor_title: 'Titre',
     editor_width: 'Largeur par défaut',
     editor_full: 'Toute la section',
@@ -826,14 +830,15 @@ export const BILLY_TRANSLATIONS = {
     reimbursements: 'Salden zwischen Zahlern',
     configure_two_payers:
       'Konfiguriere mindestens zwei Zahler in Einstellungen, um Kosten aufzuteilen.',
-    no_balance: 'Kein offener Saldo',
-    balance_to_settle: 'Offener Saldo · {count} unbezahlte {bills}',
+    no_balance: 'Keine offenen Erstattungen',
+    balance_to_settle: 'Offene Erstattung · {count} {bills}',
     bill_singular: 'Rechnung',
     bill_plural: 'Rechnungen',
+    expense_items: 'Ausgaben',
     pay_with_paypal: 'Mit PayPal zahlen',
     paypal_missing: 'PayPal.Me nicht konfiguriert',
     paypal_missing_hint: 'PayPal.Me des Gläubigers in Einstellungen hinzufügen',
-    mark_settled: 'Als ausgeglichen markieren',
+    mark_settled: 'Erstattung bestätigen',
     trend_forecast: 'Verlauf und Prognose',
     cashflow_help:
       'Farbige Balken nach Ausgabentyp + geschätzte kommende Fälligkeiten',
@@ -980,11 +985,11 @@ export const BILLY_TRANSLATIONS = {
     debtor: 'Der Schuldner',
     creditor: 'der Gläubiger',
     settle_confirm:
-      '{amount} von {from} an {to} als ausgeglichen markieren? Die {count} enthaltenen Rechnungen werden als bezahlt markiert.',
+      'Die Erstattung von {amount} von {from} an {to} bestätigen? Der Zahlungsstatus der Anbieterrechnungen bleibt unverändert.',
     settlement_note:
-      'Saldo von Billy erfasst; verknüpfte Rechnungen als bezahlt markiert',
+      'Erstattung von Billy erfasst',
     undo_settlement_confirm:
-      'Diesen Ausgleich rückgängig machen? Verknüpfte Rechnungen werden wieder als unbezahlt markiert.',
+      'Diese Erstattung rückgängig machen? Der Zahlungsstatus der Anbieterrechnungen bleibt unverändert.',
     editor_title: 'Titel',
     editor_width: 'Standardbreite',
     editor_full: 'Ganze Sektion',
@@ -1029,14 +1034,15 @@ export const BILLY_TRANSLATIONS = {
     reimbursements: 'Saldos entre pagadores',
     configure_two_payers:
       'Configure pelo menos dois pagadores nas Definições para usar a divisão de despesas.',
-    no_balance: 'Nenhum saldo por regularizar',
-    balance_to_settle: 'Saldo por regularizar · {count} {bills} não pagas',
+    no_balance: 'Nenhum reembolso por regularizar',
+    balance_to_settle: 'Reembolso por regularizar · {count} {bills}',
     bill_singular: 'conta',
     bill_plural: 'contas',
+    expense_items: 'despesas',
     pay_with_paypal: 'Pagar com PayPal',
     paypal_missing: 'PayPal.Me não configurado',
     paypal_missing_hint: 'Adicione o PayPal.Me do credor nas Definições',
-    mark_settled: 'Marcar como liquidado',
+    mark_settled: 'Confirmar reembolso',
     trend_forecast: 'Evolução e previsão',
     cashflow_help:
       'Barras coloridas por tipo de despesa + próximos vencimentos estimados',
@@ -1147,7 +1153,7 @@ export const BILLY_TRANSLATIONS = {
     no_payers:
       'Não existem pagadores configurados: a conta será guardada sem divisão. Adicione pagadores nas Definições.',
     form_help:
-      'A periodicidade preenche o período de competência. Fornecedor, contrato e consumo são opcionais; o consumo usa a unidade configurada para o tipo de conta (ex. kWh ou m³) e permite ao Billy estimar a poupança após uma mudança de contrato. As datas de pagamento e vencimento são opcionais. Apenas contas NÃO PAGAS entram nos saldos entre pagadores.',
+      'A periodicidade preenche o período de competência. O pagamento da conta ao fornecedor e os reembolsos entre utilizadores são independentes; a divisão gera reembolsos independentemente do estado pago/não pago.',
     cancel: 'Cancelar',
     save_changes: 'Guardar alterações',
     add: 'Adicionar',
@@ -1182,11 +1188,11 @@ export const BILLY_TRANSLATIONS = {
     debtor: 'O devedor',
     creditor: 'o credor',
     settle_confirm:
-      'Marcar {amount} de {from} para {to} como liquidado? As {count} contas incluídas serão marcadas como pagas.',
+      'Confirmar o reembolso de {amount} de {from} para {to}? O estado de pagamento das contas ao fornecedor não será alterado.',
     settlement_note:
-      'Saldo registado pelo Billy; contas associadas marcadas como pagas',
+      'Reembolso registado pelo Billy',
     undo_settlement_confirm:
-      'Anular esta liquidação? As contas associadas voltarão a ser marcadas como não pagas.',
+      'Anular este reembolso? O estado de pagamento das contas ao fornecedor não será alterado.',
     editor_title: 'Título',
     editor_width: 'Largura predefinida',
     editor_full: 'Secção completa',

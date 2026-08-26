@@ -44,11 +44,13 @@ FRONTEND_IMPL_PATH = FRONTEND_DIR / "bill-tracker-card-impl.js"
 FRONTEND_I18N_PATH = FRONTEND_DIR / "bill-tracker-i18n.js"
 PARSER_MANAGER_PATH = FRONTEND_DIR / "billy-parser-manager.js"
 BILLY_PANEL_PATH = FRONTEND_DIR / "billy-panel.js"
+BILLY_WIDGETS_PATH = FRONTEND_DIR / "billy-widgets.js"
 FRONTEND_URL = "/bill_tracker/bill-tracker-card.js"
 FRONTEND_IMPL_URL = "/bill_tracker/bill-tracker-card-impl.js"
 FRONTEND_I18N_URL = "/bill_tracker/bill-tracker-i18n.js"
 PARSER_MANAGER_URL = "/bill_tracker/billy-parser-manager.js"
 BILLY_PANEL_URL = "/bill_tracker/billy-panel.js"
+BILLY_WIDGETS_URL = "/bill_tracker/billy-widgets.js"
 BILLY_PANEL_MODULE_URL = f"{BILLY_PANEL_URL}?v={FRONTEND_VERSION}"
 BILLY_PANEL_ROUTE = "billy"
 FRONTEND_MODULE_URL = FRONTEND_URL
@@ -139,6 +141,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             StaticPathConfig(FRONTEND_I18N_URL, str(FRONTEND_I18N_PATH), False),
             StaticPathConfig(PARSER_MANAGER_URL, str(PARSER_MANAGER_PATH), False),
             StaticPathConfig(BILLY_PANEL_URL, str(BILLY_PANEL_PATH), False),
+            StaticPathConfig(BILLY_WIDGETS_URL, str(BILLY_WIDGETS_PATH), False),
         ]
     )
     add_extra_js_url(hass, FRONTEND_MODULE_URL)

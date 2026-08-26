@@ -117,6 +117,37 @@ def test_lovelace_resource_url_is_not_versioned():
     assert 'FRONTEND_MODULE_URL = f"{FRONTEND_URL}?v=' not in init
 
 
+def test_billy_registers_dashboard_widget_pack():
+    bootstrap = (FRONTEND / "bill-tracker-card.js").read_text(encoding="utf-8")
+    widgets = (FRONTEND / "billy-widgets.js").read_text(encoding="utf-8")
+    init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
+    for card in (
+        "billy-summary-card",
+        "billy-spending-card",
+        "billy-breakdown-card",
+        "billy-upcoming-card",
+        "billy-recurring-card",
+        "billy-balances-card",
+        "billy-parser-status-card",
+    ):
+        assert card in widgets
+    for token in (
+        "window.customCards",
+        "class BillyWidgetBase",
+        "bill_tracker/list",
+        "bill_tracker/parser/list",
+        "recurring_history",
+        "current_month_recurring",
+        "catalog_status",
+        "paypal_url",
+    ):
+        assert token in widgets
+    assert "BILLY_WIDGETS_URL" in bootstrap
+    assert "loadBillyWidgets()" in bootstrap
+    assert 'BILLY_WIDGETS_URL = "/bill_tracker/billy-widgets.js"' in init
+    assert "StaticPathConfig(BILLY_WIDGETS_URL, str(BILLY_WIDGETS_PATH), False)" in init
+
+
 def test_billy_panel_has_large_dashboard_and_native_settings():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     for token in (

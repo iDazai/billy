@@ -56,6 +56,7 @@ def test_parser_manager_panel_is_scalable_and_has_bill_type_filter():
         'id="search"',
         'id="country"',
         'id="bill-type"',
+        'id="catalog-status"',
         'id="status"',
         'id="sort"',
         "this._billType !== 'all'",
@@ -147,6 +148,49 @@ def test_billy_panel_has_large_dashboard_and_native_settings():
         "https://paypal.me/rtortora94",
     ):
         assert token in panel
+
+
+def test_bills_and_recurring_have_csv_excel_pdf_exports():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
+    manager = (ROOT / "custom_components" / "bill_tracker" / "manager.py").read_text(encoding="utf-8")
+    exporter = (ROOT / "custom_components" / "bill_tracker" / "exporter.py").read_text(encoding="utf-8")
+    for token in (
+        'id="export-bills"',
+        'id="export-recurring"',
+        'id="export-bills-format"',
+        'id="export-recurring-format"',
+        "Excel (.xlsx)",
+        "bill_tracker/export_recurring",
+    ):
+        assert token in panel
+    assert '"bill_tracker/export_recurring"' in init
+    assert "def export_recurring_data(" in manager
+    assert "def recurring_csv_bytes(" in exporter
+    assert "def recurring_xlsx_bytes(" in exporter
+    assert "def recurring_pdf_bytes(" in exporter
+
+
+def test_billy_settings_exposes_complete_backup_with_recurring_data():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
+    manager = (ROOT / "custom_components" / "bill_tracker" / "manager.py").read_text(encoding="utf-8")
+    for token in (
+        "transferTitle",
+        'id="backup-export"',
+        'id="backup-file"',
+        'id="backup-import"',
+        "bill_tracker/backup/export",
+        "bill_tracker/backup/import",
+    ):
+        assert token in panel or token in init
+    for token in (
+        '"format": "billy-backup"',
+        '"recurring_expenses": deepcopy(self.recurring_expenses)',
+        '"recurring_occurrences": deepcopy(self.recurring_occurrences)',
+        "async_import_backup",
+    ):
+        assert token in manager
     assert '<bill-tracker-card id="dashboard-card">' not in panel
     assert '<billy-bills id="bills-panel">' in panel
 
@@ -187,10 +231,49 @@ def test_parser_manager_community_publish_flow():
         "bill_tracker/parser/custom/export",
         "billy-parser-submission:v1",
         "github.com/robin994/billy-parser/issues/new",
-        "quality-experimental",
-        'id="quality"',
+        "catalog-experimental",
+        'id="catalog-status"',
     ):
         assert token in manager
+
+
+def test_parser_manager_separates_catalog_and_installation_status():
+    panel = (FRONTEND / "billy-parser-manager.js").read_text(encoding="utf-8")
+    manager = (ROOT / "custom_components" / "bill_tracker" / "parser" / "manager.py").read_text(encoding="utf-8")
+    catalog = (ROOT / "custom_components" / "bill_tracker" / "parser" / "catalog.py").read_text(encoding="utf-8")
+    for token in (
+        "Catalog status",
+        "Installation status",
+        "Stato catalogo",
+        "Stato installazione",
+        "catalog_status",
+        "install-replacement",
+        "experimentalHint",
+        "outdatedHint",
+    ):
+        assert token in panel or token in manager or token in catalog
+    assert 'row.pop("status", None)' in catalog
+    assert 'status = "outdated"' in manager
+
+
+def test_bill_and_recurring_exports_allow_date_and_type_filters():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
+    manager = (ROOT / "custom_components" / "bill_tracker" / "manager.py").read_text(encoding="utf-8")
+    for token in (
+        'id="export-bills-from"',
+        'id="export-bills-to"',
+        'id="export-bills-category"',
+        'id="export-recurring-from"',
+        'id="export-recurring-to"',
+        'id="export-recurring-kind"',
+        "from_date: fromDate",
+        "to_date: toDate",
+    ):
+        assert token in panel
+    assert 'vol.Optional("from_date", default=""): str' in init
+    assert 'vol.Optional("to_date", default=""): str' in init
+    assert "range_start = date.fromisoformat(from_date) if from_date else None" in manager
 
 
 def test_parser_tab_can_create_edit_export_and_test_custom_parsers():

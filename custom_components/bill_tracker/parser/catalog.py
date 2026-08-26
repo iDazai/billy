@@ -39,7 +39,34 @@ class ParserCatalogClient:
         source_commit = str(catalog.get("source_commit") or "").strip()
         if not source_commit:
             raise CatalogError("Remote parser catalog has no source_commit")
+        catalog["parsers"] = [
+            self._normalize_catalog_item(item)
+            for item in catalog.get("parsers", [])
+            if isinstance(item, dict)
+        ]
         return catalog
+
+    @staticmethod
+    def _normalize_catalog_item(item: dict[str, Any]) -> dict[str, Any]:
+        """Normalize upstream lifecycle without colliding with Billy runtime state."""
+        row = dict(item)
+        existing_catalog_status = str(row.get("catalog_status") or "").strip().lower()
+        upstream_status = str(row.get("status") or "").strip().lower()
+        quality = str(row.get("quality") or "").strip().lower()
+        if existing_catalog_status in {"experimental", "verified", "outdated", "custom"}:
+            catalog_status = existing_catalog_status
+        elif upstream_status in {"experimental", "verified", "outdated"}:
+            catalog_status = upstream_status
+        elif quality == "experimental":
+            catalog_status = "experimental"
+        elif quality in {"verified", "tested"}:
+            catalog_status = "verified"
+        else:
+            # Unknown old catalogs should never be presented as verified by default.
+            catalog_status = "experimental"
+        row["catalog_status"] = catalog_status
+        row.pop("status", None)
+        return row
 
     async def async_fetch_parser(
         self,

@@ -5,6 +5,7 @@ from calendar import monthrange
 from collections import defaultdict
 from copy import deepcopy
 from datetime import date, datetime, timedelta
+import json
 from math import isfinite
 from statistics import mean
 from typing import Any
@@ -34,6 +35,9 @@ from .exporter import (
     parse_csv_bool,
     parse_csv_records,
     pdf_bytes,
+    recurring_csv_bytes,
+    recurring_pdf_bytes,
+    recurring_xlsx_bytes,
     xlsx_bytes,
 )
 
@@ -914,6 +918,138 @@ class BillTrackerManager:
 
     def export_csv_template(self) -> bytes:
         return csv_template_bytes()
+
+    def export_recurring_data(
+        self,
+        *,
+        file_format: str,
+        status: str = "all",
+        kind: str = "all",
+        from_date: str | None = None,
+        to_date: str | None = None,
+        language: str = "en",
+    ) -> tuple[bytes, str, str]:
+        """Export recurring rules in CSV, XLSX or PDF form."""
+        fmt = str(file_format or "csv").lower()
+        if fmt not in {"csv", "xlsx", "pdf"}:
+            raise ValueError("Formato export non supportato")
+
+        rows = [self._public_recurring_expense(x) for x in self.recurring_expenses]
+        wanted_status = str(status or "all")
+        wanted_kind = str(kind or "all")
+        range_start = date.fromisoformat(from_date) if from_date else None
+        range_end = date.fromisoformat(to_date) if to_date else None
+        if range_start and range_end and range_start > range_end:
+            range_start, range_end = range_end, range_start
+        if wanted_status != "all":
+            rows = [row for row in rows if str(row.get("status") or "") == wanted_status]
+        if wanted_kind != "all":
+            rows = [row for row in rows if str(row.get("kind") or "") == wanted_kind]
+        if range_start or range_end:
+            filtered = []
+            for row in rows:
+                start = date.fromisoformat(str(row.get("start_date")))
+                raw_end = str(row.get("end_date") or "")
+                end = None if bool(row.get("auto_renew", False)) or not raw_end else date.fromisoformat(raw_end)
+                if range_end and start > range_end:
+                    continue
+                if range_start and end and end < range_start:
+                    continue
+                filtered.append(row)
+            rows = filtered
+        rows.sort(key=lambda row: str(row.get("name") or "").casefold())
+
+        if fmt == "csv":
+            return recurring_csv_bytes(rows, currency=self.currency), "text/csv;charset=utf-8", "csv"
+        if fmt == "xlsx":
+            return (
+                recurring_xlsx_bytes(rows, currency=self.currency),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "xlsx",
+            )
+        return (
+            recurring_pdf_bytes(rows, currency=self.currency, language=language),
+            "application/pdf",
+            "pdf",
+        )
+
+    def export_backup(self) -> bytes:
+        """Return a complete round-trip backup of Billy's persistent data."""
+        payload = {
+            "format": "billy-backup",
+            "version": 1,
+            "schema_version": STORAGE_SCHEMA_VERSION,
+            "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "currency": self.currency,
+            "data": {
+                "categories": deepcopy(self.categories),
+                "payers": deepcopy(self.payers),
+                "expenses": deepcopy(self.expenses),
+                "settlements": deepcopy(self.settlements),
+                "recurring_expenses": deepcopy(self.recurring_expenses),
+                "recurring_occurrences": deepcopy(self.recurring_occurrences),
+            },
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+    async def async_import_backup(self, content: str) -> dict[str, int]:
+        """Replace Billy data with a validated backup, including recurring data."""
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as err:
+            raise ValueError("Backup JSON non valido") from err
+        if not isinstance(payload, dict) or payload.get("format") != "billy-backup":
+            raise ValueError("Il file non è un backup Billy")
+        if int(payload.get("version", 0) or 0) != 1:
+            raise ValueError("Versione backup Billy non supportata")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise ValueError("Il backup Billy non contiene dati validi")
+
+        keys = (
+            "categories",
+            "payers",
+            "expenses",
+            "settlements",
+            "recurring_expenses",
+            "recurring_occurrences",
+        )
+        for key in keys:
+            if not isinstance(data.get(key, []), list):
+                raise ValueError(f"Sezione backup non valida: {key}")
+        if len(data.get("expenses", [])) > 50_000:
+            raise ValueError("Il backup contiene troppe bollette")
+        if len(data.get("recurring_expenses", [])) > 10_000:
+            raise ValueError("Il backup contiene troppe spese ricorrenti")
+
+        previous = {key: deepcopy(getattr(self, key)) for key in keys}
+        try:
+            for key in keys:
+                setattr(self, key, [dict(item) for item in data.get(key, [])])
+            self._normalize_payers()
+            if not self.categories:
+                self.categories = deepcopy(DEFAULT_CATEGORIES)
+            self._normalize_categories()
+            self._migrate_expenses()
+            self._migrate_settlements()
+            self._migrate_recurring_expenses()
+            self._migrate_recurring_occurrences()
+            self._sync_recurring_occurrences()
+            self._sort()
+            await self._save_and_notify()
+        except Exception:
+            for key, value in previous.items():
+                setattr(self, key, value)
+            raise
+
+        return {
+            "categories": len(self.categories),
+            "payers": len(self.payers),
+            "expenses": len(self.expenses),
+            "settlements": len(self.settlements),
+            "recurring_expenses": len(self.recurring_expenses),
+            "recurring_occurrences": len(self.recurring_occurrences),
+        }
 
     # ------------------------------------------------------------------
     # Settlements / debt netting

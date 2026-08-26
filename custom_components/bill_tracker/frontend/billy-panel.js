@@ -59,6 +59,17 @@ const TEXT = {
     billsSubtitle:
       'Complete history with provider-payment status, editing and manual entry.',
     addBill: 'Add bill',
+    exportData: 'Export',
+    exportBillsTitle: 'Export bills',
+    exportRecurringTitle: 'Export recurring expenses',
+    exportFormat: 'Format',
+    exportCurrentFilters:
+      'Choose the date range and type. The current status filter is also applied.',
+    exportFrom: 'From',
+    exportTo: 'To',
+    exportType: 'Type',
+    exportDownload: 'Download export',
+    exportFailed: 'Export failed: {error}',
     searchBills: 'Search bills…',
     allTypes: 'All bill types',
     allStatuses: 'All statuses',
@@ -154,6 +165,7 @@ const TEXT = {
     billTypes: 'Bill types',
     payers: 'Payers',
     sources: 'Email sources',
+    transfer: 'Import / Export',
     system: 'System',
     developer: 'Developer & support',
     addBillType: 'Add bill type',
@@ -182,6 +194,30 @@ const TEXT = {
     saveSources: 'Save sources',
     noSources: 'No Home Assistant IMAP source is available.',
     sourcesSaved: 'Email sources saved.',
+    transferTitle: 'Import / Export data',
+    transferSubtitle:
+      'Create a complete Billy backup or restore one. Backups include bills, recurring expenses, recurring occurrences, payers, bill types and reimbursements.',
+    fullBackup: 'Complete backup',
+    fullBackupHelp:
+      'Download a JSON backup designed for full round-trip restore, including recurring rules and their reimbursement history.',
+    downloadBackup: 'Download backup',
+    restoreBackup: 'Restore backup',
+    restoreBackupHelp:
+      'Restoring replaces the current Billy database with the selected backup. Export a backup first if you want a recovery point.',
+    backupFile: 'Billy backup file',
+    noBackupFile: 'No backup selected',
+    backupSelected: 'Selected: {name}',
+    backupTooLarge: 'The backup exceeds the 10 MB limit.',
+    backupCreated: 'Backup created: {filename}',
+    backupRestored:
+      'Backup restored: {bills} bills · {recurring} recurring expenses.',
+    backupFailed: 'Backup operation failed: {error}',
+    confirmRestoreBackup:
+      'Restore this backup? Current Billy data will be replaced.',
+    backupWorking: 'Working…',
+    historyExportTitle: 'Bill history exports',
+    historyExportHelp:
+      'CSV, Excel and PDF remain reporting formats for bill history. Use the complete JSON backup when you need recurring expenses too.',
     catalogRefresh: 'Parser catalog refresh',
     catalogRefreshBody:
       'Billy automatically refreshes the parser catalog every day at 00:00 using the Home Assistant local timezone. Installed parsers are never updated silently.',
@@ -272,6 +308,17 @@ const TEXT = {
     billsSubtitle:
       'Storico completo con stato del pagamento al fornitore, modifica e inserimento manuale.',
     addBill: 'Aggiungi bolletta',
+    exportData: 'Esporta',
+    exportBillsTitle: 'Esporta bollette',
+    exportRecurringTitle: 'Esporta spese ricorrenti',
+    exportFormat: 'Formato',
+    exportCurrentFilters:
+      'Scegli intervallo di date e tipologia. Viene applicato anche il filtro di stato corrente.',
+    exportFrom: 'Da',
+    exportTo: 'A',
+    exportType: 'Tipologia',
+    exportDownload: 'Scarica export',
+    exportFailed: 'Export fallito: {error}',
     searchBills: 'Cerca bollette…',
     allTypes: 'Tutte le tipologie',
     allStatuses: 'Tutti gli stati',
@@ -367,6 +414,7 @@ const TEXT = {
     billTypes: 'Tipologie bolletta',
     payers: 'Pagatori',
     sources: 'Sorgenti email',
+    transfer: 'Import / Export',
     system: 'Sistema',
     developer: 'Sviluppatore e supporto',
     addBillType: 'Aggiungi tipologia',
@@ -395,6 +443,30 @@ const TEXT = {
     saveSources: 'Salva sorgenti',
     noSources: 'Non è disponibile nessuna sorgente IMAP di Home Assistant.',
     sourcesSaved: 'Sorgenti email salvate.',
+    transferTitle: 'Import / Export dati',
+    transferSubtitle:
+      'Crea un backup completo di Billy oppure ripristinalo. Il backup include bollette, spese ricorrenti, relative scadenze, pagatori, tipologie e rimborsi.',
+    fullBackup: 'Backup completo',
+    fullBackupHelp:
+      'Scarica un backup JSON pensato per il ripristino completo, incluse le regole ricorrenti e lo storico dei relativi rimborsi.',
+    downloadBackup: 'Scarica backup',
+    restoreBackup: 'Ripristina backup',
+    restoreBackupHelp:
+      'Il ripristino sostituisce i dati Billy attuali con quelli del backup selezionato. Esporta prima un backup se vuoi un punto di recupero.',
+    backupFile: 'File backup Billy',
+    noBackupFile: 'Nessun backup selezionato',
+    backupSelected: 'Selezionato: {name}',
+    backupTooLarge: 'Il backup supera il limite di 10 MB.',
+    backupCreated: 'Backup creato: {filename}',
+    backupRestored:
+      'Backup ripristinato: {bills} bollette · {recurring} spese ricorrenti.',
+    backupFailed: 'Operazione backup fallita: {error}',
+    confirmRestoreBackup:
+      'Ripristinare questo backup? I dati Billy attuali verranno sostituiti.',
+    backupWorking: 'Operazione in corso…',
+    historyExportTitle: 'Export storico bollette',
+    historyExportHelp:
+      'CSV, Excel e PDF restano formati di reportistica dello storico bollette. Per includere anche le ricorrenti usa il backup JSON completo.',
     catalogRefresh: 'Aggiornamento catalogo parser',
     catalogRefreshBody:
       'Billy aggiorna automaticamente il catalogo parser ogni giorno alle 00:00 usando il fuso orario di Home Assistant. I parser installati non vengono mai aggiornati automaticamente.',
@@ -463,6 +535,23 @@ function escapeHtml(value) {
 function safeColor(value) {
   const text = String(value || '').trim()
   return /^#[0-9a-fA-F]{6}$/.test(text) ? text : '#7b8794'
+}
+
+function downloadExportPayload(result) {
+  if (!result?.content_base64) throw new Error('Empty export')
+  const binary = atob(result.content_base64)
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  const blob = new Blob([bytes], {
+    type: result.mime_type || 'application/octet-stream',
+  })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = result.filename || 'billy-export'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
 }
 
 class BillyDashboard extends HTMLElement {
@@ -1717,7 +1806,7 @@ class BillyBills extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>${this._styles()}</style>
       <div class="bills-page">
-        <div class="hero"><div><h1>${escapeHtml(this._t('billsTitle'))}</h1><p>${escapeHtml(this._t('billsSubtitle'))}</p></div><button class="primary" id="add-bill"><ha-icon icon="mdi:plus"></ha-icon>${escapeHtml(this._t('addBill'))}</button></div>
+        <div class="hero"><div><h1>${escapeHtml(this._t('billsTitle'))}</h1><p>${escapeHtml(this._t('billsSubtitle'))}</p></div><div class="hero-actions"><button class="secondary" id="export-bills"><ha-icon icon="mdi:tray-arrow-down"></ha-icon>${escapeHtml(this._t('exportData'))}</button><button class="primary" id="add-bill"><ha-icon icon="mdi:plus"></ha-icon>${escapeHtml(this._t('addBill'))}</button></div></div>
         ${this._error ? `<div class="notice error">${escapeHtml(this._error)}</div>` : ''}
         <div class="toolbar">
           <label class="search"><ha-icon icon="mdi:magnify"></ha-icon><input id="bill-search" type="search" value="${escapeHtml(this._search)}" placeholder="${escapeHtml(this._t('searchBills'))}"></label>
@@ -1733,6 +1822,9 @@ class BillyBills extends HTMLElement {
     this.shadowRoot
       .getElementById('add-bill')
       ?.addEventListener('click', () => this._openBill())
+    this.shadowRoot
+      .getElementById('export-bills')
+      ?.addEventListener('click', () => this._openExport())
     this.shadowRoot
       .getElementById('bill-search')
       ?.addEventListener('input', (event) => {
@@ -2030,11 +2122,84 @@ class BillyBills extends HTMLElement {
     }
   }
 
+  _openExport() {
+    const modal = this.shadowRoot.getElementById('bill-modal')
+    const card = this.shadowRoot.getElementById('bill-modal-card')
+    if (!modal || !card) return
+    const categories = (this._data?.categories || [])
+      .slice()
+      .sort((a, b) =>
+        String(a.name || '').localeCompare(
+          String(b.name || ''),
+          localeOf(this._hass),
+        ),
+      )
+    const year = this._year === 'all' ? null : Number(this._year)
+    const fromMonth = year ? `${year}-01` : ''
+    const toMonth = year ? `${year}-12` : ''
+    card.innerHTML = `<div class="modal-head"><h3>${escapeHtml(this._t('exportBillsTitle'))}</h3><button type="button" class="icon-close" id="export-close">×</button></div>
+      <p class="export-help">${escapeHtml(this._t('exportCurrentFilters'))}</p>
+      <div class="form-grid">
+        <label><span>${escapeHtml(this._t('exportFrom'))}</span><input id="export-bills-from" type="month" value="${escapeHtml(fromMonth)}"></label>
+        <label><span>${escapeHtml(this._t('exportTo'))}</span><input id="export-bills-to" type="month" value="${escapeHtml(toMonth)}"></label>
+        <label><span>${escapeHtml(this._t('exportType'))}</span><select id="export-bills-category"><option value="all">${escapeHtml(this._t('allTypes'))}</option>${categories.map((row) => `<option value="${escapeHtml(row.id)}" ${this._category === row.id ? 'selected' : ''}>${escapeHtml(row.name)}</option>`).join('')}</select></label>
+        <label><span>${escapeHtml(this._t('exportFormat'))}</span><select id="export-bills-format"><option value="csv">CSV</option><option value="xlsx">Excel (.xlsx)</option><option value="pdf">PDF</option></select></label>
+      </div>
+      <div class="modal-actions"><button type="button" class="secondary" id="export-cancel">${escapeHtml(this._t('cancel'))}</button><button type="button" class="primary" id="export-confirm">${escapeHtml(this._t('exportDownload'))}</button></div>`
+    modal.hidden = false
+    const close = () => {
+      modal.hidden = true
+    }
+    card.querySelector('#export-close')?.addEventListener('click', close)
+    card.querySelector('#export-cancel')?.addEventListener('click', close)
+    modal.querySelector('.modal-backdrop')?.addEventListener('click', close)
+    card
+      .querySelector('#export-confirm')
+      ?.addEventListener('click', async () => {
+        const format =
+          card.querySelector('#export-bills-format')?.value || 'csv'
+        const exportFrom = card.querySelector('#export-bills-from')?.value || ''
+        const exportTo = card.querySelector('#export-bills-to')?.value || ''
+        const categoryId =
+          card.querySelector('#export-bills-category')?.value || 'all'
+        await this._exportCurrent(format, exportFrom, exportTo, categoryId)
+        close()
+      })
+  }
+
+  async _exportCurrent(
+    format,
+    fromMonth = '',
+    toMonth = '',
+    categoryId = 'all',
+  ) {
+    try {
+      const result = await this._hass.callWS({
+        type: 'bill_tracker/export',
+        format,
+        from_month: fromMonth,
+        to_month: toMonth,
+        status: this._status,
+        category_id: categoryId,
+        trend: 'both',
+        language: languageOf(this._hass),
+      })
+      downloadExportPayload(result)
+      this._error = null
+    } catch (error) {
+      this._error = this._t('exportFailed', {
+        error: String(error?.message || error),
+      })
+      this._render()
+    }
+  }
+
   _styles() {
     return `
       :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.bills-page{display:flex;flex-direction:column;gap:18px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.hero h1{font-size:30px;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.primary,.secondary,.bill-actions button,.pager button,.error-card button{appearance:none;border-radius:10px;padding:9px 13px;font:inherit;font-weight:650;cursor:pointer}.primary{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.bill-actions button,.pager button,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}button:disabled{opacity:.45;cursor:default}.toolbar{display:grid;grid-template-columns:minmax(240px,1fr) repeat(4,minmax(145px,auto));gap:10px}.toolbar select,.search{height:44px;border:1px solid var(--divider-color);border-radius:11px;background:var(--card-background-color);color:var(--primary-text-color)}.toolbar select{padding:0 10px;font:inherit}.search{display:flex;align-items:center;gap:8px;padding:0 12px}.search ha-icon{color:var(--secondary-text-color);--mdc-icon-size:19px}.search input{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit;min-width:0}.list-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;overflow:hidden}.bill-row{display:grid;grid-template-columns:38px 8px minmax(220px,1.4fr) minmax(155px,.65fr) auto auto auto;gap:13px;align-items:center;padding:13px 16px;border-top:1px solid var(--divider-color)}.bill-row:first-child{border-top:0}.category-color{width:8px;height:42px;border-radius:99px}.bill-main,.bill-month{display:flex;flex-direction:column;gap:3px;min-width:0}.bill-main strong,.bill-main small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bill-main small,.bill-month small{font-size:11px;color:var(--secondary-text-color)}.bill-month span{font-size:13px;text-transform:capitalize}.bill-amount{font-size:15px;text-align:right;white-space:nowrap}.state{font-size:11px;padding:4px 8px;border-radius:999px;white-space:nowrap}.state.paid{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.state.unpaid{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.bill-state{display:flex;flex-direction:column;align-items:flex-start;gap:6px}.reimbursement-line{display:flex;align-items:center;gap:6px}.state.reimbursement.done{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.state.reimbursement.pending{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.state.reimbursement.partial{color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 11%,transparent)}.state.reimbursement.none{color:var(--secondary-text-color);background:var(--secondary-background-color)}.reimbursement-toggle{position:relative;width:22px;height:22px;display:grid;place-items:center;cursor:pointer}.reimbursement-toggle input{position:absolute;opacity:0}.reimbursement-toggle span{width:18px;height:18px;border:2px solid var(--divider-color);border-radius:5px;display:grid;place-items:center}.reimbursement-toggle input:checked+span{border-color:var(--success-color,#2e7d32);background:var(--success-color,#2e7d32)}.reimbursement-toggle input:checked+span:after{content:'✓';color:white;font-size:11px;font-weight:800}.reimbursement-toggle input:disabled+span{opacity:.55;cursor:not-allowed}.bill-actions{display:flex;gap:6px}.bill-actions button{padding:6px 9px;font-size:11px}.bill-actions .danger{color:var(--error-color,#d32f2f)}.paid-toggle{position:relative;width:32px;height:32px;display:grid;place-items:center;cursor:pointer}.paid-toggle input{position:absolute;opacity:0}.paid-toggle span{width:23px;height:23px;border:2px solid var(--divider-color);border-radius:50%;display:grid;place-items:center}.paid-toggle input:checked+span{border-color:var(--success-color,#2e7d32);background:var(--success-color,#2e7d32)}.paid-toggle input:checked+span:after{content:'✓';color:white;font-size:14px;font-weight:800}.pager{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px}.pager div{display:flex;gap:7px}.pager button{padding:6px 9px;font-size:11px}.empty{padding:50px 16px;text-align:center;color:var(--secondary-text-color)}.notice{padding:11px 14px;border-radius:10px}.notice.error{background:color-mix(in srgb,var(--error-color,#d32f2f) 10%,var(--card-background-color));color:var(--error-color,#d32f2f);border:1px solid color-mix(in srgb,var(--error-color,#d32f2f) 28%,transparent)}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px}.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}.modal-card{position:relative;z-index:1;width:min(850px,100%);max-height:min(90vh,900px);overflow:auto;background:var(--card-background-color);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.35);padding:20px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h3{font-size:20px;margin:0}.icon-close{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font-size:28px;cursor:pointer}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid label{display:flex;flex-direction:column;gap:6px}.form-grid label>span,.split-title small{font-size:12px;color:var(--secondary-text-color)}.form-grid input,.form-grid select,.form-grid textarea{width:100%;min-height:42px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color);padding:8px 11px;font:inherit;outline:none}.form-grid textarea{resize:vertical}.form-grid .check{flex-direction:row;align-items:center;padding-top:20px}.form-grid .check input{width:18px;min-height:18px;accent-color:var(--primary-color)}.span2{grid-column:1/-1}.split-box{border:1px solid var(--divider-color);border-radius:12px;padding:14px}.split-title{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.split-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.split-total{text-align:right;margin-top:8px;font-size:12px;color:var(--success-color,#2e7d32)}.split-total.bad{color:var(--error-color,#d32f2f)}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid var(--divider-color)}
+      .hero-actions{display:flex;gap:9px;flex-wrap:wrap}.hero-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px}.export-help{margin:0 0 16px;color:var(--secondary-text-color);font-size:13px;line-height:1.45}
       @media(max-width:1100px){.toolbar{grid-template-columns:1fr 1fr}.bill-row{grid-template-columns:34px 8px minmax(180px,1fr) auto auto}.bill-month{grid-column:3}.bill-state{grid-column:4;grid-row:1}.bill-amount{grid-column:4;grid-row:2}.bill-actions{grid-column:5;grid-row:1 / span 2}}
-      @media(max-width:720px){.hero{align-items:flex-start;flex-direction:column}.hero .primary{width:100%;justify-content:center}.toolbar{grid-template-columns:1fr}.bill-row{grid-template-columns:32px 8px minmax(0,1fr) auto;padding:12px}.bill-month{grid-column:3}.bill-state{grid-column:3}.bill-amount{grid-column:3;text-align:left}.bill-actions{grid-column:4;grid-row:1 / span 4;flex-direction:column}.form-grid,.split-grid{grid-template-columns:1fr}.span2{grid-column:auto}.modal{padding:8px}.modal-card{padding:16px}}
+      @media(max-width:720px){.hero{align-items:flex-start;flex-direction:column}.hero-actions{width:100%}.hero-actions button{flex:1}.toolbar{grid-template-columns:1fr}.bill-row{grid-template-columns:32px 8px minmax(0,1fr) auto;padding:12px}.bill-month{grid-column:3}.bill-state{grid-column:3}.bill-amount{grid-column:3;text-align:left}.bill-actions{grid-column:4;grid-row:1 / span 4;flex-direction:column}.form-grid,.split-grid{grid-template-columns:1fr}.span2{grid-column:auto}.modal{padding:8px}.modal-card{padding:16px}}
     `
   }
 }
@@ -2337,7 +2502,7 @@ class BillyRecurring extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>${this._styles()}</style>
       <div class="recurring-page">
-        <div class="hero"><div><h1>${escapeHtml(this._t('recurringTitle'))}</h1><p>${escapeHtml(this._t('recurringSubtitle'))}</p></div><button class="primary" id="add-recurring"><ha-icon icon="mdi:plus"></ha-icon>${escapeHtml(this._t('addRecurring'))}</button></div>
+        <div class="hero"><div><h1>${escapeHtml(this._t('recurringTitle'))}</h1><p>${escapeHtml(this._t('recurringSubtitle'))}</p></div><div class="hero-actions"><button class="secondary" id="export-recurring"><ha-icon icon="mdi:tray-arrow-down"></ha-icon>${escapeHtml(this._t('exportData'))}</button><button class="primary" id="add-recurring"><ha-icon icon="mdi:plus"></ha-icon>${escapeHtml(this._t('addRecurring'))}</button></div></div>
         <div class="info"><ha-icon icon="mdi:information-outline"></ha-icon><span>${escapeHtml(this._t('recurringForecastHelp'))}</span></div>
         ${this._error ? `<div class="notice error">${escapeHtml(this._error)}</div>` : ''}
         <div class="toolbar">
@@ -2353,6 +2518,9 @@ class BillyRecurring extends HTMLElement {
     this.shadowRoot
       .getElementById('add-recurring')
       ?.addEventListener('click', () => this._openRecurring())
+    this.shadowRoot
+      .getElementById('export-recurring')
+      ?.addEventListener('click', () => this._openExport())
     this.shadowRoot
       .getElementById('recurring-search')
       ?.addEventListener('input', (event) => {
@@ -2620,11 +2788,68 @@ class BillyRecurring extends HTMLElement {
     }
   }
 
+  _openExport() {
+    const modal = this.shadowRoot.getElementById('recurring-modal')
+    const card = this.shadowRoot.getElementById('recurring-modal-card')
+    if (!modal || !card) return
+    card.innerHTML = `<div class="modal-head"><h3>${escapeHtml(this._t('exportRecurringTitle'))}</h3><button type="button" class="icon-close" id="export-close">×</button></div>
+      <p class="export-help">${escapeHtml(this._t('exportCurrentFilters'))}</p>
+      <div class="form-grid">
+        <label><span>${escapeHtml(this._t('exportFrom'))}</span><input id="export-recurring-from" type="date"></label>
+        <label><span>${escapeHtml(this._t('exportTo'))}</span><input id="export-recurring-to" type="date"></label>
+        <label><span>${escapeHtml(this._t('exportType'))}</span><select id="export-recurring-kind"><option value="all">${escapeHtml(this._t('allRecurringKinds'))}</option><option value="subscription" ${this._kind === 'subscription' ? 'selected' : ''}>${escapeHtml(this._t('subscription'))}</option><option value="mortgage" ${this._kind === 'mortgage' ? 'selected' : ''}>${escapeHtml(this._t('mortgage'))}</option><option value="installment" ${this._kind === 'installment' ? 'selected' : ''}>${escapeHtml(this._t('installment'))}</option><option value="recurring" ${this._kind === 'recurring' ? 'selected' : ''}>${escapeHtml(this._t('recurringGeneric'))}</option></select></label>
+        <label><span>${escapeHtml(this._t('exportFormat'))}</span><select id="export-recurring-format"><option value="csv">CSV</option><option value="xlsx">Excel (.xlsx)</option><option value="pdf">PDF</option></select></label>
+      </div>
+      <div class="modal-actions"><button type="button" class="secondary" id="export-cancel">${escapeHtml(this._t('cancel'))}</button><button type="button" class="primary" id="export-confirm">${escapeHtml(this._t('exportDownload'))}</button></div>`
+    modal.hidden = false
+    const close = () => {
+      modal.hidden = true
+    }
+    card.querySelector('#export-close')?.addEventListener('click', close)
+    card.querySelector('#export-cancel')?.addEventListener('click', close)
+    modal.querySelector('.modal-backdrop')?.addEventListener('click', close)
+    card
+      .querySelector('#export-confirm')
+      ?.addEventListener('click', async () => {
+        const format =
+          card.querySelector('#export-recurring-format')?.value || 'csv'
+        const fromDate =
+          card.querySelector('#export-recurring-from')?.value || ''
+        const toDate = card.querySelector('#export-recurring-to')?.value || ''
+        const kind =
+          card.querySelector('#export-recurring-kind')?.value || 'all'
+        await this._exportCurrent(format, fromDate, toDate, kind)
+        close()
+      })
+  }
+
+  async _exportCurrent(format, fromDate = '', toDate = '', kind = 'all') {
+    try {
+      const result = await this._hass.callWS({
+        type: 'bill_tracker/export_recurring',
+        format,
+        status: this._status,
+        kind,
+        from_date: fromDate,
+        to_date: toDate,
+        language: languageOf(this._hass),
+      })
+      downloadExportPayload(result)
+      this._error = null
+    } catch (error) {
+      this._error = this._t('exportFailed', {
+        error: String(error?.message || error),
+      })
+      this._render()
+    }
+  }
+
   _styles() {
     return `
       :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.recurring-page{display:flex;flex-direction:column;gap:18px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.hero h1{font-size:30px;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.primary,.secondary,.actions button,.error-card button{appearance:none;border-radius:10px;padding:9px 13px;font:inherit;font-weight:650;cursor:pointer}.primary{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.actions button,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}.info{display:flex;align-items:flex-start;gap:9px;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--primary-color) 8%,var(--card-background-color));border:1px solid color-mix(in srgb,var(--primary-color) 24%,var(--divider-color));color:var(--secondary-text-color);font-size:12px}.info ha-icon{color:var(--primary-color);--mdc-icon-size:18px;flex:none}.toolbar{display:grid;grid-template-columns:minmax(260px,1fr) repeat(3,minmax(160px,auto));gap:10px}.toolbar select,.search{height:44px;border:1px solid var(--divider-color);border-radius:11px;background:var(--card-background-color);color:var(--primary-text-color)}.toolbar select{padding:0 10px;font:inherit}.search{display:flex;align-items:center;gap:8px;padding:0 12px}.search ha-icon{color:var(--secondary-text-color);--mdc-icon-size:19px}.search input{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit;min-width:0}.list-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;overflow:hidden}.recurring-row{display:grid;grid-template-columns:46px minmax(240px,1.4fr) minmax(160px,.7fr) minmax(170px,.75fr) auto auto;gap:14px;align-items:center;padding:15px 16px;border-top:1px solid var(--divider-color)}.recurring-row:first-child{border-top:0}.kind-icon{width:42px;height:42px;border-radius:12px;background:color-mix(in srgb,var(--primary-color) 11%,transparent);color:var(--primary-color);display:grid;place-items:center}.recurring-main,.recurring-due,.recurring-value{display:flex;flex-direction:column;gap:3px;min-width:0}.recurring-main span,.recurring-main small,.recurring-due span,.recurring-due small,.recurring-value small{font-size:11px;color:var(--secondary-text-color)}.recurring-main strong,.recurring-main small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.status{font-size:11px;padding:5px 8px;border-radius:999px;white-space:nowrap}.status.active{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.status.inactive{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.status.ended{color:var(--secondary-text-color);background:var(--secondary-background-color)}.status-stack{display:flex;flex-direction:column;align-items:flex-start;gap:5px}.status.reimbursement.done{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.status.reimbursement.pending{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.status.reimbursement.partial{color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 11%,transparent)}.status.reimbursement.none{color:var(--secondary-text-color);background:var(--secondary-background-color)}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{padding:6px 9px;font-size:11px}.actions .danger{color:var(--error-color,#d32f2f)}.empty{padding:50px 16px;text-align:center;color:var(--secondary-text-color)}.notice{padding:11px 14px;border-radius:10px}.notice.error{background:color-mix(in srgb,var(--error-color,#d32f2f) 10%,var(--card-background-color));color:var(--error-color,#d32f2f);border:1px solid color-mix(in srgb,var(--error-color,#d32f2f) 28%,transparent)}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px}.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}.modal-card{position:relative;z-index:1;width:min(820px,100%);max-height:min(90vh,900px);overflow:auto;background:var(--card-background-color);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.35);padding:20px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h3{font-size:20px;margin:0}.icon-close{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font-size:28px;cursor:pointer}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid label{display:flex;flex-direction:column;gap:6px}.form-grid label>span,.hint{font-size:12px;color:var(--secondary-text-color)}.form-grid input,.form-grid select,.form-grid textarea{width:100%;min-height:42px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color);padding:8px 11px;font:inherit;outline:none}.form-grid textarea{resize:vertical}.form-grid .check{flex-direction:row;align-items:center;padding-top:20px}.form-grid .check input{width:18px;min-height:18px;accent-color:var(--primary-color)}.span2{grid-column:1/-1}.split-box{border:1px solid var(--divider-color);border-radius:12px;padding:14px}.split-title{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.split-title small{font-size:12px;color:var(--secondary-text-color)}.split-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.split-total{text-align:right;margin-top:8px;font-size:12px;color:var(--success-color,#2e7d32)}.split-total.bad{color:var(--error-color,#d32f2f)}.occurrence-list{display:flex;flex-direction:column}.occurrence-row{display:grid;grid-template-columns:minmax(220px,1fr) auto minmax(210px,auto);gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--divider-color)}.occurrence-row:first-child{border-top:0}.occurrence-row>div:first-child{display:flex;flex-direction:column;gap:3px}.occurrence-row small{font-size:11px;color:var(--secondary-text-color)}.occurrence-state{display:flex;align-items:center;gap:7px}.reimbursement-toggle{position:relative;width:22px;height:22px;display:grid;place-items:center;cursor:pointer}.reimbursement-toggle input{position:absolute;opacity:0}.reimbursement-toggle span{width:18px;height:18px;border:2px solid var(--divider-color);border-radius:5px;display:grid;place-items:center}.reimbursement-toggle input:checked+span{border-color:var(--success-color,#2e7d32);background:var(--success-color,#2e7d32)}.reimbursement-toggle input:checked+span:after{content:'✓';color:white;font-size:11px;font-weight:800}.reimbursement-toggle input:disabled+span{opacity:.55;cursor:not-allowed}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid var(--divider-color)}
+      .hero-actions{display:flex;gap:9px;flex-wrap:wrap}.hero-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px}.export-help{margin:0 0 16px;color:var(--secondary-text-color);font-size:13px;line-height:1.45}
       @media(max-width:1050px){.recurring-row{grid-template-columns:46px minmax(200px,1fr) auto auto}.recurring-due{grid-column:2}.recurring-value{grid-column:3;grid-row:1 / span 2}.status-stack{grid-column:4;grid-row:1}.actions{grid-column:4;grid-row:2}}
-      @media(max-width:720px){.hero{align-items:flex-start;flex-direction:column}.hero .primary{width:100%;justify-content:center}.toolbar{grid-template-columns:1fr}.recurring-row{grid-template-columns:42px minmax(0,1fr);padding:12px}.recurring-due,.recurring-value,.status-stack,.actions{grid-column:2;grid-row:auto}.actions{flex-wrap:wrap}.form-grid,.split-grid{grid-template-columns:1fr}.span2{grid-column:auto}.occurrence-row{grid-template-columns:1fr}.modal{padding:8px}.modal-card{padding:16px}}
+      @media(max-width:720px){.hero{align-items:flex-start;flex-direction:column}.hero-actions{width:100%}.hero-actions button{flex:1}.toolbar{grid-template-columns:1fr}.recurring-row{grid-template-columns:42px minmax(0,1fr);padding:12px}.recurring-due,.recurring-value,.status-stack,.actions{grid-column:2;grid-row:auto}.actions{flex-wrap:wrap}.form-grid,.split-grid{grid-template-columns:1fr}.span2{grid-column:auto}.occurrence-row{grid-template-columns:1fr}.modal{padding:8px}.modal-card{padding:16px}}
     `
   }
 }
@@ -2641,6 +2866,9 @@ class BillySettings extends HTMLElement {
     this._error = null
     this._notice = ''
     this._unsubscribe = null
+    this._backupBusy = false
+    this._backupContent = ''
+    this._backupFileName = ''
   }
 
   set hass(value) {
@@ -2771,6 +2999,24 @@ class BillySettings extends HTMLElement {
       ${rows.length ? `<div class="footer-actions"><button class="primary" id="save-sources">${escapeHtml(this._t('saveSources'))}</button></div>` : ''}`
   }
 
+  _transfer() {
+    return `<div class="section-head"><div><h2>${escapeHtml(this._t('transferTitle'))}</h2><p>${escapeHtml(this._t('transferSubtitle'))}</p></div></div>
+      <div class="transfer-settings-grid">
+        <article class="transfer-settings-card featured">
+          <div class="transfer-card-icon"><ha-icon icon="mdi:database-export-outline"></ha-icon></div>
+          <div class="transfer-card-copy"><h3>${escapeHtml(this._t('fullBackup'))}</h3><p>${escapeHtml(this._t('fullBackupHelp'))}</p></div>
+          <button class="primary" id="backup-export" type="button" ${this._backupBusy ? 'disabled' : ''}>${escapeHtml(this._t(this._backupBusy ? 'backupWorking' : 'downloadBackup'))}</button>
+        </article>
+        <article class="transfer-settings-card">
+          <div class="transfer-card-icon"><ha-icon icon="mdi:database-import-outline"></ha-icon></div>
+          <div class="transfer-card-copy"><h3>${escapeHtml(this._t('restoreBackup'))}</h3><p>${escapeHtml(this._t('restoreBackupHelp'))}</p></div>
+          <label class="backup-picker"><span>${escapeHtml(this._t('backupFile'))}</span><input id="backup-file" type="file" accept=".json,application/json"><strong>${escapeHtml(this._backupFileName ? this._t('backupSelected', { name: this._backupFileName }) : this._t('noBackupFile'))}</strong></label>
+          <button class="secondary" id="backup-import" type="button" ${!this._backupContent || this._backupBusy ? 'disabled' : ''}>${escapeHtml(this._t(this._backupBusy ? 'backupWorking' : 'restoreBackup'))}</button>
+        </article>
+      </div>
+      <article class="history-export-note"><ha-icon icon="mdi:file-chart-outline"></ha-icon><div><strong>${escapeHtml(this._t('historyExportTitle'))}</strong><p>${escapeHtml(this._t('historyExportHelp'))}</p></div></article>`
+  }
+
   _system() {
     const installed = this._parserData?.installed || []
     const catalog = this._parserData?.catalog?.parsers || []
@@ -2838,6 +3084,7 @@ class BillySettings extends HTMLElement {
     let content = this._categories()
     if (this._section === 'payers') content = this._payers()
     if (this._section === 'sources') content = this._sources()
+    if (this._section === 'transfer') content = this._transfer()
     if (this._section === 'system') content = this._system()
     if (this._section === 'developer') content = this._developer()
 
@@ -2848,7 +3095,7 @@ class BillySettings extends HTMLElement {
         ${this._notice ? `<div class="notice">${escapeHtml(this._notice)}</div>` : ''}
         ${this._error ? `<div class="notice error">${escapeHtml(this._error)}</div>` : ''}
         <div class="settings-layout">
-          <aside>${this._sectionButton('categories', 'mdi:shape-outline')}${this._sectionButton('payers', 'mdi:account-group-outline')}${this._sectionButton('sources', 'mdi:email-outline')}${this._sectionButton('system', 'mdi:cog-outline')}${this._sectionButton('developer', 'mdi:account-heart-outline')}</aside>
+          <aside>${this._sectionButton('categories', 'mdi:shape-outline')}${this._sectionButton('payers', 'mdi:account-group-outline')}${this._sectionButton('sources', 'mdi:email-outline')}${this._sectionButton('transfer', 'mdi:swap-vertical-bold')}${this._sectionButton('system', 'mdi:cog-outline')}${this._sectionButton('developer', 'mdi:account-heart-outline')}</aside>
           <section class="settings-content">${content}</section>
         </div>
       </div>
@@ -2900,6 +3147,106 @@ class BillySettings extends HTMLElement {
     this.shadowRoot
       .getElementById('save-sources')
       ?.addEventListener('click', () => this._saveSources())
+    this.shadowRoot
+      .getElementById('backup-export')
+      ?.addEventListener('click', () => this._exportBackup())
+    this.shadowRoot
+      .getElementById('backup-file')
+      ?.addEventListener('change', (event) => this._readBackup(event.target))
+    this.shadowRoot
+      .getElementById('backup-import')
+      ?.addEventListener('click', () => this._importBackup())
+  }
+
+  _downloadPayload(result) {
+    if (!result?.content_base64) throw new Error('Empty backup')
+    const binary = atob(result.content_base64)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    const blob = new Blob([bytes], {
+      type: result.mime_type || 'application/octet-stream',
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = result.filename || 'billy-backup.json'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  async _exportBackup() {
+    if (!this._hass || this._backupBusy) return
+    this._backupBusy = true
+    this._notice = ''
+    this._error = null
+    this._render()
+    try {
+      const result = await this._hass.callWS({
+        type: 'bill_tracker/backup/export',
+      })
+      this._downloadPayload(result)
+      this._notice = this._t('backupCreated', { filename: result.filename })
+    } catch (error) {
+      this._error = this._t('backupFailed', {
+        error: String(error?.message || error),
+      })
+    } finally {
+      this._backupBusy = false
+      this._render()
+    }
+  }
+
+  async _readBackup(input) {
+    const file = input?.files?.[0]
+    this._backupContent = ''
+    this._backupFileName = file?.name || ''
+    if (!file) {
+      this._render()
+      return
+    }
+    if (file.size > 10_000_000) {
+      this._error = this._t('backupTooLarge')
+      this._render()
+      return
+    }
+    try {
+      this._backupContent = await file.text()
+      this._error = null
+    } catch (error) {
+      this._error = String(error?.message || error)
+    }
+    this._render()
+  }
+
+  async _importBackup() {
+    if (!this._hass || !this._backupContent || this._backupBusy) return
+    if (!window.confirm(this._t('confirmRestoreBackup'))) return
+    this._backupBusy = true
+    this._notice = ''
+    this._error = null
+    this._render()
+    try {
+      const result = await this._hass.callWS({
+        type: 'bill_tracker/backup/import',
+        content: this._backupContent,
+      })
+      this._backupContent = ''
+      this._backupFileName = ''
+      this._notice = this._t('backupRestored', {
+        bills: Number(result.expenses || 0),
+        recurring: Number(result.recurring_expenses || 0),
+      })
+      await this._load(false)
+      this._section = 'transfer'
+    } catch (error) {
+      this._error = this._t('backupFailed', {
+        error: String(error?.message || error),
+      })
+    } finally {
+      this._backupBusy = false
+      this._render()
+    }
   }
 
   _openCategory(id = null) {
@@ -3072,9 +3419,9 @@ class BillySettings extends HTMLElement {
 
   _styles() {
     return `
-      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.settings-page{display:flex;flex-direction:column;gap:16px}.settings-hero h1{font-size:30px;line-height:1.1;margin:0 0 6px}.settings-hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.settings-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:start}.settings-layout aside{position:sticky;top:122px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:3px}.settings-nav-item{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font:inherit;padding:11px 12px;border-radius:9px;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer}.settings-nav-item.active{background:color-mix(in srgb,var(--primary-color) 12%,transparent);color:var(--primary-color);font-weight:650}.settings-nav-item ha-icon{--mdc-icon-size:20px}.settings-content{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;padding:20px;min-height:420px}.section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding-bottom:18px;border-bottom:1px solid var(--divider-color)}.section-head h2{font-size:20px;margin:0 0 5px}.section-head p{font-size:13px;line-height:1.45;color:var(--secondary-text-color);margin:0;max-width:760px}.primary,.secondary,.row-actions button,.error-card button{appearance:none;border-radius:9px;padding:9px 13px;font:inherit;font-weight:600;cursor:pointer}.primary{border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.row-actions button,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}.items{display:flex;flex-direction:column}.item-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:14px;padding:15px 2px;border-bottom:1px solid var(--divider-color)}.item-row:last-child{border-bottom:0}.color-dot{width:14px;height:42px;border-radius:99px}.avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--primary-color) 13%,transparent);color:var(--primary-color);font-weight:700}.item-main{display:flex;flex-direction:column;gap:4px;min-width:0}.item-main strong{font-size:14px}.item-main small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.status{font-size:11px;padding:4px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color);white-space:nowrap}.status.enabled{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 12%,transparent)}.status.warning{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.row-actions{display:flex;gap:7px}.row-actions button{padding:7px 10px;font-size:12px}.row-actions .danger{color:var(--error-color,#d32f2f)}.source-items{padding-top:4px}.source-row{display:flex;align-items:center;gap:12px;padding:15px 4px;border-bottom:1px solid var(--divider-color);cursor:pointer}.source-row:last-child{border-bottom:0}.source-row input{width:18px;height:18px;accent-color:var(--primary-color)}.source-row div{display:flex;flex-direction:column;gap:3px}.source-row small{color:var(--secondary-text-color)}.footer-actions{display:flex;justify-content:flex-end;padding-top:18px;border-top:1px solid var(--divider-color)}.system-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0}.info-card{border:1px solid var(--divider-color);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px}.info-card span{font-size:11px;color:var(--secondary-text-color)}.info-card strong{font-size:18px}.system-card{display:flex;gap:14px;padding:18px;border:1px solid var(--divider-color);border-radius:14px}.system-card>ha-icon{color:var(--primary-color);--mdc-icon-size:27px}.system-card div{display:flex;flex-direction:column;align-items:flex-start;gap:5px}.system-card p{margin:0 0 4px;color:var(--secondary-text-color);font-size:13px;line-height:1.45}.developer-card{display:flex;align-items:center;gap:18px;padding:20px;border:1px solid var(--divider-color);border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,var(--primary-color) 8%,var(--card-background-color)),var(--card-background-color))}.developer-avatar{width:68px;height:68px;flex:none;border-radius:18px;background:var(--primary-color);color:var(--text-primary-color,#fff);display:grid;place-items:center;font-size:24px;font-weight:800}.developer-copy h3,.project-card h3,.support-card h3{margin:0;font-size:18px}.developer-copy p,.project-card p,.support-card p{margin:5px 0 0;color:var(--secondary-text-color);font-size:13px;line-height:1.5}.link-actions,.project-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.link-actions a,.project-actions a,.donate{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border:1px solid var(--divider-color);border-radius:9px;text-decoration:none;color:var(--primary-text-color);font-size:12px;font-weight:650}.link-actions a:hover,.project-actions a:hover{border-color:var(--primary-color);color:var(--primary-color)}.project-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.project-card{border:1px solid var(--divider-color);border-radius:14px;padding:16px;display:grid;grid-template-columns:auto 1fr;gap:12px}.project-icon{width:42px;height:42px;border-radius:11px;background:color-mix(in srgb,var(--primary-color) 12%,transparent);color:var(--primary-color);display:grid;place-items:center}.project-actions{grid-column:1/-1}.project-actions .star{color:var(--warning-color,#f9a825)}.support-card{display:grid;grid-template-columns:auto 1fr;gap:14px;margin-top:14px;padding:18px;border:1px solid color-mix(in srgb,var(--error-color,#d32f2f) 20%,var(--divider-color));border-radius:14px}.support-card>div:first-child{width:46px;height:46px;border-radius:12px;background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent);color:var(--error-color,#d32f2f);display:grid;place-items:center}.donate{margin-top:12px;background:#0070ba;color:white!important;border-color:#0070ba!important}.notice{padding:11px 14px;border-radius:10px;background:color-mix(in srgb,var(--success-color,#2e7d32) 10%,var(--card-background-color));color:var(--success-color,#2e7d32);border:1px solid color-mix(in srgb,var(--success-color,#2e7d32) 28%,transparent);font-size:13px}.notice.error{background:color-mix(in srgb,var(--error-color,#d32f2f) 10%,var(--card-background-color));color:var(--error-color,#d32f2f);border-color:color-mix(in srgb,var(--error-color,#d32f2f) 28%,transparent)}.empty{padding:34px;text-align:center;color:var(--secondary-text-color)}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px}.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}.modal-card{position:relative;z-index:1;width:min(680px,100%);max-height:min(86vh,760px);overflow:auto;background:var(--card-background-color);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.35);padding:20px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h3{font-size:20px;margin:0}.icon-close{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font-size:28px;line-height:1;cursor:pointer}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid label{display:flex;flex-direction:column;gap:6px}.form-grid label>span{font-size:12px;color:var(--secondary-text-color)}.form-grid input,.form-grid select{width:100%;height:42px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color);padding:0 11px;font:inherit;outline:none}.form-grid input:focus,.form-grid select:focus{border-color:var(--primary-color)}.form-grid input[type=color]{padding:4px}.span2{grid-column:1/-1}.form-grid .check{flex-direction:row;align-items:center}.form-grid .check input{width:18px;height:18px;accent-color:var(--primary-color)}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid var(--divider-color)}
+      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.settings-page{display:flex;flex-direction:column;gap:16px}.settings-hero h1{font-size:30px;line-height:1.1;margin:0 0 6px}.settings-hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.settings-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:start}.settings-layout aside{position:sticky;top:122px;background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:3px}.settings-nav-item{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font:inherit;padding:11px 12px;border-radius:9px;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer}.settings-nav-item.active{background:color-mix(in srgb,var(--primary-color) 12%,transparent);color:var(--primary-color);font-weight:650}.settings-nav-item ha-icon{--mdc-icon-size:20px}.settings-content{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;padding:20px;min-height:420px}.section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding-bottom:18px;border-bottom:1px solid var(--divider-color)}.section-head h2{font-size:20px;margin:0 0 5px}.section-head p{font-size:13px;line-height:1.45;color:var(--secondary-text-color);margin:0;max-width:760px}.primary,.secondary,.row-actions button,.error-card button{appearance:none;border-radius:9px;padding:9px 13px;font:inherit;font-weight:600;cursor:pointer}.primary{border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.row-actions button,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}button:disabled{opacity:.55;cursor:not-allowed}.items{display:flex;flex-direction:column}.item-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:14px;padding:15px 2px;border-bottom:1px solid var(--divider-color)}.item-row:last-child{border-bottom:0}.color-dot{width:14px;height:42px;border-radius:99px}.avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--primary-color) 13%,transparent);color:var(--primary-color);font-weight:700}.item-main{display:flex;flex-direction:column;gap:4px;min-width:0}.item-main strong{font-size:14px}.item-main small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.status{font-size:11px;padding:4px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color);white-space:nowrap}.status.enabled{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 12%,transparent)}.status.warning{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.row-actions{display:flex;gap:7px}.row-actions button{padding:7px 10px;font-size:12px}.row-actions .danger{color:var(--error-color,#d32f2f)}.source-items{padding-top:4px}.source-row{display:flex;align-items:center;gap:12px;padding:15px 4px;border-bottom:1px solid var(--divider-color);cursor:pointer}.source-row:last-child{border-bottom:0}.source-row input{width:18px;height:18px;accent-color:var(--primary-color)}.source-row div{display:flex;flex-direction:column;gap:3px}.source-row small{color:var(--secondary-text-color)}.footer-actions{display:flex;justify-content:flex-end;padding-top:18px;border-top:1px solid var(--divider-color)}.transfer-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.transfer-settings-card{border:1px solid var(--divider-color);border-radius:16px;padding:18px;display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start}.transfer-settings-card.featured{background:linear-gradient(135deg,color-mix(in srgb,var(--primary-color) 8%,var(--card-background-color)),var(--card-background-color));border-color:color-mix(in srgb,var(--primary-color) 28%,var(--divider-color))}.transfer-card-icon{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb,var(--primary-color) 12%,transparent);color:var(--primary-color)}.transfer-card-icon ha-icon{--mdc-icon-size:25px}.transfer-card-copy h3{margin:1px 0 5px;font-size:17px}.transfer-card-copy p,.history-export-note p{margin:0;color:var(--secondary-text-color);font-size:13px;line-height:1.5}.transfer-settings-card>button,.backup-picker{grid-column:1/-1}.backup-picker{display:flex;flex-direction:column;gap:7px;padding:12px;border:1px dashed var(--divider-color);border-radius:11px;background:var(--secondary-background-color)}.backup-picker span{font-size:12px;color:var(--secondary-text-color)}.backup-picker input{font:inherit;color:var(--primary-text-color)}.backup-picker strong{font-size:12px;font-weight:550;overflow-wrap:anywhere}.history-export-note{display:flex;gap:12px;align-items:flex-start;margin-top:14px;padding:15px;border-radius:13px;background:var(--secondary-background-color)}.history-export-note ha-icon{color:var(--secondary-text-color);--mdc-icon-size:22px;flex:none}.history-export-note strong{display:block;margin-bottom:4px;font-size:13px}.system-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0}.info-card{border:1px solid var(--divider-color);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px}.info-card span{font-size:11px;color:var(--secondary-text-color)}.info-card strong{font-size:18px}.system-card{display:flex;gap:14px;padding:18px;border:1px solid var(--divider-color);border-radius:14px}.system-card>ha-icon{color:var(--primary-color);--mdc-icon-size:27px}.system-card div{display:flex;flex-direction:column;align-items:flex-start;gap:5px}.system-card p{margin:0 0 4px;color:var(--secondary-text-color);font-size:13px;line-height:1.45}.developer-card{display:flex;align-items:center;gap:18px;padding:20px;border:1px solid var(--divider-color);border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,var(--primary-color) 8%,var(--card-background-color)),var(--card-background-color))}.developer-avatar{width:68px;height:68px;flex:none;border-radius:18px;background:var(--primary-color);color:var(--text-primary-color,#fff);display:grid;place-items:center;font-size:24px;font-weight:800}.developer-copy h3,.project-card h3,.support-card h3{margin:0;font-size:18px}.developer-copy p,.project-card p,.support-card p{margin:5px 0 0;color:var(--secondary-text-color);font-size:13px;line-height:1.5}.link-actions,.project-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.link-actions a,.project-actions a,.donate{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border:1px solid var(--divider-color);border-radius:9px;text-decoration:none;color:var(--primary-text-color);font-size:12px;font-weight:650}.link-actions a:hover,.project-actions a:hover{border-color:var(--primary-color);color:var(--primary-color)}.project-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.project-card{border:1px solid var(--divider-color);border-radius:14px;padding:16px;display:grid;grid-template-columns:auto 1fr;gap:12px}.project-icon{width:42px;height:42px;border-radius:11px;background:color-mix(in srgb,var(--primary-color) 12%,transparent);color:var(--primary-color);display:grid;place-items:center}.project-actions{grid-column:1/-1}.project-actions .star{color:var(--warning-color,#f9a825)}.support-card{display:grid;grid-template-columns:auto 1fr;gap:14px;margin-top:14px;padding:18px;border:1px solid color-mix(in srgb,var(--error-color,#d32f2f) 20%,var(--divider-color));border-radius:14px}.support-card>div:first-child{width:46px;height:46px;border-radius:12px;background:color-mix(in srgb,var(--error-color,#d32f2f) 12%,transparent);color:var(--error-color,#d32f2f);display:grid;place-items:center}.donate{margin-top:12px;background:#0070ba;color:white!important;border-color:#0070ba!important}.notice{padding:11px 14px;border-radius:10px;background:color-mix(in srgb,var(--success-color,#2e7d32) 10%,var(--card-background-color));color:var(--success-color,#2e7d32);border:1px solid color-mix(in srgb,var(--success-color,#2e7d32) 28%,transparent);font-size:13px}.notice.error{background:color-mix(in srgb,var(--error-color,#d32f2f) 10%,var(--card-background-color));color:var(--error-color,#d32f2f);border-color:color-mix(in srgb,var(--error-color,#d32f2f) 28%,transparent)}.empty{padding:34px;text-align:center;color:var(--secondary-text-color)}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px}.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}.modal-card{position:relative;z-index:1;width:min(680px,100%);max-height:min(86vh,760px);overflow:auto;background:var(--card-background-color);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.35);padding:20px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h3{font-size:20px;margin:0}.icon-close{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font-size:28px;line-height:1;cursor:pointer}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid label{display:flex;flex-direction:column;gap:6px}.form-grid label>span{font-size:12px;color:var(--secondary-text-color)}.form-grid input,.form-grid select{width:100%;height:42px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color);padding:0 11px;font:inherit;outline:none}.form-grid input:focus,.form-grid select:focus{border-color:var(--primary-color)}.form-grid input[type=color]{padding:4px}.span2{grid-column:1/-1}.form-grid .check{flex-direction:row;align-items:center}.form-grid .check input{width:18px;height:18px;accent-color:var(--primary-color)}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid var(--divider-color)}
       @media(max-width:1000px){.settings-layout{grid-template-columns:1fr}.settings-layout aside{position:static;flex-direction:row;overflow-x:auto}.settings-nav-item{white-space:nowrap}.system-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-      @media(max-width:700px){.project-grid{grid-template-columns:1fr}.developer-card{align-items:flex-start}.settings-hero h1{font-size:25px}.settings-content{padding:14px}.section-head{flex-direction:column}.section-head .primary{width:100%}.item-row{grid-template-columns:auto minmax(0,1fr) auto}.item-row .status{grid-column:2}.row-actions{grid-column:1/-1;justify-content:flex-end}.system-grid{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.span2{grid-column:auto}.modal{padding:8px}.modal-card{padding:16px}}
+      @media(max-width:700px){.project-grid,.transfer-settings-grid{grid-template-columns:1fr}.developer-card{align-items:flex-start}.settings-hero h1{font-size:25px}.settings-content{padding:14px}.section-head{flex-direction:column}.section-head .primary{width:100%}.item-row{grid-template-columns:auto minmax(0,1fr) auto}.item-row .status{grid-column:2}.row-actions{grid-column:1/-1;justify-content:flex-end}.system-grid{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.span2{grid-column:auto}.modal{padding:8px}.modal-card{padding:16px}}
     `
   }
 }

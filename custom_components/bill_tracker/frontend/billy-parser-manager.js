@@ -11,7 +11,9 @@ const TEXT = {
     allCountries: 'All countries',
     billType: 'Bill type',
     allBillTypes: 'All bill types',
-    state: 'Status',
+    installationStatus: 'Installation status',
+    catalogStatus: 'Catalog status',
+    allCatalogStatuses: 'All catalog statuses',
     all: 'All',
     installed: 'Installed',
     notInstalled: 'Not installed',
@@ -24,7 +26,8 @@ const TEXT = {
     sortType: 'Bill type',
     sortUpdates: 'Updates first',
     available: 'Available',
-    outdated: 'Outdated',
+    outdated: 'Update available',
+    catalogOutdated: 'Outdated',
     removed: 'Removed from catalog',
     error: 'Error',
     custom: 'Custom',
@@ -46,7 +49,8 @@ const TEXT = {
     never: 'not yet',
     parsers: 'parsers',
     updateCount: 'updates available',
-    confirmRemove: 'Remove this parser? Already imported bills will not be deleted.',
+    confirmRemove:
+      'Remove this parser? Already imported bills will not be deleted.',
     installTitle: 'Install parser',
     updateTitle: 'Update parser',
     configureTitle: 'Configure parser',
@@ -54,23 +58,30 @@ const TEXT = {
     actionError: 'Operation failed',
     updateBlocked: 'Update requires a newer Billy version',
     deprecatedHint: 'This parser is deprecated.',
-    removedHint: 'This installed parser is no longer present in the remote catalog.',
+    removedHint:
+      'This installed parser is no longer present in the remote catalog.',
     customHint: 'Custom parser stored locally.',
     changelog: 'Changes',
-    quality: 'Quality',
-    allQualities: 'All quality levels',
     verified: 'Verified',
-    tested: 'Tested',
     experimental: 'Experimental',
+    experimentalHint:
+      'Experimental parser: it may not work with every bill format yet.',
+    verifiedHint: 'Verified parser recommended by the Billy parser catalog.',
+    outdatedHint: 'This parser is no longer recommended by the catalog.',
+    replacement: 'Replacement',
+    installReplacement: 'Install replacement',
     publishExperimental: 'Publish Experimental',
-    publishTooLarge: 'This parser is too large for browser publishing. Export it and submit it manually on GitHub.',
-    publishHint: 'Only the parser YAML is sent to GitHub. No invoices, emails or attachments are included.',
+    publishTooLarge:
+      'This parser is too large for browser publishing. Export it and submit it manually on GitHub.',
+    publishHint:
+      'Only the parser YAML is sent to GitHub. No invoices, emails or attachments are included.',
     newCustom: 'New custom parser',
     editCustom: 'Edit parser',
     exportCustom: 'Export',
     customEditorTitle: 'Custom parser editor',
     customEditorNewTitle: 'Create custom parser',
-    customEditorHint: 'Create and manage a local parser here. The YAML must follow the Billy parser schema.',
+    customEditorHint:
+      'Create and manage a local parser here. The YAML must follow the Billy parser schema.',
     yamlSource: 'Parser YAML',
     testData: 'Optional test data',
     testSender: 'Sender',
@@ -86,11 +97,13 @@ const TEXT = {
     saveCustom: 'Save custom parser',
     customSaved: 'Custom parser saved.',
     editorLoading: 'Loading parser…',
-    customIdLocked: 'The parser ID cannot be changed while editing an existing custom parser.'
+    customIdLocked:
+      'The parser ID cannot be changed while editing an existing custom parser.',
   },
   it: {
     title: 'Gestione parser',
-    subtitle: 'Installa, aggiorna e configura i parser automatici delle bollette.',
+    subtitle:
+      'Installa, aggiorna e configura i parser automatici delle bollette.',
     refresh: 'Aggiorna lista',
     refreshing: 'Aggiornamento…',
     search: 'Cerca fornitore, parser o tipo…',
@@ -98,7 +111,9 @@ const TEXT = {
     allCountries: 'Tutte le nazioni',
     billType: 'Tipologia',
     allBillTypes: 'Tutte le tipologie',
-    state: 'Stato',
+    installationStatus: 'Stato installazione',
+    catalogStatus: 'Stato catalogo',
+    allCatalogStatuses: 'Tutti gli stati catalogo',
     all: 'Tutti',
     installed: 'Installati',
     notInstalled: 'Non installati',
@@ -111,7 +126,8 @@ const TEXT = {
     sortType: 'Tipo bolletta',
     sortUpdates: 'Aggiornamenti prima',
     available: 'Disponibile',
-    outdated: 'Outdated',
+    outdated: 'Aggiornamento disponibile',
+    catalogOutdated: 'Obsoleto',
     removed: 'Rimosso dal catalogo',
     error: 'Errore',
     custom: 'Personalizzato',
@@ -133,7 +149,8 @@ const TEXT = {
     never: 'mai',
     parsers: 'parser',
     updateCount: 'aggiornamenti disponibili',
-    confirmRemove: 'Eliminare questo parser? Le bollette già importate non verranno cancellate.',
+    confirmRemove:
+      'Eliminare questo parser? Le bollette già importate non verranno cancellate.',
     installTitle: 'Installa parser',
     updateTitle: 'Aggiorna parser',
     configureTitle: 'Configura parser',
@@ -141,23 +158,30 @@ const TEXT = {
     actionError: 'Operazione non riuscita',
     updateBlocked: 'L’aggiornamento richiede una versione più recente di Billy',
     deprecatedHint: 'Questo parser è deprecato.',
-    removedHint: 'Questo parser installato non è più presente nel catalogo remoto.',
+    removedHint:
+      'Questo parser installato non è più presente nel catalogo remoto.',
     customHint: 'Parser personalizzato salvato localmente.',
     changelog: 'Modifiche',
-    quality: 'Qualità',
-    allQualities: 'Tutti i livelli',
     verified: 'Verificato',
-    tested: 'Testato',
     experimental: 'Sperimentale',
+    experimentalHint:
+      'Parser sperimentale: potrebbe non funzionare ancora con tutti i formati di bolletta.',
+    verifiedHint: 'Parser verificato e raccomandato dal catalogo Billy.',
+    outdatedHint: 'Questo parser non è più raccomandato dal catalogo.',
+    replacement: 'Sostituto',
+    installReplacement: 'Installa sostituto',
     publishExperimental: 'Pubblica Experimental',
-    publishTooLarge: 'Questo parser è troppo grande per la pubblicazione dal browser. Esportalo e invialo manualmente su GitHub.',
-    publishHint: 'Su GitHub viene inviato solo lo YAML del parser. Nessuna bolletta, email o allegato viene incluso.',
+    publishTooLarge:
+      'Questo parser è troppo grande per la pubblicazione dal browser. Esportalo e invialo manualmente su GitHub.',
+    publishHint:
+      'Su GitHub viene inviato solo lo YAML del parser. Nessuna bolletta, email o allegato viene incluso.',
     newCustom: 'Nuovo parser custom',
     editCustom: 'Modifica parser',
     exportCustom: 'Esporta',
     customEditorTitle: 'Editor parser custom',
     customEditorNewTitle: 'Crea parser custom',
-    customEditorHint: 'Crea e gestisci qui un parser locale. Lo YAML deve rispettare lo schema parser di Billy.',
+    customEditorHint:
+      'Crea e gestisci qui un parser locale. Lo YAML deve rispettare lo schema parser di Billy.',
     yamlSource: 'YAML del parser',
     testData: 'Dati di test opzionali',
     testSender: 'Mittente',
@@ -173,16 +197,18 @@ const TEXT = {
     saveCustom: 'Salva parser custom',
     customSaved: 'Parser custom salvato.',
     editorLoading: 'Caricamento parser…',
-    customIdLocked: 'L’ID del parser non può essere cambiato durante la modifica di un parser custom esistente.'
-  }
+    customIdLocked:
+      'L’ID del parser non può essere cambiato durante la modifica di un parser custom esistente.',
+  },
 }
 
-function languageOf (hass) {
-  const raw = hass?.language || hass?.locale?.language || navigator.language || 'en'
+function languageOf(hass) {
+  const raw =
+    hass?.language || hass?.locale?.language || navigator.language || 'en'
   return String(raw).toLowerCase().split(/[-_]/)[0] === 'it' ? 'it' : 'en'
 }
 
-function esc (value) {
+function esc(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -191,14 +217,18 @@ function esc (value) {
     .replaceAll("'", '&#039;')
 }
 
-function countryFlag (code) {
-  const value = String(code || '').trim().toUpperCase()
+function countryFlag(code) {
+  const value = String(code || '')
+    .trim()
+    .toUpperCase()
   if (!/^[A-Z]{2}$/.test(value)) return '🌐'
-  return String.fromCodePoint(...[...value].map(char => 127397 + char.charCodeAt(0)))
+  return String.fromCodePoint(
+    ...[...value].map((char) => 127397 + char.charCodeAt(0)),
+  )
 }
 
 class BillyParserManagerPanel extends HTMLElement {
-  constructor () {
+  constructor() {
     super()
     this.attachShadow({ mode: 'open' })
     this._hass = null
@@ -212,33 +242,33 @@ class BillyParserManagerPanel extends HTMLElement {
     this._country = 'all'
     this._billType = 'all'
     this._status = 'all'
-    this._quality = 'all'
+    this._catalogStatus = 'all'
     this._sort = 'country'
     this._dialog = null
     this._customEditor = null
   }
 
-  set hass (value) {
+  set hass(value) {
     this._hass = value
     if (!this._data && !this._loading) this._load()
     else this._render()
   }
 
-  get hass () {
+  get hass() {
     return this._hass
   }
 
-  connectedCallback () {
+  connectedCallback() {
     this._render()
     if (this._hass && !this._data && !this._loading) this._load()
   }
 
-  _t (key) {
+  _t(key) {
     const language = languageOf(this._hass)
     return TEXT[language]?.[key] ?? TEXT.en[key] ?? key
   }
 
-  async _load ({ refreshIfEmpty = true } = {}) {
+  async _load({ refreshIfEmpty = true } = {}) {
     if (!this._hass || this._loading) return
     this._loading = true
     this._error = ''
@@ -246,7 +276,7 @@ class BillyParserManagerPanel extends HTMLElement {
     try {
       const [parserData, billData] = await Promise.all([
         this._hass.callWS({ type: 'bill_tracker/parser/list' }),
-        this._hass.callWS({ type: 'bill_tracker/list', forecast_months: 1 })
+        this._hass.callWS({ type: 'bill_tracker/list', forecast_months: 1 }),
       ])
       this._data = parserData
       this._billData = billData
@@ -263,7 +293,7 @@ class BillyParserManagerPanel extends HTMLElement {
     }
   }
 
-  async _refreshCatalog () {
+  async _refreshCatalog() {
     if (!this._hass || this._refreshing) return
     this._refreshing = true
     this._error = ''
@@ -280,14 +310,16 @@ class BillyParserManagerPanel extends HTMLElement {
     }
   }
 
-  _rows () {
+  _rows() {
     const catalogRows = [...(this._data?.catalog?.parsers || [])]
-    const known = new Set(catalogRows.map(row => String(row.id)))
+    const known = new Set(catalogRows.map((row) => String(row.id)))
     for (const installed of this._data?.installed || []) {
-      if (installed.source !== 'custom' || known.has(String(installed.id))) continue
+      if (installed.source !== 'custom' || known.has(String(installed.id)))
+        continue
       catalogRows.push({
         ...installed,
         status: 'custom',
+        catalog_status: 'custom',
         installed: true,
         installed_version: installed.version,
         compatible: true,
@@ -295,62 +327,121 @@ class BillyParserManagerPanel extends HTMLElement {
         provider: installed.provider || '',
         bill_type: installed.bill_type || '',
         source: 'custom',
-        quality: 'custom'
       })
     }
     return catalogRows
   }
 
-  _filteredRows () {
+  _filteredRows() {
     const search = this._search.trim().toLowerCase()
-    const rows = this._rows().filter(row => {
-      if (this._country !== 'all' && String(row.country || '') !== this._country) return false
-      if (this._billType !== 'all' && String(row.bill_type || '') !== this._billType) return false
-      if (this._status === 'installed' && !row.installed) return false
-      if (this._status === 'not_installed' && row.installed) return false
-      if (this._status === 'updates' && !row.update_available) return false
-      if (this._status === 'incompatible' && row.compatible !== false) return false
-      if (this._status === 'deprecated' && !row.deprecated) return false
-      if (this._quality !== 'all' && String(row.quality || 'verified') !== this._quality) return false
+    const rows = this._rows().filter((row) => {
+      if (
+        this._country !== 'all' &&
+        String(row.country || '') !== this._country
+      )
+        return false
+      if (
+        this._billType !== 'all' &&
+        String(row.bill_type || '') !== this._billType
+      )
+        return false
+      if (this._status !== 'all') {
+        if (this._status === 'updates') {
+          if (!row.update_available) return false
+        } else if (String(row.status || 'available') !== this._status)
+          return false
+      }
+      if (
+        this._catalogStatus !== 'all' &&
+        String(row.catalog_status || 'experimental') !== this._catalogStatus
+      )
+        return false
       if (!search) return true
-      return [row.name, row.provider, row.id, row.bill_type, row.country]
-        .some(value => String(value || '').toLowerCase().includes(search))
+      return [row.name, row.provider, row.id, row.bill_type, row.country].some(
+        (value) =>
+          String(value || '')
+            .toLowerCase()
+            .includes(search),
+      )
     })
 
-    const compareText = (a, b) => String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base' })
+    const compareText = (a, b) =>
+      String(a || '').localeCompare(String(b || ''), undefined, {
+        sensitivity: 'base',
+      })
     rows.sort((a, b) => {
       if (this._sort === 'updates') {
-        const updateDiff = Number(Boolean(b.update_available)) - Number(Boolean(a.update_available))
+        const updateDiff =
+          Number(Boolean(b.update_available)) -
+          Number(Boolean(a.update_available))
         if (updateDiff) return updateDiff
       }
-      if (this._sort === 'provider') return compareText(a.provider || a.name, b.provider || b.name)
+      if (this._sort === 'provider')
+        return compareText(a.provider || a.name, b.provider || b.name)
       if (this._sort === 'type') {
-        return compareText(a.bill_type, b.bill_type) || compareText(a.provider || a.name, b.provider || b.name)
+        return (
+          compareText(a.bill_type, b.bill_type) ||
+          compareText(a.provider || a.name, b.provider || b.name)
+        )
       }
-      return compareText(a.country, b.country) || compareText(a.provider || a.name, b.provider || b.name)
+      return (
+        compareText(a.country, b.country) ||
+        compareText(a.provider || a.name, b.provider || b.name)
+      )
     })
     return rows
   }
 
-  _countries () {
-    return [...new Set(this._rows().map(row => String(row.country || '')).filter(Boolean))].sort()
+  _countries() {
+    return [
+      ...new Set(
+        this._rows()
+          .map((row) => String(row.country || ''))
+          .filter(Boolean),
+      ),
+    ].sort()
   }
 
-  _billTypes () {
-    return [...new Set(this._rows().map(row => String(row.bill_type || '')).filter(Boolean))].sort()
+  _billTypes() {
+    return [
+      ...new Set(
+        this._rows()
+          .map((row) => String(row.bill_type || ''))
+          .filter(Boolean),
+      ),
+    ].sort()
   }
 
-  _billTypeLabel (value) {
+  _billTypeLabel(value) {
     const labels = {
-      en: { electricity: 'Electricity', gas: 'Gas', water: 'Water', internet: 'Internet', mobile: 'Mobile', phone: 'Phone', insurance: 'Insurance' },
-      it: { electricity: 'Elettricità', gas: 'Gas', water: 'Acqua', internet: 'Internet', mobile: 'Telefonia mobile', phone: 'Telefono', insurance: 'Assicurazione' }
+      en: {
+        electricity: 'Electricity',
+        gas: 'Gas',
+        water: 'Water',
+        internet: 'Internet',
+        mobile: 'Mobile',
+        phone: 'Phone',
+        insurance: 'Insurance',
+      },
+      it: {
+        electricity: 'Elettricità',
+        gas: 'Gas',
+        water: 'Acqua',
+        internet: 'Internet',
+        mobile: 'Telefonia mobile',
+        phone: 'Telefono',
+        insurance: 'Assicurazione',
+      },
     }
     const language = languageOf(this._hass)
     const key = String(value || '')
-    return labels[language]?.[key] || key.replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase())
+    return (
+      labels[language]?.[key] ||
+      key.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+    )
   }
 
-  _statusLabel (row) {
+  _statusLabel(row) {
     if (row.status === 'outdated') return this._t('outdated')
     if (row.status === 'installed') return this._t('installed')
     if (row.status === 'incompatible') return this._t('incompatible')
@@ -361,27 +452,40 @@ class BillyParserManagerPanel extends HTMLElement {
     return this._t('available')
   }
 
-  _qualityLabel (quality) {
-    const value = String(quality || 'verified')
+  _catalogStatusLabel(catalogStatus) {
+    const value = String(catalogStatus || 'experimental')
     if (value === 'experimental') return this._t('experimental')
-    if (value === 'tested') return this._t('tested')
     if (value === 'verified') return this._t('verified')
+    if (value === 'outdated') return this._t('catalogOutdated')
     return this._t('custom')
   }
 
-  _renderRow (row) {
+  _renderRow(row) {
     const installedVersion = row.installed_version ?? row.version
     const remoteVersion = row.version
     const busy = this._busy === String(row.id)
-    const canUpdate = row.update_available && row.compatible !== false && !row.removed_from_catalog
+    const canUpdate =
+      row.update_available &&
+      row.compatible !== false &&
+      !row.removed_from_catalog
     let versionLine = `${this._t('version')} v${esc(remoteVersion ?? '?')}`
     if (row.update_available) {
       versionLine = `${this._t('installedVersion')} v${esc(installedVersion)} → ${this._t('remoteVersion')} v${esc(remoteVersion)}`
     }
 
     let hint = ''
-    if (row.compatible === false) hint = `${this._t('requires')} ${esc(row.min_billy_version || '?')}`
+    if (row.compatible === false)
+      hint = `${this._t('requires')} ${esc(row.min_billy_version || '?')}`
     if (row.deprecated) hint = this._t('deprecatedHint')
+    if (row.catalog_status === 'experimental')
+      hint = this._t('experimentalHint')
+    if (row.catalog_status === 'verified' && !hint)
+      hint = this._t('verifiedHint')
+    if (row.catalog_status === 'outdated') {
+      hint = this._t('outdatedHint')
+      if (row.replacement)
+        hint += ` ${this._t('replacement')}: ${esc(row.replacement)}.`
+    }
     if (row.status === 'removed') hint = this._t('removedHint')
     if (row.status === 'custom') hint = this._t('customHint')
     if (row.load_error) hint = esc(row.load_error)
@@ -402,13 +506,26 @@ class BillyParserManagerPanel extends HTMLElement {
         ${row.update_available ? `<button class="primary" data-action="update" data-id="${esc(row.id)}" ${canUpdate && !busy ? '' : 'disabled'} title="${row.compatible === false ? esc(this._t('updateBlocked')) : ''}">${this._t('update')}</button>` : ''}
         <button class="danger" data-action="remove" data-id="${esc(row.id)}" ${busy ? 'disabled' : ''}>${this._t('remove')}</button>`
     }
+    if (
+      row.catalog_status === 'outdated' &&
+      row.replacement &&
+      row.source !== 'custom'
+    ) {
+      actions += `<button class="secondary" data-action="install-replacement" data-id="${esc(row.replacement)}">${this._t('installReplacement')}</button>`
+    }
 
     const badges = [
       `<span class="badge status-${esc(row.status || 'available')}">${esc(this._statusLabel(row))}</span>`,
-      row.update_available ? `<span class="badge warning">v${esc(installedVersion)} → v${esc(remoteVersion)}</span>` : '',
-      row.deprecated ? `<span class="badge warning">${this._t('deprecated')}</span>` : '',
-      row.compatible === false ? `<span class="badge error">${this._t('incompatible')}</span>` : '',
-      row.quality ? `<span class="badge quality-${esc(row.quality)}">${esc(this._qualityLabel(row.quality))}</span>` : ''
+      row.update_available
+        ? `<span class="badge warning">v${esc(installedVersion)} → v${esc(remoteVersion)}</span>`
+        : '',
+      row.deprecated
+        ? `<span class="badge warning">${this._t('deprecated')}</span>`
+        : '',
+      row.compatible === false
+        ? `<span class="badge error">${this._t('incompatible')}</span>`
+        : '',
+      `<span class="badge catalog-${esc(row.catalog_status || 'experimental')}">${esc(this._catalogStatusLabel(row.catalog_status))}</span>`,
     ].join('')
 
     return `
@@ -430,18 +547,32 @@ class BillyParserManagerPanel extends HTMLElement {
       </article>`
   }
 
-  _render () {
+  _render() {
     if (!this.shadowRoot) return
     const rows = this._filteredRows()
     const counts = this._data?.catalog?.counts || {}
     const updatedAt = this._data?.catalog?.updated_at
     const countries = this._countries()
     const billTypes = this._billTypes()
-    const countryOptions = [`<option value="all">${this._t('allCountries')}</option>`]
-      .concat(countries.map(code => `<option value="${esc(code)}" ${this._country === code ? 'selected' : ''}>${countryFlag(code)} ${esc(code)}</option>`))
+    const countryOptions = [
+      `<option value="all">${this._t('allCountries')}</option>`,
+    ]
+      .concat(
+        countries.map(
+          (code) =>
+            `<option value="${esc(code)}" ${this._country === code ? 'selected' : ''}>${countryFlag(code)} ${esc(code)}</option>`,
+        ),
+      )
       .join('')
-    const billTypeOptions = [`<option value="all">${this._t('allBillTypes')}</option>`]
-      .concat(billTypes.map(type => `<option value="${esc(type)}" ${this._billType === type ? 'selected' : ''}>${esc(this._billTypeLabel(type))}</option>`))
+    const billTypeOptions = [
+      `<option value="all">${this._t('allBillTypes')}</option>`,
+    ]
+      .concat(
+        billTypes.map(
+          (type) =>
+            `<option value="${esc(type)}" ${this._billType === type ? 'selected' : ''}>${esc(this._billTypeLabel(type))}</option>`,
+        ),
+      )
       .join('')
 
     this.shadowRoot.innerHTML = `
@@ -473,20 +604,23 @@ class BillyParserManagerPanel extends HTMLElement {
           </label>
           <label><span>${this._t('country')}</span><select id="country">${countryOptions}</select></label>
           <label><span>${this._t('billType')}</span><select id="bill-type">${billTypeOptions}</select></label>
-          <label><span>${this._t('quality')}</span><select id="quality">
-            <option value="all" ${this._quality === 'all' ? 'selected' : ''}>${this._t('allQualities')}</option>
-            <option value="verified" ${this._quality === 'verified' ? 'selected' : ''}>${this._t('verified')}</option>
-            <option value="tested" ${this._quality === 'tested' ? 'selected' : ''}>${this._t('tested')}</option>
-            <option value="experimental" ${this._quality === 'experimental' ? 'selected' : ''}>${this._t('experimental')}</option>
-            <option value="custom" ${this._quality === 'custom' ? 'selected' : ''}>${this._t('custom')}</option>
+          <label><span>${this._t('catalogStatus')}</span><select id="catalog-status">
+            <option value="all" ${this._catalogStatus === 'all' ? 'selected' : ''}>${this._t('allCatalogStatuses')}</option>
+            <option value="verified" ${this._catalogStatus === 'verified' ? 'selected' : ''}>${this._t('verified')}</option>
+            <option value="experimental" ${this._catalogStatus === 'experimental' ? 'selected' : ''}>${this._t('experimental')}</option>
+            <option value="outdated" ${this._catalogStatus === 'outdated' ? 'selected' : ''}>${this._t('catalogOutdated')}</option>
+            <option value="custom" ${this._catalogStatus === 'custom' ? 'selected' : ''}>${this._t('custom')}</option>
           </select></label>
-          <label><span>${this._t('state')}</span><select id="status">
+          <label><span>${this._t('installationStatus')}</span><select id="status">
             <option value="all" ${this._status === 'all' ? 'selected' : ''}>${this._t('all')}</option>
             <option value="installed" ${this._status === 'installed' ? 'selected' : ''}>${this._t('installed')}</option>
-            <option value="not_installed" ${this._status === 'not_installed' ? 'selected' : ''}>${this._t('notInstalled')}</option>
+            <option value="available" ${this._status === 'available' ? 'selected' : ''}>${this._t('available')}</option>
             <option value="updates" ${this._status === 'updates' ? 'selected' : ''}>${this._t('updates')}</option>
             <option value="incompatible" ${this._status === 'incompatible' ? 'selected' : ''}>${this._t('incompatible')}</option>
             <option value="deprecated" ${this._status === 'deprecated' ? 'selected' : ''}>${this._t('deprecated')}</option>
+            <option value="error" ${this._status === 'error' ? 'selected' : ''}>${this._t('error')}</option>
+            <option value="removed" ${this._status === 'removed' ? 'selected' : ''}>${this._t('removed')}</option>
+            <option value="custom" ${this._status === 'custom' ? 'selected' : ''}>${this._t('custom')}</option>
           </select></label>
           <label><span>${this._t('sort')}</span><select id="sort">
             <option value="country" ${this._sort === 'country' ? 'selected' : ''}>${this._t('sortCountry')}</option>
@@ -499,7 +633,7 @@ class BillyParserManagerPanel extends HTMLElement {
         ${this._error ? `<div class="error-box">${esc(this._error)}</div>` : ''}
         ${this._loading ? '<div class="loading">Loading…</div>' : ''}
         <section class="list">
-          ${rows.length ? rows.map(row => this._renderRow(row)).join('') : `<div class="empty">${this._t('noResults')}</div>`}
+          ${rows.length ? rows.map((row) => this._renderRow(row)).join('') : `<div class="empty">${this._t('noResults')}</div>`}
         </section>
         ${this._customEditor ? this._renderCustomEditor() : this._dialog ? this._renderDialog() : ''}
       </div>`
@@ -507,19 +641,19 @@ class BillyParserManagerPanel extends HTMLElement {
     this._wireEvents()
   }
 
-  _renderList () {
+  _renderList() {
     const list = this.shadowRoot?.querySelector('.list')
     if (!list) return
     const rows = this._filteredRows()
     list.innerHTML = rows.length
-      ? rows.map(row => this._renderRow(row)).join('')
+      ? rows.map((row) => this._renderRow(row)).join('')
       : `<div class="empty">${this._t('noResults')}</div>`
     this._wireActionEvents()
   }
 
-  _wireActionEvents () {
-    this.shadowRoot.querySelectorAll('[data-action]').forEach(button => {
-      button.addEventListener('click', event => {
+  _wireActionEvents() {
+    this.shadowRoot.querySelectorAll('[data-action]').forEach((button) => {
+      button.addEventListener('click', (event) => {
         const action = event.currentTarget.dataset.action
         const id = event.currentTarget.dataset.id
         this._handleAction(action, id)
@@ -527,50 +661,80 @@ class BillyParserManagerPanel extends HTMLElement {
     })
   }
 
-  _wireEvents () {
-    this.shadowRoot.getElementById('new-custom')?.addEventListener('click', () => this._openCustomEditor())
-    this.shadowRoot.getElementById('refresh')?.addEventListener('click', () => this._refreshCatalog())
-    this.shadowRoot.getElementById('search')?.addEventListener('input', event => {
-      // Do not rebuild the input itself while the user is typing: replacing it
-      // resets the caret to position 0 and made text appear in reverse order.
-      this._search = event.target.value
-      this._renderList()
-    })
-    this.shadowRoot.getElementById('country')?.addEventListener('change', event => {
-      this._country = event.target.value
-      this._render()
-    })
-    this.shadowRoot.getElementById('bill-type')?.addEventListener('change', event => {
-      this._billType = event.target.value
-      this._render()
-    })
-    this.shadowRoot.getElementById('quality')?.addEventListener('change', event => {
-      this._quality = event.target.value
-      this._render()
-    })
-    this.shadowRoot.getElementById('status')?.addEventListener('change', event => {
-      this._status = event.target.value
-      this._render()
-    })
-    this.shadowRoot.getElementById('sort')?.addEventListener('change', event => {
-      this._sort = event.target.value
-      this._render()
-    })
+  _wireEvents() {
+    this.shadowRoot
+      .getElementById('new-custom')
+      ?.addEventListener('click', () => this._openCustomEditor())
+    this.shadowRoot
+      .getElementById('refresh')
+      ?.addEventListener('click', () => this._refreshCatalog())
+    this.shadowRoot
+      .getElementById('search')
+      ?.addEventListener('input', (event) => {
+        // Do not rebuild the input itself while the user is typing: replacing it
+        // resets the caret to position 0 and made text appear in reverse order.
+        this._search = event.target.value
+        this._renderList()
+      })
+    this.shadowRoot
+      .getElementById('country')
+      ?.addEventListener('change', (event) => {
+        this._country = event.target.value
+        this._render()
+      })
+    this.shadowRoot
+      .getElementById('bill-type')
+      ?.addEventListener('change', (event) => {
+        this._billType = event.target.value
+        this._render()
+      })
+    this.shadowRoot
+      .getElementById('catalog-status')
+      ?.addEventListener('change', (event) => {
+        this._catalogStatus = event.target.value
+        this._render()
+      })
+    this.shadowRoot
+      .getElementById('status')
+      ?.addEventListener('change', (event) => {
+        this._status = event.target.value
+        this._render()
+      })
+    this.shadowRoot
+      .getElementById('sort')
+      ?.addEventListener('change', (event) => {
+        this._sort = event.target.value
+        this._render()
+      })
     this._wireActionEvents()
     const closeDialog = () => {
       this._dialog = null
       this._render()
     }
-    this.shadowRoot.getElementById('dialog-close')?.addEventListener('click', closeDialog)
-    this.shadowRoot.getElementById('dialog-close-secondary')?.addEventListener('click', closeDialog)
-    this.shadowRoot.getElementById('dialog-save')?.addEventListener('click', () => this._saveDialog())
-    this.shadowRoot.getElementById('custom-editor-close')?.addEventListener('click', () => this._closeCustomEditor())
-    this.shadowRoot.getElementById('custom-editor-cancel')?.addEventListener('click', () => this._closeCustomEditor())
-    this.shadowRoot.getElementById('custom-editor-save')?.addEventListener('click', () => this._saveCustomEditor())
-    this.shadowRoot.getElementById('custom-editor-test')?.addEventListener('click', () => this._testCustomEditor())
+    this.shadowRoot
+      .getElementById('dialog-close')
+      ?.addEventListener('click', closeDialog)
+    this.shadowRoot
+      .getElementById('dialog-close-secondary')
+      ?.addEventListener('click', closeDialog)
+    this.shadowRoot
+      .getElementById('dialog-save')
+      ?.addEventListener('click', () => this._saveDialog())
+    this.shadowRoot
+      .getElementById('custom-editor-close')
+      ?.addEventListener('click', () => this._closeCustomEditor())
+    this.shadowRoot
+      .getElementById('custom-editor-cancel')
+      ?.addEventListener('click', () => this._closeCustomEditor())
+    this.shadowRoot
+      .getElementById('custom-editor-save')
+      ?.addEventListener('click', () => this._saveCustomEditor())
+    this.shadowRoot
+      .getElementById('custom-editor-test')
+      ?.addEventListener('click', () => this._testCustomEditor())
   }
 
-  _defaultCustomTemplate () {
+  _defaultCustomTemplate() {
     return `schema: 1
 id: it.provider.internet
 version: 1
@@ -620,14 +784,16 @@ fields:
 `
   }
 
-  async _openCustomEditor (row = null) {
+  async _openCustomEditor(row = null) {
     const categories = this._billData?.categories || []
     const defaultCategory = String(
       row?.category_id ||
-      categories.find(item => String(item.id) === String(row?.bill_type || ''))?.id ||
-      categories.find(item => item.enabled !== false)?.id ||
-      categories[0]?.id ||
-      ''
+        categories.find(
+          (item) => String(item.id) === String(row?.bill_type || ''),
+        )?.id ||
+        categories.find((item) => item.enabled !== false)?.id ||
+        categories[0]?.id ||
+        '',
     )
     this._dialog = null
     this._customEditor = {
@@ -640,17 +806,17 @@ fields:
       loading: Boolean(row),
       testing: false,
       result: null,
-      error: ''
+      error: '',
     }
     this._render()
     if (!row) return
     try {
       const exported = await this._hass.callWS({
         type: 'bill_tracker/parser/custom/export',
-        parser_id: String(row.id)
+        parser_id: String(row.id),
       })
       const raw = atob(exported.content_base64 || '')
-      const bytes = Uint8Array.from(raw, char => char.charCodeAt(0))
+      const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0))
       this._customEditor.content = new TextDecoder().decode(bytes)
       this._customEditor.loading = false
     } catch (error) {
@@ -660,18 +826,22 @@ fields:
     this._render()
   }
 
-  _closeCustomEditor () {
+  _closeCustomEditor() {
     this._customEditor = null
     this._render()
   }
 
-  _renderCustomEditor () {
+  _renderCustomEditor() {
     const editor = this._customEditor
     const categories = this._billData?.categories || []
-    const options = categories.map(category => `
+    const options = categories
+      .map(
+        (category) => `
       <option value="${esc(category.id)}" ${String(category.id) === String(editor.categoryId) ? 'selected' : ''}>
         ${esc(category.name)}${category.enabled === false ? ' · disabled' : ''}
-      </option>`).join('')
+      </option>`,
+      )
+      .join('')
     const result = editor.result
       ? `<div class="test-result ${editor.result.ok ? 'test-ok' : 'test-error'}">
           <strong>${editor.result.ok ? this._t('yamlValid') : this._t('yamlInvalid')}</strong>
@@ -690,7 +860,10 @@ fields:
             </div>
             <button id="custom-editor-close" class="icon-button">×</button>
           </div>
-          ${editor.loading ? `<div class="loading">${this._t('editorLoading')}</div>` : `
+          ${
+            editor.loading
+              ? `<div class="loading">${this._t('editorLoading')}</div>`
+              : `
             ${editor.originalId ? `<div class="editor-note">${this._t('customIdLocked')} <strong>${esc(editor.originalId)}</strong></div>` : ''}
             ${editor.error ? `<div class="error-box">${esc(editor.error)}</div>` : ''}
             <div class="editor-layout">
@@ -715,26 +888,36 @@ fields:
               <button id="custom-editor-cancel" class="secondary">${this._t('close')}</button>
               <button id="custom-editor-save" class="primary">${this._t('saveCustom')}</button>
             </div>
-          `}
+          `
+          }
         </div>
       </div>`
   }
 
-  _readCustomEditorForm () {
+  _readCustomEditorForm() {
     const editor = this._customEditor
     if (!editor) return null
     return {
-      content: this.shadowRoot.getElementById('custom-yaml')?.value ?? editor.content,
-      categoryId: this.shadowRoot.getElementById('custom-category')?.value || editor.categoryId,
-      enabled: Boolean(this.shadowRoot.getElementById('custom-enabled')?.checked),
-      autoImport: Boolean(this.shadowRoot.getElementById('custom-auto')?.checked),
+      content:
+        this.shadowRoot.getElementById('custom-yaml')?.value ?? editor.content,
+      categoryId:
+        this.shadowRoot.getElementById('custom-category')?.value ||
+        editor.categoryId,
+      enabled: Boolean(
+        this.shadowRoot.getElementById('custom-enabled')?.checked,
+      ),
+      autoImport: Boolean(
+        this.shadowRoot.getElementById('custom-auto')?.checked,
+      ),
       sender: this.shadowRoot.getElementById('custom-test-sender')?.value || '',
-      subject: this.shadowRoot.getElementById('custom-test-subject')?.value || '',
-      emailText: this.shadowRoot.getElementById('custom-test-email')?.value || ''
+      subject:
+        this.shadowRoot.getElementById('custom-test-subject')?.value || '',
+      emailText:
+        this.shadowRoot.getElementById('custom-test-email')?.value || '',
     }
   }
 
-  async _testCustomEditor () {
+  async _testCustomEditor() {
     const editor = this._customEditor
     const form = this._readCustomEditorForm()
     if (!editor || !form) return
@@ -751,14 +934,14 @@ fields:
         sender: form.sender,
         subject: form.subject,
         email_text: form.emailText,
-        documents: {}
+        documents: {},
       })
       editor.result = {
         ok: true,
         matched: Boolean(result.matched),
         score: result.score ?? 0,
         threshold: result.threshold ?? 0,
-        data: result.data || {}
+        data: result.data || {},
       }
     } catch (error) {
       editor.result = { ok: false, message: error?.message || String(error) }
@@ -768,7 +951,7 @@ fields:
     }
   }
 
-  async _saveCustomEditor () {
+  async _saveCustomEditor() {
     const editor = this._customEditor
     const form = this._readCustomEditorForm()
     if (!editor || !form) return
@@ -783,7 +966,7 @@ fields:
         category_id: form.categoryId,
         enabled: form.enabled,
         auto_import: form.autoImport,
-        ...(editor.originalId ? { expected_parser_id: editor.originalId } : {})
+        ...(editor.originalId ? { expected_parser_id: editor.originalId } : {}),
       })
       this._customEditor = null
       await this._load({ refreshIfEmpty: false })
@@ -793,13 +976,18 @@ fields:
     }
   }
 
-  async _exportCustom (row) {
+  async _exportCustom(row) {
     try {
-      const exported = await this._hass.callWS({ type: 'bill_tracker/parser/custom/export', parser_id: String(row.id) })
+      const exported = await this._hass.callWS({
+        type: 'bill_tracker/parser/custom/export',
+        parser_id: String(row.id),
+      })
       const raw = atob(exported.content_base64 || '')
-      const bytes = Uint8Array.from(raw, char => char.charCodeAt(0))
+      const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0))
       const content = new TextDecoder().decode(bytes)
-      const blob = new Blob([content], { type: exported.mime_type || 'application/yaml' })
+      const blob = new Blob([content], {
+        type: exported.mime_type || 'application/yaml',
+      })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -814,13 +1002,17 @@ fields:
     }
   }
 
-  _findRow (id) {
-    return this._rows().find(row => String(row.id) === String(id))
+  _findRow(id) {
+    return this._rows().find((row) => String(row.id) === String(id))
   }
 
-  async _handleAction (action, id) {
+  async _handleAction(action, id) {
     const row = this._findRow(id)
     if (!row) return
+    if (action === 'install-replacement') {
+      this._openDialog(row, 'install')
+      return
+    }
     if (action === 'edit-custom') {
       await this._openCustomEditor(row)
       return
@@ -838,9 +1030,10 @@ fields:
       this._busy = String(id)
       this._render()
       try {
-        const type = row.source === 'custom'
-          ? 'bill_tracker/parser/custom/delete'
-          : 'bill_tracker/parser/uninstall'
+        const type =
+          row.source === 'custom'
+            ? 'bill_tracker/parser/custom/delete'
+            : 'bill_tracker/parser/uninstall'
         await this._hass.callWS({ type, parser_id: String(id) })
         await this._load({ refreshIfEmpty: false })
       } catch (error) {
@@ -854,11 +1047,14 @@ fields:
     this._openDialog(row, action)
   }
 
-  async _publishCustom (row) {
+  async _publishCustom(row) {
     try {
-      const exported = await this._hass.callWS({ type: 'bill_tracker/parser/custom/export', parser_id: String(row.id) })
+      const exported = await this._hass.callWS({
+        type: 'bill_tracker/parser/custom/export',
+        parser_id: String(row.id),
+      })
       const raw = atob(exported.content_base64 || '')
-      const bytes = Uint8Array.from(raw, char => char.charCodeAt(0))
+      const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0))
       const content = new TextDecoder().decode(bytes)
       if (content.length > 24000) {
         window.alert(this._t('publishTooLarge'))
@@ -867,43 +1063,58 @@ fields:
       const body = `<!-- billy-parser-submission:v1 -->\n\nGenerated by Billy ${BILLY_PARSER_MANAGER_VERSION}. ${this._t('publishHint')}\n\n\`\`\`yaml\n${content.trim()}\n\`\`\`\n`
       const params = new URLSearchParams({
         title: `[Experimental Parser] ${row.provider || row.name || row.id} - ${row.bill_type || row.id}`,
-        body
+        body,
       })
-      window.open(`https://github.com/robin994/billy-parser/issues/new?${params.toString()}`, '_blank', 'noopener,noreferrer')
+      window.open(
+        `https://github.com/robin994/billy-parser/issues/new?${params.toString()}`,
+        '_blank',
+        'noopener,noreferrer',
+      )
     } catch (error) {
       this._error = `${this._t('actionError')}: ${error?.message || error}`
       this._render()
     }
   }
 
-  _openDialog (row, mode) {
+  _openDialog(row, mode) {
     const categories = this._billData?.categories || []
     const suggested = row.category_id || row.bill_type
-    const defaultCategory = categories.some(item => String(item.id) === String(suggested))
+    const defaultCategory = categories.some(
+      (item) => String(item.id) === String(suggested),
+    )
       ? String(suggested)
-      : String(categories.find(item => item.enabled !== false)?.id || categories[0]?.id || '')
+      : String(
+          categories.find((item) => item.enabled !== false)?.id ||
+            categories[0]?.id ||
+            '',
+        )
     this._dialog = {
       mode,
       row,
       categoryId: defaultCategory,
       enabled: row.installed ? row.enabled !== false : true,
-      autoImport: row.installed ? Boolean(row.auto_import) : false
+      autoImport: row.installed ? Boolean(row.auto_import) : false,
     }
     this._render()
   }
 
-  _renderDialog () {
+  _renderDialog() {
     const dialog = this._dialog
     const categories = this._billData?.categories || []
-    const title = dialog.mode === 'install'
-      ? this._t('installTitle')
-      : dialog.mode === 'update'
+    const title =
+      dialog.mode === 'install'
+        ? this._t('installTitle')
+        : dialog.mode === 'update'
           ? this._t('updateTitle')
           : this._t('configureTitle')
-    const options = categories.map(category => `
+    const options = categories
+      .map(
+        (category) => `
       <option value="${esc(category.id)}" ${String(category.id) === String(dialog.categoryId) ? 'selected' : ''}>
         ${esc(category.name)}${category.enabled === false ? ' · disabled' : ''}
-      </option>`).join('')
+      </option>`,
+      )
+      .join('')
     return `
       <div class="modal-backdrop">
         <div class="modal" role="dialog" aria-modal="true">
@@ -922,12 +1133,18 @@ fields:
       </div>`
   }
 
-  async _saveDialog () {
+  async _saveDialog() {
     const dialog = this._dialog
     if (!dialog) return
-    const categoryId = this.shadowRoot.getElementById('dialog-category')?.value || dialog.categoryId
-    const enabled = Boolean(this.shadowRoot.getElementById('dialog-enabled')?.checked)
-    const autoImport = Boolean(this.shadowRoot.getElementById('dialog-auto')?.checked)
+    const categoryId =
+      this.shadowRoot.getElementById('dialog-category')?.value ||
+      dialog.categoryId
+    const enabled = Boolean(
+      this.shadowRoot.getElementById('dialog-enabled')?.checked,
+    )
+    const autoImport = Boolean(
+      this.shadowRoot.getElementById('dialog-auto')?.checked,
+    )
     this._busy = String(dialog.row.id)
     this._dialog = null
     this._render()
@@ -938,7 +1155,7 @@ fields:
           parser_id: String(dialog.row.id),
           category_id: categoryId,
           enabled,
-          auto_import: autoImport
+          auto_import: autoImport,
         })
       } else {
         await this._hass.callWS({
@@ -946,7 +1163,7 @@ fields:
           parser_id: String(dialog.row.id),
           category_id: categoryId,
           enabled,
-          auto_import: autoImport
+          auto_import: autoImport,
         })
       }
       await this._load({ refreshIfEmpty: false })
@@ -958,7 +1175,7 @@ fields:
     }
   }
 
-  _styles () {
+  _styles() {
     return `
       :host { display:block; min-height:100%; color:var(--primary-text-color); background:var(--primary-background-color); }
       * { box-sizing:border-box; }
@@ -1000,9 +1217,10 @@ fields:
       .status-outdated, .warning { color:var(--warning-color, #f39c12); background:color-mix(in srgb, var(--warning-color, #f39c12) 14%, transparent); }
       .status-incompatible, .status-error, .error { color:var(--error-color, #db4437); background:color-mix(in srgb, var(--error-color, #db4437) 12%, transparent); }
       .status-deprecated, .status-removed, .status-custom { color:var(--secondary-text-color); }
-      .quality-verified { color:var(--success-color,#2e7d32); background:color-mix(in srgb,var(--success-color,#2e7d32) 12%,transparent); }
-      .quality-tested { color:var(--primary-color); background:color-mix(in srgb,var(--primary-color) 12%,transparent); }
-      .quality-experimental { color:var(--warning-color,#f39c12); background:color-mix(in srgb,var(--warning-color,#f39c12) 14%,transparent); }
+      .catalog-verified { color:var(--success-color,#2e7d32); background:color-mix(in srgb,var(--success-color,#2e7d32) 12%,transparent); }
+      .catalog-experimental { color:var(--warning-color,#f39c12); background:color-mix(in srgb,var(--warning-color,#f39c12) 14%,transparent); }
+      .catalog-outdated { color:var(--error-color,#db4437); background:color-mix(in srgb,var(--error-color,#db4437) 12%,transparent); }
+      .catalog-custom { color:var(--secondary-text-color); background:var(--secondary-background-color); }
       .actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; flex:0 0 auto; }
       .empty, .loading { padding:36px; text-align:center; color:var(--secondary-text-color); }
       .error-box { margin:0 0 14px; padding:12px 14px; border-radius:10px; color:var(--error-color, #db4437); background:color-mix(in srgb, var(--error-color, #db4437) 10%, transparent); }

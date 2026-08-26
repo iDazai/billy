@@ -125,7 +125,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ws_settlement_delete,
         ws_import_csv,
         ws_export,
+        ws_export_recurring,
         ws_export_template,
+        ws_backup_export,
+        ws_backup_import,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -748,6 +751,42 @@ async def ws_export(hass, connection, msg):
     )
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/export_recurring",
+        vol.Required("format"): vol.In(("csv", "xlsx", "pdf")),
+        vol.Optional("status", default="all"): vol.In(("all", "active", "inactive", "ended")),
+        vol.Optional("kind", default="all"): str,
+        vol.Optional("from_date", default=""): str,
+        vol.Optional("to_date", default=""): str,
+        vol.Optional("language", default="en"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_export_recurring(hass, connection, msg):
+    try:
+        payload, mime_type, extension = _manager(hass).export_recurring_data(
+            file_format=msg["format"],
+            status=msg["status"],
+            kind=msg.get("kind") or "all",
+            from_date=msg.get("from_date") or None,
+            to_date=msg.get("to_date") or None,
+            language=msg.get("language", "en"),
+        )
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "export_failed", str(err))
+        return
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    connection.send_result(
+        msg["id"],
+        {
+            "filename": f"billy-recurring-{stamp}.{extension}",
+            "mime_type": mime_type,
+            "content_base64": base64.b64encode(payload).decode("ascii"),
+        },
+    )
+
+
 @websocket_api.websocket_command({vol.Required("type"): "bill_tracker/export_template"})
 @websocket_api.async_response
 async def ws_export_template(hass, connection, msg):
@@ -764,3 +803,38 @@ async def ws_export_template(hass, connection, msg):
             "content_base64": base64.b64encode(payload).decode("ascii"),
         },
     )
+
+
+@websocket_api.websocket_command({vol.Required("type"): "bill_tracker/backup/export"})
+@websocket_api.async_response
+async def ws_backup_export(hass, connection, msg):
+    try:
+        payload = _manager(hass).export_backup()
+    except RuntimeError as err:
+        connection.send_error(msg["id"], "not_configured", str(err))
+        return
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    connection.send_result(
+        msg["id"],
+        {
+            "filename": f"billy-backup-{stamp}.json",
+            "mime_type": "application/json;charset=utf-8",
+            "content_base64": base64.b64encode(payload).decode("ascii"),
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/backup/import",
+        vol.Required("content"): vol.All(str, vol.Length(max=10_000_000)),
+    }
+)
+@websocket_api.async_response
+async def ws_backup_import(hass, connection, msg):
+    try:
+        result = await _manager(hass).async_import_backup(msg["content"])
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_backup", str(err))
+        return
+    connection.send_result(msg["id"], result)

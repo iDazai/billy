@@ -181,7 +181,7 @@ class ParserManager:
         catalog_ids: set[str] = set()
 
         for item in catalog.get("parsers", []) or []:
-            row = dict(item)
+            row = self.catalog_client._normalize_catalog_item(item)
             parser_id = str(item.get("id") or "")
             catalog_ids.add(parser_id)
             state = installed.get(parser_id)
@@ -215,6 +215,8 @@ class ParserManager:
                     "update_available": update_available,
                     "compatible": compatible,
                     "deprecated": deprecated,
+                    "catalog_status": str(row.get("catalog_status") or "experimental"),
+                    "replacement": row.get("replacement"),
                     "status": status,
                     "enabled": bool(state.get("enabled", True)) if state else False,
                     "category_id": state.get("category_id") if state else None,
@@ -246,6 +248,12 @@ class ParserManager:
                     "update_available": False,
                     "compatible": True,
                     "deprecated": False,
+                    "catalog_status": str(
+                        state.get("catalog_status")
+                        or metadata.get("status")
+                        or "experimental"
+                    ),
+                    "replacement": state.get("replacement"),
                     "removed_from_catalog": True,
                     "status": "error" if state.get("load_error") else "removed",
                     "enabled": bool(state.get("enabled", True)),
@@ -261,6 +269,9 @@ class ParserManager:
             "installed": sum(1 for row in rows if row.get("installed")),
             "available": sum(1 for row in rows if row.get("status") == "available"),
             "outdated": sum(1 for row in rows if row.get("status") == "outdated"),
+            "catalog_outdated": sum(
+                1 for row in rows if row.get("catalog_status") == "outdated"
+            ),
             "incompatible": sum(1 for row in rows if not row.get("compatible", True)),
             "deprecated": sum(1 for row in rows if row.get("deprecated")),
             "errors": sum(1 for row in rows if row.get("status") == "error"),
@@ -305,6 +316,8 @@ class ParserManager:
             "enabled": bool(enabled),
             "category_id": category_id,
             "auto_import": bool(auto_import),
+            "catalog_status": str(item.get("catalog_status") or "experimental"),
+            "replacement": item.get("replacement"),
             "source": "official",
             "installed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
@@ -353,6 +366,7 @@ class ParserManager:
         category_id: str,
         enabled: bool = True,
         auto_import: bool = False,
+        expected_parser_id: str | None = None,
     ) -> dict[str, Any]:
         self._ensure_category(category_id)
         parser = load_parser_yaml(content)
@@ -371,6 +385,7 @@ class ParserManager:
             "enabled": bool(enabled),
             "category_id": category_id,
             "auto_import": bool(auto_import),
+            "catalog_status": "custom",
             "source": "custom",
             "saved_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
@@ -426,6 +441,16 @@ class ParserManager:
                         "provider": metadata.get("provider", ""),
                         "bill_type": metadata.get("bill_type", ""),
                         "country": metadata.get("country", ""),
+                        "catalog_status": (
+                            "custom"
+                            if source_name == "custom"
+                            else str(
+                                state.get("catalog_status")
+                                or metadata.get("status")
+                                or "experimental"
+                            )
+                        ),
+                        "replacement": state.get("replacement"),
                     }
                 )
         return sorted(rows, key=lambda row: str(row.get("name", "")).casefold())

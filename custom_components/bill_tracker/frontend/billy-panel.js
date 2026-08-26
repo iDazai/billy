@@ -19,8 +19,12 @@ const TEXT = {
     parserUpdates: 'Parser updates',
     spendingTrend: 'Spending trend',
     last12Months: 'Last 12 months + forecast',
-    chartFilter: 'Filter',
+    chartFilter: 'Chart items',
     chartAllExpenses: 'All expenses',
+    chartEnableAll: 'Enable all',
+    chartDisableAll: 'Disable all',
+    chartNoneSelected: 'No items selected',
+    chartSelectedCount: '{count} selected',
     chartSpan: 'Month span',
     chartYear: 'Year',
     chartAllYears: 'Rolling period',
@@ -268,8 +272,12 @@ const TEXT = {
     parserUpdates: 'Aggiornamenti parser',
     spendingTrend: 'Andamento spese',
     last12Months: 'Ultimi 12 mesi + previsione',
-    chartFilter: 'Filtro',
+    chartFilter: 'Voci del grafico',
     chartAllExpenses: 'Tutte le spese',
+    chartEnableAll: 'Abilita tutte',
+    chartDisableAll: 'Disabilita tutte',
+    chartNoneSelected: 'Nessuna voce selezionata',
+    chartSelectedCount: '{count} selezionate',
     chartSpan: 'Intervallo mesi',
     chartYear: 'Anno',
     chartAllYears: 'Periodo mobile',
@@ -567,7 +575,8 @@ class BillyDashboard extends HTMLElement {
     this._unsubscribeImports = null
     this._chartMonths = 12
     this._chartYear = 'all'
-    this._chartFilter = 'all'
+    this._chartDisabled = new Set()
+    this._chartFilterOpen = false
     this._chartView = 'stacked'
   }
 
@@ -743,6 +752,10 @@ class BillyDashboard extends HTMLElement {
         if (Number.isInteger(year) && year > 0) years.add(year)
       }
     }
+    for (const row of this._data?.recurring_history || []) {
+      const match = /^(\d{4})-\d{2}-\d{2}$/.exec(String(row.due_date || ''))
+      if (match) years.add(Number(match[1]))
+    }
     return [...years].sort((a, b) => b - a)
   }
 
@@ -753,8 +766,89 @@ class BillyDashboard extends HTMLElement {
     return this._t('chartRollingHelp', { months: this._chartMonths })
   }
 
+  _chartItemEnabled(key) {
+    return !this._chartDisabled.has(String(key))
+  }
+
+  _chartActualPoints() {
+    const now = new Date()
+    const points = []
+    if (this._chartYear === 'all') {
+      const monthCount = Math.max(
+        3,
+        Math.min(36, Number(this._chartMonths || 12)),
+      )
+      for (let offset = monthCount - 1; offset >= 0; offset -= 1) {
+        points.push(new Date(now.getFullYear(), now.getMonth() - offset, 1))
+      }
+      return points
+    }
+
+    const year = Number(this._chartYear)
+    const currentYear = now.getFullYear()
+    const lastMonth =
+      year < currentYear ? 11 : year === currentYear ? now.getMonth() : -1
+    for (let month = 0; month <= lastMonth; month += 1) {
+      points.push(new Date(year, month, 1))
+    }
+    return points
+  }
+
+  _rawChartForecastRows() {
+    return (this._data?.forecast || [])
+      .filter(
+        (row) =>
+          this._chartYear === 'all' ||
+          Number(row.year) === Number(this._chartYear),
+      )
+      .slice(0, this._chartYear === 'all' ? 6 : 12)
+  }
+
+  _availableChartFilterKeys() {
+    const available = new Set()
+    const actualKeys = new Set(
+      this._chartActualPoints().map(
+        (point) =>
+          `${point.getFullYear()}-${String(point.getMonth() + 1).padStart(2, '0')}`,
+      ),
+    )
+
+    for (const row of this._data?.monthly || []) {
+      if (!actualKeys.has(String(row.key || ''))) continue
+      for (const [name, rawAmount] of Object.entries(row.categories || {})) {
+        if (Number(rawAmount || 0) <= 0) continue
+        const category = this._categoryByName(name)
+        if (category?.id) available.add(`bill:${category.id}`)
+      }
+    }
+
+    for (const row of this._data?.recurring_history || []) {
+      const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(String(row.due_date || ''))
+      if (!match || Number(row.amount || 0) <= 0) continue
+      if (!actualKeys.has(`${match[1]}-${match[2]}`)) continue
+      const id = String(row.id || row.recurring_id || '')
+      if (id) available.add(`recurring:${id}`)
+    }
+
+    for (const row of this._rawChartForecastRows()) {
+      for (const [name, rawAmount] of Object.entries(row.categories || {})) {
+        if (Number(rawAmount || 0) <= 0) continue
+        const category = this._categoryByName(name)
+        if (category?.id) available.add(`bill:${category.id}`)
+      }
+      for (const recurring of row.recurring_items || []) {
+        if (Number(recurring.amount || 0) <= 0) continue
+        const id = String(recurring.id || '')
+        if (id) available.add(`recurring:${id}`)
+      }
+    }
+    return available
+  }
+
   _chartFilterOptions() {
+    const available = this._availableChartFilterKeys()
     const categories = (this._data?.categories || [])
+      .filter((category) => available.has(`bill:${category.id}`))
       .slice()
       .sort((a, b) =>
         String(a.name || '').localeCompare(
@@ -763,7 +857,7 @@ class BillyDashboard extends HTMLElement {
         ),
       )
     const recurring = (this._data?.recurring_expenses || [])
-      .filter((row) => row.status === 'active')
+      .filter((row) => available.has(`recurring:${row.id}`))
       .slice()
       .sort((a, b) =>
         String(a.name || '').localeCompare(
@@ -771,9 +865,62 @@ class BillyDashboard extends HTMLElement {
           localeOf(this._hass),
         ),
       )
-    return `<option value="all" ${this._chartFilter === 'all' ? 'selected' : ''}>${escapeHtml(this._t('chartAllExpenses'))}</option>
-      ${categories.length ? `<optgroup label="${escapeHtml(this._t('chartBillTypes'))}">${categories.map((category) => `<option value="bill:${escapeHtml(category.id)}" ${this._chartFilter === `bill:${category.id}` ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}</optgroup>` : ''}
-      ${recurring.length ? `<optgroup label="${escapeHtml(this._t('chartRecurringExpenses'))}">${recurring.map((row) => `<option value="recurring:${escapeHtml(row.id)}" ${this._chartFilter === `recurring:${row.id}` ? 'selected' : ''}>${escapeHtml(row.name)}</option>`).join('')}</optgroup>` : ''}`
+    if (!categories.length && !recurring.length) return ''
+    const allItems = [
+      ...categories.map((item) => ({
+        key: `bill:${item.id}`,
+        name: item.name,
+      })),
+      ...recurring.map((item) => ({
+        key: `recurring:${item.id}`,
+        name: item.name,
+      })),
+    ]
+    const selectedItems = allItems.filter((item) =>
+      this._chartItemEnabled(item.key),
+    )
+    const selectedSummary =
+      selectedItems.length === allItems.length
+        ? this._t('chartAllExpenses')
+        : selectedItems.length === 0
+          ? this._t('chartNoneSelected')
+          : selectedItems.length === 1
+            ? selectedItems[0].name
+            : this._t('chartSelectedCount', { count: selectedItems.length })
+    return `<details class="chart-filter-combobox" ${this._chartFilterOpen ? 'open' : ''}>
+      <summary aria-label="${escapeHtml(this._t('chartFilter'))}">
+        <span class="chart-filter-summary-main"><ha-icon icon="mdi:filter-variant"></ha-icon><span><small>${escapeHtml(this._t('chartFilter'))}</small><strong>${escapeHtml(selectedSummary)}</strong></span></span>
+        <span class="chart-filter-count">${selectedItems.length}/${allItems.length}</span>
+        <ha-icon class="chart-filter-chevron" icon="mdi:chevron-down"></ha-icon>
+      </summary>
+      <div class="chart-filter-dropdown">
+        <div class="chart-filter-head"><strong>${escapeHtml(this._t('chartFilter'))}</strong><div><button type="button" class="text-button" data-chart-enable-all>${escapeHtml(this._t('chartEnableAll'))}</button><button type="button" class="text-button" data-chart-disable-all>${escapeHtml(this._t('chartDisableAll'))}</button></div></div>
+        <div class="chart-filter-groups">
+        ${
+          categories.length
+            ? `<fieldset><legend>${escapeHtml(this._t('chartBillTypes'))}</legend><div class="chart-option-list">${categories
+                .map((category) => {
+                  const key = `bill:${category.id}`
+                  const enabled = this._chartItemEnabled(key)
+                  return `<label class="chart-option ${enabled ? 'active' : ''}" style="--option-color:${safeColor(category.color)}"><input type="checkbox" data-chart-toggle="${escapeHtml(key)}" ${enabled ? 'checked' : ''}><span class="chart-option-box" aria-hidden="true">✓</span><i></i><span>${escapeHtml(category.name)}</span></label>`
+                })
+                .join('')}</div></fieldset>`
+            : ''
+        }
+        ${
+          recurring.length
+            ? `<fieldset><legend>${escapeHtml(this._t('chartRecurringExpenses'))}</legend><div class="chart-option-list">${recurring
+                .map((row) => {
+                  const key = `recurring:${row.id}`
+                  const enabled = this._chartItemEnabled(key)
+                  return `<label class="chart-option ${enabled ? 'active' : ''}" style="--option-color:${safeColor(row.color)}"><input type="checkbox" data-chart-toggle="${escapeHtml(key)}" ${enabled ? 'checked' : ''}><span class="chart-option-box" aria-hidden="true">✓</span><i></i><span>${escapeHtml(row.name)}</span></label>`
+                })
+                .join('')}</div></fieldset>`
+            : ''
+        }
+        </div>
+      </div>
+    </details>`
   }
 
   _actualChartRows() {
@@ -781,15 +928,12 @@ class BillyDashboard extends HTMLElement {
       (this._data?.monthly || []).map((row) => [String(row.key), row]),
     )
     const recurringByKey = new Map()
-    const now = new Date()
-    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    for (const occurrence of this._data?.recurring_occurrences || []) {
+    for (const occurrence of this._data?.recurring_history || []) {
       const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(
         String(occurrence.due_date || ''),
       )
       if (!match) continue
       const key = `${match[1]}-${match[2]}`
-      if (key === currentKey) continue
       const bucket = recurringByKey.get(key) || {
         total: 0,
         kinds: {},
@@ -800,7 +944,7 @@ class BillyDashboard extends HTMLElement {
       bucket.total += amount
       bucket.kinds[kind] = Number(bucket.kinds[kind] || 0) + amount
       bucket.items.push({
-        id: String(occurrence.recurring_id || ''),
+        id: String(occurrence.id || occurrence.recurring_id || ''),
         name: String(occurrence.name || this._recurringKindLabel(kind)),
         kind,
         amount,
@@ -810,41 +954,7 @@ class BillyDashboard extends HTMLElement {
       recurringByKey.set(key, bucket)
     }
 
-    const currentItems = (this._data?.current_month_recurring || []).map(
-      (item) => ({
-        ...item,
-        id: String(item.id || ''),
-        amount: Math.max(0, Number(item.amount || 0)),
-        color: safeColor(item.color),
-      }),
-    )
-    recurringByKey.set(currentKey, {
-      total: currentItems.reduce((sum, item) => sum + item.amount, 0),
-      kinds: currentItems.reduce((result, item) => {
-        const kind = String(item.kind || 'recurring')
-        result[kind] = Number(result[kind] || 0) + item.amount
-        return result
-      }, {}),
-      items: currentItems,
-    })
-
-    const points = []
-    if (this._chartYear === 'all') {
-      const monthCount = Math.max(
-        3,
-        Math.min(36, Number(this._chartMonths || 12)),
-      )
-      for (let offset = monthCount - 1; offset >= 0; offset -= 1) {
-        points.push(new Date(now.getFullYear(), now.getMonth() - offset, 1))
-      }
-    } else {
-      const year = Number(this._chartYear)
-      const currentYear = now.getFullYear()
-      const lastMonth =
-        year < currentYear ? 11 : year === currentYear ? now.getMonth() : -1
-      for (let month = 0; month <= lastMonth; month += 1)
-        points.push(new Date(year, month, 1))
-    }
+    const points = this._chartActualPoints()
 
     const rows = []
     for (const point of points) {
@@ -858,26 +968,14 @@ class BillyDashboard extends HTMLElement {
         items: [],
       }
       const categories = { ...(bill.categories || {}) }
-      const categoryFilter = this._chartFilter.startsWith('bill:')
-        ? this._chartFilter.slice(5)
-        : null
-      const recurringFilter = this._chartFilter.startsWith('recurring:')
-        ? this._chartFilter.slice(10)
-        : null
-      if (categoryFilter) {
-        const selected = (this._data?.categories || []).find(
-          (category) => String(category.id) === categoryFilter,
-        )
-        for (const name of Object.keys(categories)) {
-          if (!selected || name !== selected.name) delete categories[name]
+      for (const category of this._data?.categories || []) {
+        if (!this._chartItemEnabled(`bill:${category.id}`)) {
+          delete categories[category.name]
         }
-      } else if (recurringFilter) {
-        for (const name of Object.keys(categories)) delete categories[name]
       }
-      const recurringItems = (recurring.items || []).filter((item) => {
-        if (categoryFilter) return false
-        return !recurringFilter || String(item.id) === recurringFilter
-      })
+      const recurringItems = (recurring.items || []).filter((item) =>
+        this._chartItemEnabled(`recurring:${item.id}`),
+      )
       const billTotal = Object.values(categories).reduce(
         (sum, value) => sum + Math.max(0, Number(value || 0)),
         0,
@@ -911,53 +1009,34 @@ class BillyDashboard extends HTMLElement {
   }
 
   _chartForecastRows() {
-    const categoryFilter = this._chartFilter.startsWith('bill:')
-      ? this._chartFilter.slice(5)
-      : null
-    const recurringFilter = this._chartFilter.startsWith('recurring:')
-      ? this._chartFilter.slice(10)
-      : null
-    return (this._data?.forecast || [])
-      .filter(
-        (row) =>
-          this._chartYear === 'all' ||
-          Number(row.year) === Number(this._chartYear),
+    return this._rawChartForecastRows().map((row) => {
+      const categories = { ...(row.categories || {}) }
+      for (const category of this._data?.categories || []) {
+        if (!this._chartItemEnabled(`bill:${category.id}`)) {
+          delete categories[category.name]
+        }
+      }
+      const recurringItems = (row.recurring_items || []).filter((item) =>
+        this._chartItemEnabled(`recurring:${item.id}`),
       )
-      .slice(0, this._chartYear === 'all' ? 6 : 12)
-      .map((row) => {
-        const categories = { ...(row.categories || {}) }
-        if (categoryFilter) {
-          const selected = (this._data?.categories || []).find(
-            (category) => String(category.id) === categoryFilter,
-          )
-          for (const name of Object.keys(categories)) {
-            if (!selected || name !== selected.name) delete categories[name]
-          }
-        } else if (recurringFilter) {
-          for (const name of Object.keys(categories)) delete categories[name]
-        }
-        const recurringItems = (row.recurring_items || []).filter((item) => {
-          if (categoryFilter) return false
-          return !recurringFilter || String(item.id) === recurringFilter
-        })
-        const billTotal = Object.values(categories).reduce(
-          (sum, value) => sum + Math.max(0, Number(value || 0)),
-          0,
-        )
-        const recurringTotal = recurringItems.reduce(
-          (sum, item) => sum + Math.max(0, Number(item.amount || 0)),
-          0,
-        )
-        return {
-          ...row,
-          categories,
-          recurring_items: recurringItems,
-          bill_total: billTotal,
-          recurring_total: recurringTotal,
-          total: billTotal + recurringTotal,
-          kind: 'forecast',
-        }
-      })
+      const billTotal = Object.values(categories).reduce(
+        (sum, value) => sum + Math.max(0, Number(value || 0)),
+        0,
+      )
+      const recurringTotal = recurringItems.reduce(
+        (sum, item) => sum + Math.max(0, Number(item.amount || 0)),
+        0,
+      )
+      return {
+        ...row,
+        categories,
+        recurring_items: recurringItems,
+        bill_total: billTotal,
+        recurring_total: recurringTotal,
+        total: billTotal + recurringTotal,
+        kind: 'forecast',
+      }
+    })
   }
 
   _chartItems(row) {
@@ -973,12 +1052,7 @@ class BillyDashboard extends HTMLElement {
         const category = (this._data?.categories || []).find(
           (item) => item.id === expense.category_id,
         )
-        if (
-          this._chartFilter.startsWith('bill:') &&
-          String(expense.category_id) !== this._chartFilter.slice(5)
-        )
-          continue
-        if (this._chartFilter.startsWith('recurring:')) continue
+        if (!this._chartItemEnabled(`bill:${expense.category_id}`)) continue
         items.push({
           label: [expense.category, expense.provider]
             .filter(Boolean)
@@ -1130,23 +1204,14 @@ class BillyDashboard extends HTMLElement {
 
   _chartLegend() {
     const items = []
-    const filter = this._chartFilter
     for (const category of this._data?.categories || []) {
-      if (filter.startsWith('bill:') && filter !== `bill:${category.id}`)
-        continue
-      if (filter.startsWith('recurring:')) continue
+      if (!this._chartItemEnabled(`bill:${category.id}`)) continue
       items.push(
         `<span><i style="background:${safeColor(category.color)}"></i>${escapeHtml(category.name)}</span>`,
       )
     }
     for (const recurring of this._data?.recurring_expenses || []) {
-      if (recurring.status !== 'active') continue
-      if (
-        filter.startsWith('recurring:') &&
-        filter !== `recurring:${recurring.id}`
-      )
-        continue
-      if (filter.startsWith('bill:')) continue
+      if (!this._chartItemEnabled(`recurring:${recurring.id}`)) continue
       items.push(
         `<span><i style="background:${safeColor(recurring.color)}"></i>${escapeHtml(recurring.name)}</span>`,
       )
@@ -1239,17 +1304,38 @@ class BillyDashboard extends HTMLElement {
 
   _recurringOverview() {
     const summary = this._data?.summary || {}
-    const rows = (this._data?.recurring_expenses || [])
-      .filter((row) => row.status === 'active')
-      .slice()
-      .sort((a, b) =>
-        String(a.next_due_date || '9999').localeCompare(
-          String(b.next_due_date || '9999'),
-        ),
+    const rows = (this._data?.recurring_expenses || []).slice().sort((a, b) => {
+      const statusOrder = { active: 0, inactive: 1, ended: 2 }
+      const statusDiff =
+        (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3)
+      if (statusDiff) return statusDiff
+      return String(a.next_due_date || '9999').localeCompare(
+        String(b.next_due_date || '9999'),
       )
-      .slice(0, 5)
+    })
     const list = rows.length
-      ? `<div class="recurring-overview-list">${rows.map((row) => `<div class="recurring-overview-row"><div><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(`${row.kind === 'subscription' ? this._t('subscription') : row.kind === 'mortgage' ? this._t('mortgage') : row.kind === 'installment' ? this._t('installment') : this._t('recurringGeneric')} · ${this._t('nextCharge')}: ${this._date(row.next_due_date)}`)}</small></div><b>${escapeHtml(this._money(row.amount))}</b></div>`).join('')}</div>`
+      ? `<div class="recurring-overview-list">${rows
+          .map((row) => {
+            const kind =
+              row.kind === 'subscription'
+                ? this._t('subscription')
+                : row.kind === 'mortgage'
+                  ? this._t('mortgage')
+                  : row.kind === 'installment'
+                    ? this._t('installment')
+                    : this._t('recurringGeneric')
+            const status =
+              row.status === 'active'
+                ? this._t('recurringActive')
+                : row.status === 'ended'
+                  ? this._t('recurringEnded')
+                  : this._t('recurringInactive')
+            const due = row.next_due_date
+              ? ` · ${this._t('nextCharge')}: ${this._date(row.next_due_date)}`
+              : ''
+            return `<div class="recurring-overview-row"><div><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(`${kind} · ${status}${due}`)}</small></div><b>${escapeHtml(this._money(row.amount))}</b></div>`
+          })
+          .join('')}</div>`
       : `<div class="empty">${escapeHtml(this._t('noRecurring'))}</div>`
     return `<article class="panel recurring-overview-panel">
       <div class="panel-head"><div><h2>${escapeHtml(this._t('recurringOverview'))}</h2><p>${escapeHtml(this._t('recurringOverviewHelp'))}</p></div><button class="secondary small" data-nav="recurring">${escapeHtml(this._t('manageRecurring'))}</button></div>
@@ -1385,6 +1471,7 @@ class BillyDashboard extends HTMLElement {
       [this._t('parserUpdates'), String(parserStats.updates), 'mdi:update'],
     ]
 
+    const chartFilters = this._chartFilterOptions()
     this.shadowRoot.innerHTML = `
       <style>${this._styles()}</style>
       <div class="dashboard">
@@ -1407,8 +1494,8 @@ class BillyDashboard extends HTMLElement {
         <div class="grid-main">
           <article class="panel chart-panel">
             <div class="panel-head"><div><h2>${escapeHtml(this._t('spendingTrend'))}</h2><p>${escapeHtml(this._chartDescription())}</p></div></div>
+            ${chartFilters}
             <div class="chart-controls">
-              <label><span>${escapeHtml(this._t('chartFilter'))}</span><select id="chart-filter">${this._chartFilterOptions()}</select></label>
               <label><span>${escapeHtml(this._t('chartSpan'))}</span><select id="chart-months" ${this._chartYear !== 'all' ? 'disabled' : ''}>${[3, 6, 12, 18, 24, 36].map((value) => `<option value="${value}" ${Number(this._chartMonths) === value ? 'selected' : ''}>${value} ${escapeHtml(this._t('months'))}</option>`).join('')}</select></label>
               <label><span>${escapeHtml(this._t('chartYear'))}</span><select id="chart-year"><option value="all" ${this._chartYear === 'all' ? 'selected' : ''}>${escapeHtml(this._t('chartAllYears'))}</option>${this._chartYears()
                 .map(
@@ -1469,22 +1556,50 @@ class BillyDashboard extends HTMLElement {
         this._undoReimbursement(button.dataset.undoReimbursement),
       )
     }
+    for (const checkbox of this.shadowRoot.querySelectorAll(
+      '[data-chart-toggle]',
+    )) {
+      checkbox.addEventListener('change', (event) => {
+        const key = String(event.currentTarget.dataset.chartToggle || '')
+        if (!key) return
+        if (event.currentTarget.checked) this._chartDisabled.delete(key)
+        else this._chartDisabled.add(key)
+        this._chartFilterOpen = true
+        this._render()
+      })
+    }
     this.shadowRoot
-      .getElementById('chart-filter')
-      ?.addEventListener('change', (event) => {
-        this._chartFilter = event.currentTarget.value
+      .querySelector('.chart-filter-combobox')
+      ?.addEventListener('toggle', (event) => {
+        this._chartFilterOpen = Boolean(event.currentTarget.open)
+      })
+    this.shadowRoot
+      .querySelector('[data-chart-enable-all]')
+      ?.addEventListener('click', () => {
+        this._chartDisabled.clear()
+        this._chartFilterOpen = true
+        this._render()
+      })
+    this.shadowRoot
+      .querySelector('[data-chart-disable-all]')
+      ?.addEventListener('click', () => {
+        for (const key of this._availableChartFilterKeys())
+          this._chartDisabled.add(key)
+        this._chartFilterOpen = true
         this._render()
       })
     this.shadowRoot
       .getElementById('chart-months')
       ?.addEventListener('change', (event) => {
         this._chartMonths = Number(event.currentTarget.value || 12)
+        this._chartFilterOpen = false
         this._render()
       })
     this.shadowRoot
       .getElementById('chart-year')
       ?.addEventListener('change', (event) => {
         this._chartYear = event.currentTarget.value
+        this._chartFilterOpen = false
         this._render()
       })
     this.shadowRoot
@@ -1497,9 +1612,9 @@ class BillyDashboard extends HTMLElement {
 
   _styles() {
     return `
-      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.dashboard{display:flex;flex-direction:column;gap:20px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:4px 2px 2px}.hero h1{font-size:30px;line-height:1.1;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.hero-actions{display:flex;gap:10px}.primary,.secondary,.error-card button{appearance:none;border-radius:10px;padding:10px 15px;font:inherit;font-weight:650;cursor:pointer}.primary{border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.kpi{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:center;min-width:0}.kpi ha-icon{color:var(--primary-color);--mdc-icon-size:24px}.kpi div{display:flex;flex-direction:column;gap:4px;min-width:0}.kpi span{font-size:12px;color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi strong{font-size:20px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.panel{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;padding:18px;min-width:0}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.panel-head h2{font-size:18px;margin:0}.panel-head p{font-size:12px;color:var(--secondary-text-color);margin:4px 0 0}.grid-main{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(300px,.9fr);gap:16px}.grid-bottom{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(380px,1.5fr) minmax(260px,.7fr);gap:16px}.chart-controls{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:9px;margin-bottom:12px}.chart-controls label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--secondary-text-color)}.chart-controls select{height:38px;border:1px solid var(--divider-color);border-radius:9px;padding:0 9px;background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit}.chart-controls select:disabled{opacity:.5}.chart-scroll{overflow:auto hidden}.chart-scroll svg{display:block;width:100%;min-width:720px;height:auto}.grid{stroke:var(--divider-color);stroke-width:1}.axis,.month{fill:var(--secondary-text-color);font-size:11px}.forecast-label{font-style:italic}.forecast-segment,.forecast-separated{opacity:.4;stroke:currentColor;stroke-width:1;stroke-dasharray:4 3}.recurring-segment{stroke:var(--card-background-color);stroke-width:.6}.separate-bar{stroke:var(--card-background-color);stroke-width:.6}.legend{display:flex;gap:10px;color:var(--secondary-text-color);font-size:11px;flex-wrap:wrap;margin-bottom:8px}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}.forecast-dot{background:color-mix(in srgb,var(--primary-color) 25%,transparent);border:1px dashed var(--primary-color)}.breakdown-list{display:flex;flex-direction:column;gap:14px}.breakdown-row{display:flex;flex-direction:column;gap:7px}.breakdown-head{display:flex;justify-content:space-between;gap:12px;font-size:13px}.breakdown-head>span{display:flex;align-items:center;gap:8px;min-width:0}.breakdown-head>span>span{display:flex;flex-direction:column;gap:1px;min-width:0}.breakdown-head small{font-size:10px;color:var(--secondary-text-color);font-weight:400}.breakdown-head i{width:10px;height:10px;border-radius:50%;flex:none}.breakdown-head strong{font-size:13px}.meter{height:7px;border-radius:99px;background:var(--secondary-background-color);overflow:hidden}.meter span{display:block;height:100%;border-radius:99px}.compact-list,.recent-list{display:flex;flex-direction:column}.compact-row,.recent-row{border-top:1px solid var(--divider-color);padding:12px 0}.compact-row:first-child,.recent-row:first-child{border-top:0;padding-top:2px}.compact-row{display:flex;justify-content:space-between;align-items:center;gap:16px}.compact-row div{display:flex;flex-direction:column;gap:3px}.compact-row small,.recent-row small{color:var(--secondary-text-color)}.recent-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:12px}.recent-row>i{width:10px;height:36px;border-radius:99px}.recent-main,.recent-value{display:flex;flex-direction:column;gap:3px}.recent-value{align-items:flex-end}.pill{font-size:10px;padding:2px 7px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.pill.ok{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 12%,transparent)}.pill.warn{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.parser-health{display:flex;flex-direction:column}.parser-stat{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--divider-color);font-size:13px}.parser-stat strong{font-size:18px}.attention{color:var(--warning-color,#f9a825)!important}.parser-message{font-size:12px;color:var(--secondary-text-color);padding:14px 0}.full{width:100%;margin-top:auto}.recurring-overview-panel{display:flex;flex-direction:column;gap:10px}.recurring-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.recurring-stats>div{padding:12px;border-radius:12px;background:var(--secondary-background-color);display:flex;flex-direction:column;gap:4px}.recurring-stats span{font-size:11px;color:var(--secondary-text-color)}.recurring-stats strong{font-size:17px}.recurring-overview-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.recurring-overview-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--divider-color);border-radius:11px}.recurring-overview-row>div{display:flex;flex-direction:column;gap:3px;min-width:0}.recurring-overview-row small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.reimbursements-panel{display:flex;flex-direction:column;gap:4px}.reimbursement-list{display:flex;flex-direction:column}.reimbursement-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:16px;align-items:center;padding:13px 0;border-top:1px solid var(--divider-color)}.reimbursement-row:first-child{border-top:0}.reimbursement-main{display:flex;flex-direction:column;gap:3px}.reimbursement-main small,.history-row small{color:var(--secondary-text-color)}.reimbursement-actions{display:flex;gap:8px;align-items:center}.small{padding:7px 10px;font-size:12px}.paypal{display:inline-flex;align-items:center;justify-content:center;border-radius:10px;padding:8px 11px;background:#0070ba;color:white;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap}.reimbursement-empty{padding:16px;border-radius:12px;background:color-mix(in srgb,var(--success-color,#2e7d32) 10%,transparent);color:var(--success-color,#2e7d32)}.reimbursement-history{margin-top:14px;padding-top:14px;border-top:1px solid var(--divider-color)}.reimbursement-history h3{font-size:13px;margin:0 0 8px;color:var(--secondary-text-color)}.history-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 0}.history-row>div{display:flex;flex-direction:column;gap:2px}.empty{padding:28px 8px;text-align:center;color:var(--secondary-text-color);font-size:13px}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.loading{text-align:center;color:var(--secondary-text-color)}.error-card p{color:var(--secondary-text-color)}
+      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.dashboard{display:flex;flex-direction:column;gap:20px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:4px 2px 2px}.hero h1{font-size:30px;line-height:1.1;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.hero-actions{display:flex;gap:10px}.primary,.secondary,.error-card button{appearance:none;border-radius:10px;padding:10px 15px;font:inherit;font-weight:650;cursor:pointer}.primary{border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.kpi{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:center;min-width:0}.kpi ha-icon{color:var(--primary-color);--mdc-icon-size:24px}.kpi div{display:flex;flex-direction:column;gap:4px;min-width:0}.kpi span{font-size:12px;color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi strong{font-size:20px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.panel{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;padding:18px;min-width:0}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.panel-head h2{font-size:18px;margin:0}.panel-head p{font-size:12px;color:var(--secondary-text-color);margin:4px 0 0}.grid-main{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(300px,.9fr);gap:16px}.grid-bottom{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(380px,1.5fr) minmax(260px,.7fr);gap:16px}.chart-filter-combobox{position:relative;width:min(360px,100%);margin-bottom:11px}.chart-filter-combobox summary{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;min-height:48px;padding:8px 11px;border:1px solid var(--divider-color);border-radius:11px;background:var(--secondary-background-color);cursor:pointer;user-select:none}.chart-filter-combobox summary::-webkit-details-marker{display:none}.chart-filter-combobox[open] summary{border-color:color-mix(in srgb,var(--primary-color) 45%,var(--divider-color));box-shadow:0 0 0 2px color-mix(in srgb,var(--primary-color) 10%,transparent)}.chart-filter-summary-main{display:flex;align-items:center;gap:9px;min-width:0}.chart-filter-summary-main>ha-icon{color:var(--primary-color);--mdc-icon-size:20px}.chart-filter-summary-main>span{display:flex;flex-direction:column;gap:1px;min-width:0}.chart-filter-summary-main small{font-size:10px;color:var(--secondary-text-color)}.chart-filter-summary-main strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chart-filter-count{font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;background:var(--card-background-color);color:var(--secondary-text-color)}.chart-filter-chevron{--mdc-icon-size:20px;color:var(--secondary-text-color);transition:transform .15s ease}.chart-filter-combobox[open] .chart-filter-chevron{transform:rotate(180deg)}.chart-filter-dropdown{position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(440px,calc(100vw - 48px));max-height:360px;overflow:auto;padding:11px;border:1px solid var(--divider-color);border-radius:12px;background:var(--card-background-color);box-shadow:0 12px 30px rgba(0,0,0,.18)}.chart-filter-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:9px;margin-bottom:9px;border-bottom:1px solid var(--divider-color);font-size:11px}.chart-filter-head>strong{font-size:12px}.chart-filter-head>div{display:flex;gap:9px}.text-button{appearance:none;border:0;background:transparent;color:var(--primary-color);padding:2px 0;font:inherit;font-size:11px;font-weight:650;cursor:pointer}.chart-filter-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.chart-filter-groups fieldset{border:0;padding:0;margin:0;min-width:0}.chart-filter-groups legend{font-size:10px;font-weight:700;color:var(--secondary-text-color);margin-bottom:6px}.chart-option-list{display:flex;flex-direction:column;gap:3px}.chart-option{position:relative;display:grid!important;grid-template-columns:20px 10px minmax(0,1fr);align-items:center;gap:8px!important;min-height:34px;padding:5px 7px;border-radius:8px;color:var(--primary-text-color)!important;font-size:12px!important;cursor:pointer;user-select:none}.chart-option:hover{background:var(--secondary-background-color)}.chart-option input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}.chart-option:has(input:focus-visible){outline:2px solid var(--primary-color);outline-offset:1px}.chart-option-box{display:grid;place-items:center;width:18px;height:18px;border:1px solid var(--divider-color);border-radius:5px;background:var(--card-background-color);color:transparent;font-size:11px;font-weight:800}.chart-option.active .chart-option-box{border-color:var(--option-color);background:var(--option-color);color:#fff}.chart-option i{width:9px;height:9px;border-radius:50%;background:var(--option-color)}.chart-controls{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:9px;margin-bottom:12px}.chart-controls label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--secondary-text-color)}.chart-controls select{height:38px;border:1px solid var(--divider-color);border-radius:9px;padding:0 9px;background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit}.chart-controls select:disabled{opacity:.5}.chart-scroll{overflow:auto hidden}.chart-scroll svg{display:block;width:100%;min-width:720px;height:auto}.grid{stroke:var(--divider-color);stroke-width:1}.axis,.month{fill:var(--secondary-text-color);font-size:11px}.forecast-label{font-style:italic}.forecast-segment,.forecast-separated{opacity:.4;stroke:currentColor;stroke-width:1;stroke-dasharray:4 3}.recurring-segment{stroke:var(--card-background-color);stroke-width:.6}.separate-bar{stroke:var(--card-background-color);stroke-width:.6}.legend{display:flex;gap:10px;color:var(--secondary-text-color);font-size:11px;flex-wrap:wrap;margin-bottom:8px}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}.forecast-dot{background:color-mix(in srgb,var(--primary-color) 25%,transparent);border:1px dashed var(--primary-color)}.breakdown-list{display:flex;flex-direction:column;gap:14px}.breakdown-row{display:flex;flex-direction:column;gap:7px}.breakdown-head{display:flex;justify-content:space-between;gap:12px;font-size:13px}.breakdown-head>span{display:flex;align-items:center;gap:8px;min-width:0}.breakdown-head>span>span{display:flex;flex-direction:column;gap:1px;min-width:0}.breakdown-head small{font-size:10px;color:var(--secondary-text-color);font-weight:400}.breakdown-head i{width:10px;height:10px;border-radius:50%;flex:none}.breakdown-head strong{font-size:13px}.meter{height:7px;border-radius:99px;background:var(--secondary-background-color);overflow:hidden}.meter span{display:block;height:100%;border-radius:99px}.compact-list,.recent-list{display:flex;flex-direction:column}.compact-row,.recent-row{border-top:1px solid var(--divider-color);padding:12px 0}.compact-row:first-child,.recent-row:first-child{border-top:0;padding-top:2px}.compact-row{display:flex;justify-content:space-between;align-items:center;gap:16px}.compact-row div{display:flex;flex-direction:column;gap:3px}.compact-row small,.recent-row small{color:var(--secondary-text-color)}.recent-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:12px}.recent-row>i{width:10px;height:36px;border-radius:99px}.recent-main,.recent-value{display:flex;flex-direction:column;gap:3px}.recent-value{align-items:flex-end}.pill{font-size:10px;padding:2px 7px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.pill.ok{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 12%,transparent)}.pill.warn{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.parser-health{display:flex;flex-direction:column}.parser-stat{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--divider-color);font-size:13px}.parser-stat strong{font-size:18px}.attention{color:var(--warning-color,#f9a825)!important}.parser-message{font-size:12px;color:var(--secondary-text-color);padding:14px 0}.full{width:100%;margin-top:auto}.recurring-overview-panel{display:flex;flex-direction:column;gap:10px}.recurring-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.recurring-stats>div{padding:12px;border-radius:12px;background:var(--secondary-background-color);display:flex;flex-direction:column;gap:4px}.recurring-stats span{font-size:11px;color:var(--secondary-text-color)}.recurring-stats strong{font-size:17px}.recurring-overview-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.recurring-overview-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--divider-color);border-radius:11px}.recurring-overview-row>div{display:flex;flex-direction:column;gap:3px;min-width:0}.recurring-overview-row small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.reimbursements-panel{display:flex;flex-direction:column;gap:4px}.reimbursement-list{display:flex;flex-direction:column}.reimbursement-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:16px;align-items:center;padding:13px 0;border-top:1px solid var(--divider-color)}.reimbursement-row:first-child{border-top:0}.reimbursement-main{display:flex;flex-direction:column;gap:3px}.reimbursement-main small,.history-row small{color:var(--secondary-text-color)}.reimbursement-actions{display:flex;gap:8px;align-items:center}.small{padding:7px 10px;font-size:12px}.paypal{display:inline-flex;align-items:center;justify-content:center;border-radius:10px;padding:8px 11px;background:#0070ba;color:white;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap}.reimbursement-empty{padding:16px;border-radius:12px;background:color-mix(in srgb,var(--success-color,#2e7d32) 10%,transparent);color:var(--success-color,#2e7d32)}.reimbursement-history{margin-top:14px;padding-top:14px;border-top:1px solid var(--divider-color)}.reimbursement-history h3{font-size:13px;margin:0 0 8px;color:var(--secondary-text-color)}.history-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 0}.history-row>div{display:flex;flex-direction:column;gap:2px}.empty{padding:28px 8px;text-align:center;color:var(--secondary-text-color);font-size:13px}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.loading{text-align:center;color:var(--secondary-text-color)}.error-card p{color:var(--secondary-text-color)}
       @media(max-width:1180px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.grid-main{grid-template-columns:1fr}.grid-bottom{grid-template-columns:1fr 1fr}.parser-health{grid-column:1/-1}}
-      @media(max-width:720px){.recurring-stats{grid-template-columns:1fr 1fr}.reimbursement-row,.history-row{grid-template-columns:1fr}.reimbursement-actions{flex-wrap:wrap}.hero{align-items:flex-start;flex-direction:column}.hero-actions{width:100%}.hero-actions button{flex:1}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-bottom{grid-template-columns:1fr}.parser-health{grid-column:auto}.panel{padding:14px}.chart-controls{grid-template-columns:1fr 1fr}.legend{display:none}.hero h1{font-size:25px}}
+      @media(max-width:720px){.recurring-stats{grid-template-columns:1fr 1fr}.reimbursement-row,.history-row{grid-template-columns:1fr}.reimbursement-actions{flex-wrap:wrap}.hero{align-items:flex-start;flex-direction:column}.hero-actions{width:100%}.hero-actions button{flex:1}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-bottom{grid-template-columns:1fr}.parser-health{grid-column:auto}.panel{padding:14px}.chart-filter-groups{grid-template-columns:1fr}.chart-filter-head{align-items:flex-start;flex-direction:column}.chart-controls{grid-template-columns:1fr 1fr}.legend{display:none}.hero h1{font-size:25px}}
     `
   }
 }

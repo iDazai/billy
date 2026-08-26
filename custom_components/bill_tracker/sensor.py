@@ -20,7 +20,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Bill Tracker sensor and the optional parser subsystem."""
     manager: BillTrackerManager = hass.data[DOMAIN][entry.entry_id]
-    parser_manager = ParserManager(hass, manager, billy_version=FRONTEND_VERSION)
+    parser_manager = ParserManager(
+        hass,
+        manager,
+        billy_version=FRONTEND_VERSION,
+        config_entry=entry,
+    )
     await parser_manager.async_load()
     await parser_manager.async_start()
     hass.data[DOMAIN]["parser_manager"] = parser_manager

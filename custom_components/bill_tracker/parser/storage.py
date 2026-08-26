@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -27,6 +28,8 @@ class ParserStorage:
         return {
             "schema_version": 1,
             "catalog": {},
+            "catalog_cache": {"index": {}, "country": "", "path": "", "shard": {}},
+            "community_id": "",
             "installed": {},
             "custom": {},
             "source_entry_ids": [],
@@ -43,11 +46,33 @@ class ParserStorage:
             data["installed"] = {}
         if not isinstance(data["custom"], dict):
             data["custom"] = {}
+        if not isinstance(data["catalog_cache"], dict):
+            data["catalog_cache"] = {
+                "index": {},
+                "country": "",
+                "path": "",
+                "shard": {},
+            }
+        else:
+            cache = data["catalog_cache"]
+            if not isinstance(cache.get("index"), dict):
+                cache["index"] = {}
+            if not isinstance(cache.get("shard"), dict):
+                cache["shard"] = {}
+            cache["country"] = str(cache.get("country") or "")
+            cache["path"] = str(cache.get("path") or "")
+        community_id = str(data.get("community_id") or "").strip()
+        generated_community_id = not community_id
+        if not community_id:
+            community_id = uuid4().hex
+        data["community_id"] = community_id
         if not isinstance(data["source_entry_ids"], list):
             data["source_entry_ids"] = []
         if not isinstance(data["imports"], list):
             data["imports"] = []
         self.data = data
+        if generated_community_id:
+            await self._store.async_save(self.data)
         await self.hass.async_add_executor_job(self._ensure_dirs)
         return self.data
 

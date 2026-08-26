@@ -65,6 +65,8 @@ def test_parser_manager_panel_is_scalable_and_has_bill_type_filter():
         "bill_tracker/parser/uninstall",
         "update_available",
         "outdated",
+        "catalogCacheWarning",
+        "refresh_error",
     ):
         assert token in panel
     assert '"parser_manager"' in flow
@@ -226,15 +228,23 @@ def test_panel_modals_do_not_reload_on_every_hass_object_update():
 def test_parser_manager_community_publish_flow():
     manager = (FRONTEND / "billy-parser-manager.js").read_text(encoding="utf-8")
     for token in (
-        "Publish Experimental",
-        "Pubblica Experimental",
+        "Share with community",
+        "Condividi con la community",
         "bill_tracker/parser/custom/export",
-        "billy-parser-submission:v1",
+        "billy-parser-submission:v2",
+        "requested_status: 'experimental'",
+        "billy-parser-feedback:v1",
+        "installation_fingerprint",
+        "feedback-working",
+        "feedback-partial",
+        "feedback-failed",
         "github.com/robin994/billy-parser/issues/new",
         "catalog-experimental",
         'id="catalog-status"',
     ):
         assert token in manager
+    assert "row.catalog_status === 'experimental'" in manager
+    assert "Number(installedVersion || 0) === Number(remoteVersion || 0)" in manager
 
 
 def test_parser_manager_separates_catalog_and_installation_status():
@@ -303,11 +313,14 @@ def test_overview_chart_includes_recurring_expenses_in_actual_and_forecast_bars(
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     for token in (
         "_actualChartRows()",
-        "this._data?.recurring_occurrences || []",
+        "this._data?.recurring_history || []",
         "recurring_total: recurringTotal",
         "current_month_recurring",
         "recurring_items",
-        "chart-filter",
+        "data-chart-toggle",
+        "_chartDisabled = new Set()",
+        "data-chart-enable-all",
+        "data-chart-disable-all",
         "chart-months",
         "chart-year",
         "chart-view",
@@ -316,6 +329,38 @@ def test_overview_chart_includes_recurring_expenses_in_actual_and_forecast_bars(
         "chartRecurring: 'Spese ricorrenti'",
     ):
         assert token in panel
+
+
+def test_overview_chart_uses_independent_checkbox_filters():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    assert 'type="checkbox" data-chart-toggle="bill:' in panel
+    assert 'type="checkbox" data-chart-toggle="recurring:' in panel
+    assert 'class="chart-filter-combobox"' in panel
+    assert 'class="chart-option ${enabled ? \'active\' : \'\'}"' in panel
+    assert "chartSelectedCount" in panel
+    assert "chartNoneSelected" in panel
+    assert "this._chartFilterOpen = true" in panel
+    assert "this._chartDisabled.add(key)" in panel
+    assert "this._chartDisabled.delete(key)" in panel
+    assert "_chartItemEnabled(`bill:${category.id}`)" in panel
+    assert "_chartItemEnabled(`recurring:${item.id}`)" in panel
+
+
+def test_overview_chart_hides_filters_without_data_in_selected_range():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    assert "_availableChartFilterKeys()" in panel
+    assert ".filter((category) => available.has(`bill:${category.id}`))" in panel
+    assert ".filter((row) => available.has(`recurring:${row.id}`))" in panel
+    assert "for (const key of this._availableChartFilterKeys())" in panel
+
+
+def test_overview_recurring_chart_history_is_generated_from_start_date():
+    manager = (ROOT / "custom_components" / "bill_tracker" / "manager.py").read_text(encoding="utf-8")
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    assert '"recurring_history": self.recurring_history_items()' in manager
+    assert "def recurring_history_items" in manager
+    assert 'start_text = str(recurring.get("start_date") or "")' in manager
+    assert "this._data?.recurring_history || []" in panel
 
 
 def test_overview_breakdown_includes_expected_current_month_recurring_expenses():
@@ -327,6 +372,20 @@ def test_overview_breakdown_includes_expected_current_month_recurring_expenses()
         "recurring_month_items",
     ):
         assert token in panel or token in manager
+
+
+def test_overview_does_not_hide_recurring_kinds_or_inactive_rules():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    overview_start = panel.index("_recurringOverview()")
+    overview_end = panel.index("_reimbursements()", overview_start)
+    overview = panel[overview_start:overview_end]
+    chart_filters_start = panel.index("_chartFilterOptions()")
+    chart_filters_end = panel.index("_actualChartRows()", chart_filters_start)
+    chart_filters = panel[chart_filters_start:chart_filters_end]
+
+    assert ".filter((row) => row.status === 'active')" not in overview
+    assert ".filter((row) => row.status === 'active')" not in chart_filters
+    assert "row.kind === 'mortgage'" in overview
 
 
 def test_recurring_expenses_have_persistent_configurable_colors():

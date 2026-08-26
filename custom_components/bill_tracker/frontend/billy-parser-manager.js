@@ -46,6 +46,8 @@ const TEXT = {
     category: 'Billy bill type',
     noResults: 'No parsers match the selected filters.',
     catalogUpdated: 'Catalog updated',
+    catalogCacheWarning:
+      'Remote catalog refresh failed. Showing the last cached catalog.',
     never: 'not yet',
     parsers: 'parsers',
     updateCount: 'updates available',
@@ -70,11 +72,19 @@ const TEXT = {
     outdatedHint: 'This parser is no longer recommended by the catalog.',
     replacement: 'Replacement',
     installReplacement: 'Install replacement',
-    publishExperimental: 'Publish Experimental',
+    shareCommunity: 'Share with community',
     publishTooLarge:
-      'This parser is too large for browser publishing. Export it and submit it manually on GitHub.',
+      'This parser is too large for browser sharing. Export it and submit the YAML through the billy-parser submission flow.',
     publishHint:
-      'Only the parser YAML is sent to GitHub. No invoices, emails or attachments are included.',
+      'Only parser metadata and YAML are included. No invoices, emails or attachments are shared.',
+    communityFeedback: 'Community feedback',
+    feedbackPrompt: 'Did this experimental parser work with your bill?',
+    feedbackWorking: 'Works',
+    feedbackPartial: 'Partial',
+    feedbackFailed: 'Does not work',
+    feedbackHint:
+      'Feedback contains only parser ID, version, result and an anonymous installation fingerprint.',
+    feedbackStats: '{working} works · {partial} partial · {failed} failed',
     newCustom: 'New custom parser',
     editCustom: 'Edit parser',
     exportCustom: 'Export',
@@ -146,6 +156,8 @@ const TEXT = {
     category: 'Tipo di bolletta Billy',
     noResults: 'Nessun parser corrisponde ai filtri selezionati.',
     catalogUpdated: 'Catalogo aggiornato',
+    catalogCacheWarning:
+      'Aggiornamento del catalogo remoto non riuscito. Viene mostrata l’ultima copia in cache.',
     never: 'mai',
     parsers: 'parser',
     updateCount: 'aggiornamenti disponibili',
@@ -170,11 +182,20 @@ const TEXT = {
     outdatedHint: 'Questo parser non è più raccomandato dal catalogo.',
     replacement: 'Sostituto',
     installReplacement: 'Installa sostituto',
-    publishExperimental: 'Pubblica Experimental',
+    shareCommunity: 'Condividi con la community',
     publishTooLarge:
-      'Questo parser è troppo grande per la pubblicazione dal browser. Esportalo e invialo manualmente su GitHub.',
+      'Questo parser è troppo grande per la condivisione dal browser. Esportalo e invia lo YAML tramite il flusso di submission di billy-parser.',
     publishHint:
-      'Su GitHub viene inviato solo lo YAML del parser. Nessuna bolletta, email o allegato viene incluso.',
+      'Vengono inclusi solo metadata e YAML del parser. Nessuna bolletta, email o allegato viene condiviso.',
+    communityFeedback: 'Feedback community',
+    feedbackPrompt:
+      'Questo parser sperimentale ha funzionato con la tua bolletta?',
+    feedbackWorking: 'Funziona',
+    feedbackPartial: 'Parziale',
+    feedbackFailed: 'Non funziona',
+    feedbackHint:
+      'Il feedback contiene solo ID parser, versione, esito e un fingerprint anonimo dell’installazione.',
+    feedbackStats: '{working} funziona · {partial} parziale · {failed} fallito',
     newCustom: 'Nuovo parser custom',
     editCustom: 'Modifica parser',
     exportCustom: 'Esporta',
@@ -263,9 +284,13 @@ class BillyParserManagerPanel extends HTMLElement {
     if (this._hass && !this._data && !this._loading) this._load()
   }
 
-  _t(key) {
+  _t(key, values = {}) {
     const language = languageOf(this._hass)
-    return TEXT[language]?.[key] ?? TEXT.en[key] ?? key
+    let text = TEXT[language]?.[key] ?? TEXT.en[key] ?? key
+    for (const [name, value] of Object.entries(values)) {
+      text = text.replaceAll(`{${name}}`, String(value))
+    }
+    return text
   }
 
   async _load({ refreshIfEmpty = true } = {}) {
@@ -496,7 +521,7 @@ class BillyParserManagerPanel extends HTMLElement {
         <button class="secondary" data-action="edit-custom" data-id="${esc(row.id)}">${this._t('editCustom')}</button>
         <button class="secondary" data-action="configure" data-id="${esc(row.id)}">${this._t('configure')}</button>
         <button class="secondary" data-action="export-custom" data-id="${esc(row.id)}">${this._t('exportCustom')}</button>
-        <button class="primary" data-action="publish" data-id="${esc(row.id)}">${this._t('publishExperimental')}</button>
+        <button class="primary" data-action="publish" data-id="${esc(row.id)}">${this._t('shareCommunity')}</button>
         <button class="danger" data-action="remove" data-id="${esc(row.id)}">${this._t('remove')}</button>`
     } else if (!row.installed) {
       actions = `<button class="primary" data-action="install" data-id="${esc(row.id)}" ${row.compatible === false || busy ? 'disabled' : ''}>${this._t('install')}</button>`
@@ -505,6 +530,15 @@ class BillyParserManagerPanel extends HTMLElement {
         <button class="secondary" data-action="configure" data-id="${esc(row.id)}">${this._t('configure')}</button>
         ${row.update_available ? `<button class="primary" data-action="update" data-id="${esc(row.id)}" ${canUpdate && !busy ? '' : 'disabled'} title="${row.compatible === false ? esc(this._t('updateBlocked')) : ''}">${this._t('update')}</button>` : ''}
         <button class="danger" data-action="remove" data-id="${esc(row.id)}" ${busy ? 'disabled' : ''}>${this._t('remove')}</button>`
+    }
+    const canSubmitFeedback =
+      row.source !== 'custom' &&
+      row.installed &&
+      row.catalog_status === 'experimental' &&
+      Number(installedVersion || 0) === Number(remoteVersion || 0) &&
+      Boolean(row.feedback_fingerprint)
+    if (canSubmitFeedback) {
+      actions += `<div class="feedback-actions" title="${esc(this._t('feedbackHint'))}"><span>${esc(this._t('feedbackPrompt'))}</span><div><button class="feedback-working" data-action="feedback-working" data-id="${esc(row.id)}">✓ ${esc(this._t('feedbackWorking'))}</button><button class="feedback-partial" data-action="feedback-partial" data-id="${esc(row.id)}">~ ${esc(this._t('feedbackPartial'))}</button><button class="feedback-failed" data-action="feedback-failed" data-id="${esc(row.id)}">× ${esc(this._t('feedbackFailed'))}</button></div></div>`
     }
     if (
       row.catalog_status === 'outdated' &&
@@ -527,6 +561,18 @@ class BillyParserManagerPanel extends HTMLElement {
         : '',
       `<span class="badge catalog-${esc(row.catalog_status || 'experimental')}">${esc(this._catalogStatusLabel(row.catalog_status))}</span>`,
     ].join('')
+    const feedback = row.feedback || {}
+    const feedbackTotal =
+      Number(feedback.working || 0) +
+      Number(feedback.partial || 0) +
+      Number(feedback.failed || 0)
+    const feedbackLine = feedbackTotal
+      ? this._t('feedbackStats', {
+          working: Number(feedback.working || 0),
+          partial: Number(feedback.partial || 0),
+          failed: Number(feedback.failed || 0),
+        })
+      : ''
 
     return `
       <article class="parser-row">
@@ -540,6 +586,7 @@ class BillyParserManagerPanel extends HTMLElement {
             <div class="parser-name">${esc(row.name || row.id)}</div>
             <div class="meta">${esc(row.id)} · ${esc(row.bill_type || '—')} · ${versionLine}</div>
             ${hint ? `<div class="hint">${hint}</div>` : ''}
+            ${feedbackLine ? `<div class="hint"><strong>${this._t('communityFeedback')}:</strong> ${esc(feedbackLine)}</div>` : ''}
             ${row.changelog ? `<div class="hint"><strong>${this._t('changelog')}:</strong> ${esc(row.changelog)}</div>` : ''}
           </div>
         </div>
@@ -596,6 +643,8 @@ class BillyParserManagerPanel extends HTMLElement {
           <span class="${Number(counts.outdated || 0) > 0 ? 'summary-alert' : ''}">${esc(counts.outdated || 0)} ${this._t('updateCount')}</span>
           <span>${this._t('catalogUpdated')}: ${updatedAt ? esc(new Date(updatedAt).toLocaleString()) : this._t('never')}</span>
         </section>
+
+        ${this._data?.catalog?.refresh_error ? `<div class="warning-box">⚠ ${esc(this._t('catalogCacheWarning'))}</div>` : ''}
 
         <section class="filters">
           <label class="search-field">
@@ -746,6 +795,8 @@ metadata:
   provider: Provider
   bill_type: internet
   min_billy_version: ${BILLY_PARSER_MANAGER_VERSION}
+  status: experimental
+  quality: experimental
 
 prefilter:
   email:
@@ -1025,6 +1076,10 @@ fields:
       await this._publishCustom(row)
       return
     }
+    if (action.startsWith('feedback-')) {
+      this._submitFeedback(row, action.slice('feedback-'.length))
+      return
+    }
     if (action === 'remove') {
       if (!window.confirm(this._t('confirmRemove'))) return
       this._busy = String(id)
@@ -1060,9 +1115,19 @@ fields:
         window.alert(this._t('publishTooLarge'))
         return
       }
-      const body = `<!-- billy-parser-submission:v1 -->\n\nGenerated by Billy ${BILLY_PARSER_MANAGER_VERSION}. ${this._t('publishHint')}\n\n\`\`\`yaml\n${content.trim()}\n\`\`\`\n`
+      const submission = {
+        schema_version: 2,
+        parser_id: String(row.id),
+        version: Number(row.version || 1),
+        country: String(row.country || '').toUpperCase(),
+        provider: String(row.provider || row.name || ''),
+        bill_type: String(row.bill_type || ''),
+        requested_status: 'experimental',
+        billy_version: BILLY_PARSER_MANAGER_VERSION,
+      }
+      const body = `<!-- billy-parser-submission:v2 -->\n\n${this._t('publishHint')}\n\n\`\`\`json\n${JSON.stringify(submission, null, 2)}\n\`\`\`\n\n\`\`\`yaml\n${content.trim()}\n\`\`\`\n`
       const params = new URLSearchParams({
-        title: `[Experimental Parser] ${row.provider || row.name || row.id} - ${row.bill_type || row.id}`,
+        title: `[Parser Submission] ${row.id} v${row.version || 1}`,
         body,
       })
       window.open(
@@ -1074,6 +1139,31 @@ fields:
       this._error = `${this._t('actionError')}: ${error?.message || error}`
       this._render()
     }
+  }
+
+  _submitFeedback(row, result) {
+    if (!['working', 'partial', 'failed'].includes(result)) return
+    const version = Number(row.installed_version ?? row.version ?? 0)
+    if (!row.feedback_fingerprint || version <= 0) return
+    const feedback = {
+      schema_version: 1,
+      parser_id: String(row.id),
+      version,
+      result,
+      installation_fingerprint: String(row.feedback_fingerprint),
+      billy_version: BILLY_PARSER_MANAGER_VERSION,
+      source_commit: String(row.source_commit || ''),
+    }
+    const body = `<!-- billy-parser-feedback:v1 -->\n\n${this._t('feedbackHint')}\n\n\`\`\`json\n${JSON.stringify(feedback, null, 2)}\n\`\`\`\n`
+    const params = new URLSearchParams({
+      title: `[Parser Feedback] ${row.id} v${version} - ${result}`,
+      body,
+    })
+    window.open(
+      `https://github.com/robin994/billy-parser/issues/new?${params.toString()}`,
+      '_blank',
+      'noopener,noreferrer',
+    )
   }
 
   _openDialog(row, mode) {
@@ -1222,8 +1312,16 @@ fields:
       .catalog-outdated { color:var(--error-color,#db4437); background:color-mix(in srgb,var(--error-color,#db4437) 12%,transparent); }
       .catalog-custom { color:var(--secondary-text-color); background:var(--secondary-background-color); }
       .actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; flex:0 0 auto; }
+      .feedback-actions { width:100%; max-width:330px; margin-top:4px; padding:9px 10px; border:1px solid color-mix(in srgb,var(--warning-color,#f39c12) 32%,var(--divider-color)); border-radius:10px; background:color-mix(in srgb,var(--warning-color,#f39c12) 7%,transparent); }
+      .feedback-actions > span { display:block; margin-bottom:7px; color:var(--secondary-text-color); font-size:11px; text-align:right; }
+      .feedback-actions > div { display:flex; justify-content:flex-end; gap:5px; flex-wrap:wrap; }
+      .feedback-actions button { padding:6px 8px; border-radius:8px; background:var(--card-background-color); color:var(--primary-text-color); font-size:11px; }
+      .feedback-working { border-color:color-mix(in srgb,var(--success-color,#2e7d32) 45%,var(--divider-color))!important; }
+      .feedback-partial { border-color:color-mix(in srgb,var(--warning-color,#f39c12) 45%,var(--divider-color))!important; }
+      .feedback-failed { border-color:color-mix(in srgb,var(--error-color,#db4437) 45%,var(--divider-color))!important; }
       .empty, .loading { padding:36px; text-align:center; color:var(--secondary-text-color); }
       .error-box { margin:0 0 14px; padding:12px 14px; border-radius:10px; color:var(--error-color, #db4437); background:color-mix(in srgb, var(--error-color, #db4437) 10%, transparent); }
+      .warning-box { margin:0 0 14px; padding:12px 14px; border-radius:10px; color:var(--warning-color, #f39c12); background:color-mix(in srgb, var(--warning-color, #f39c12) 12%, transparent); }
       .modal-backdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.48); }
       .modal { width:min(520px, 100%); padding:20px; border-radius:16px; background:var(--card-background-color); box-shadow:var(--ha-card-box-shadow, 0 8px 30px rgba(0,0,0,.3)); }
       .modal-head { display:flex; justify-content:space-between; gap:16px; margin-bottom:20px; }
@@ -1256,6 +1354,9 @@ fields:
         .search-field { grid-column:1 / -1; }
         .parser-row { flex-direction:column; }
         .actions { justify-content:flex-start; padding-left:40px; }
+        .feedback-actions { max-width:none; }
+        .feedback-actions > span { text-align:left; }
+        .feedback-actions > div { justify-content:flex-start; }
       }
       @media (max-width: 480px) {
         .filters { grid-template-columns:1fr; }

@@ -28,6 +28,8 @@ def _recurring_helper_class():
         "_recurring_occurrence",
         "_next_recurring_due",
         "_recurring_occurrences_between",
+        "recurring_month_items",
+        "recurring_history_items",
         "_recurring_progress",
         "_next_renewal_date",
         "payer",
@@ -85,6 +87,90 @@ def test_recurring_schedule_preserves_anchor_day_and_clips_short_months():
     assert manager._recurring_occurrence(item, 0) == date(2026, 1, 31)
     assert manager._recurring_occurrence(item, 1) == date(2026, 2, 28)
     assert manager._recurring_occurrence(item, 2) == date(2026, 3, 31)
+
+
+def test_recurring_without_payers_keeps_requested_active_state():
+    manager = _recurring_helper_class()()
+    manager.payers = []
+    item = manager._normalize_recurring_payload(
+        name="Mortgage",
+        kind="mortgage",
+        amount=800,
+        interval_months=1,
+        start_date="2026-01-15",
+        end_date=None,
+        auto_renew=False,
+        renewal_interval_months=12,
+        installment_count=None,
+        provider="Bank",
+        contract="",
+        note="",
+        active=True,
+    )
+    assert item["active"] is True
+    assert item["payer_id"] is None
+
+
+def test_current_month_recurring_includes_mortgage_rules():
+    manager = _recurring_helper_class()()
+    manager.payers = []
+    mortgage = manager._normalize_recurring_payload(
+        name="Home mortgage",
+        kind="mortgage",
+        amount=800,
+        interval_months=1,
+        start_date="2026-01-15",
+        end_date=None,
+        auto_renew=False,
+        renewal_interval_months=12,
+        installment_count=None,
+        provider="Bank",
+        contract="",
+        note="",
+        active=True,
+    )
+    mortgage["id"] = "mortgage"
+    manager.recurring_expenses = [mortgage]
+
+    rows = manager.recurring_month_items(2026, 8)
+
+    assert len(rows) == 1
+    assert rows[0]["id"] == "mortgage"
+    assert rows[0]["kind"] == "mortgage"
+    assert rows[0]["amount"] == 800
+    assert rows[0]["due_date"] == "2026-08-15"
+
+
+def test_recurring_chart_history_starts_from_activation_not_creation_date():
+    manager = _recurring_helper_class()()
+    manager.payers = []
+    today = date.today()
+    start = date(today.year - 1, today.month, 15)
+    mortgage = manager._normalize_recurring_payload(
+        name="Home mortgage",
+        kind="mortgage",
+        amount=800,
+        interval_months=1,
+        start_date=start.isoformat(),
+        end_date=None,
+        auto_renew=False,
+        renewal_interval_months=12,
+        installment_count=None,
+        provider="Bank",
+        contract="",
+        note="",
+        active=True,
+    )
+    mortgage.update({"id": "mortgage", "created_at": today.isoformat()})
+    manager.recurring_expenses = [mortgage]
+
+    rows = manager.recurring_history_items()
+
+    assert rows[0]["due_date"] == start.isoformat()
+    assert rows[0]["id"] == "mortgage"
+    assert rows[0]["kind"] == "mortgage"
+    assert rows[0]["amount"] == 800
+    assert len(rows) >= 13
 
 
 def test_installment_count_calculates_last_due_and_stops_series():

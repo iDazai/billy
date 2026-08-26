@@ -1291,6 +1291,7 @@ class BillTrackerManager:
             "recurring_occurrences": [
                 self._public_recurring_occurrence(x) for x in self.recurring_occurrences
             ],
+            "recurring_history": self.recurring_history_items(),
             "current_month_recurring": self.recurring_month_items(today.year, today.month),
             "balances": self.balances(),
             "debts": self.debts(),
@@ -1310,6 +1311,37 @@ class BillTrackerManager:
         items: list[dict[str, Any]] = []
         for recurring in self.recurring_expenses:
             for due in self._recurring_occurrences_between(recurring, first_day, last_day):
+                items.append(
+                    {
+                        "id": str(recurring.get("id", "")),
+                        "name": str(recurring.get("name", "")),
+                        "kind": str(recurring.get("kind", "recurring")),
+                        "color": self._normalize_color(recurring.get("color"), 0),
+                        "amount": round(float(recurring.get("amount", 0.0) or 0.0), 2),
+                        "due_date": due.isoformat(),
+                    }
+                )
+        items.sort(key=lambda x: (str(x.get("due_date", "")), str(x.get("name", "")).casefold()))
+        return items
+
+    def recurring_history_items(self) -> list[dict[str, Any]]:
+        """Return scheduled recurring charges from activation through the current month."""
+        today = date.today()
+        window_end = date(today.year, today.month, monthrange(today.year, today.month)[1])
+        items: list[dict[str, Any]] = []
+        for recurring in self.recurring_expenses:
+            if not bool(recurring.get("active", True)):
+                continue
+            start_text = str(recurring.get("start_date") or "")
+            if not start_text:
+                continue
+            try:
+                start = date.fromisoformat(start_text)
+            except ValueError:
+                continue
+            if start > window_end:
+                continue
+            for due in self._recurring_occurrences_between(recurring, start, window_end):
                 items.append(
                     {
                         "id": str(recurring.get("id", "")),
@@ -1771,8 +1803,8 @@ class BillTrackerManager:
 
         resolved_payer = self._validate_optional_payer(payer_id)
         if resolved_payer is None:
-            active = self.active_payers()
-            resolved_payer = str(active[0]["id"]) if active else None
+            active_payers = self.active_payers()
+            resolved_payer = str(active_payers[0]["id"]) if active_payers else None
         normalized_split = self._resolve_expense_split(split, resolved_payer)
         color_index = sum(ord(char) for char in f"{normalized_kind}:{normalized_name}")
 

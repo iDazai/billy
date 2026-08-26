@@ -1,7 +1,9 @@
 from pathlib import Path
 import ast
+import hashlib
 import re
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +26,7 @@ def _load_method(name: str):
     fn.decorator_list = []
     module = ast.Module(body=[fn], type_ignores=[])
     ast.fix_missing_locations(module)
-    ns = {"Any": Any, "MailPart": MailPart, "re": re}
+    ns = {"Any": Any, "MailPart": MailPart, "hashlib": hashlib, "re": re}
     exec(compile(module, str(MANAGER), "exec"), ns)
     return ns[name]
 
@@ -53,6 +55,7 @@ class _StorageHarness:
     def __init__(self, catalog, installed=None, custom=None):
         self.data = {
             "catalog": catalog,
+            "community_id": "test-community-installation",
             "installed": installed or {},
             "custom": custom or {},
         }
@@ -65,8 +68,18 @@ class _ManagerHarness:
         self.parsers = {}
 
     @staticmethod
+    def catalog_country():
+        return "IT"
+
+    def _stored_catalog_for_country(self, _country):
+        return dict(self.storage.data["catalog"])
+
+    @staticmethod
     def _version_supported(_minimum):
         return True
+
+    def community_fingerprint(self, parser_id, version):
+        return f"fingerprint:{parser_id}:{version}"
 
 
 def test_generic_binary_pdf_matches_restrictive_pdf_parser_by_filename():
@@ -112,6 +125,7 @@ def test_catalog_snapshot_marks_outdated_and_removed_parsers():
     source = MANAGER.read_text(encoding="utf-8")
     assert 'status = "outdated"' in source
     assert '"removed_from_catalog": True' in source
+    assert "installed_country != country" in source
     assert '"outdated": sum(1 for row in rows if row.get("status") == "outdated")' in source
     assert '"compatible": compatible' in source
 
@@ -123,6 +137,46 @@ def test_catalog_status_fallback_from_legacy_quality():
     assert normalize({"quality": "tested"})["catalog_status"] == "verified"
     assert normalize({"catalog_status": "verified"})["catalog_status"] == "verified"
     assert normalize({})["catalog_status"] == "experimental"
+
+
+def test_catalog_refresh_uses_etag_cache_validation():
+    source = CATALOG.read_text(encoding="utf-8")
+    assert 'headers = {"If-None-Match": etag} if etag else None' in source
+    assert "response.status == 304" in source
+    assert '"catalog_cache"' in (
+        ROOT / "custom_components" / "bill_tracker" / "parser" / "storage.py"
+    ).read_text(encoding="utf-8")
+
+
+def test_parser_catalog_country_prefers_explicit_option_then_home_assistant_then_it():
+    resolve = _load_method("catalog_country")
+
+    class Client:
+        @staticmethod
+        def normalize_country(value):
+            text = str(value or "").strip().upper()
+            return text if len(text) == 2 and text.isalpha() else None
+
+    explicit = SimpleNamespace(
+        config_entry=SimpleNamespace(options={"parser_country": "fr"}, data={}),
+        hass=SimpleNamespace(config=SimpleNamespace(country="IT")),
+        catalog_client=Client(),
+    )
+    assert resolve(explicit) == "FR"
+
+    home_assistant = SimpleNamespace(
+        config_entry=SimpleNamespace(options={}, data={}),
+        hass=SimpleNamespace(config=SimpleNamespace(country="de")),
+        catalog_client=Client(),
+    )
+    assert resolve(home_assistant) == "DE"
+
+    fallback = SimpleNamespace(
+        config_entry=None,
+        hass=SimpleNamespace(config=SimpleNamespace(country=None)),
+        catalog_client=Client(),
+    )
+    assert resolve(fallback) == "IT"
 
 
 def test_catalog_status_is_preserved_after_runtime_merge():
@@ -197,6 +251,39 @@ def test_installed_and_available_runtime_status_remain_distinct():
     assert rows["it.eon.energy"]["catalog_status"] == "verified"
     assert rows["it.enel.energy"]["status"] == "available"
     assert rows["it.enel.energy"]["catalog_status"] == "experimental"
+
+
+def test_installed_parser_exposes_anonymous_version_scoped_feedback_fingerprint():
+    snapshot = _load_method("catalog_snapshot")
+    catalog = {
+        "parsers": [
+            {"id": "it.enel.energy", "version": 3, "status": "experimental"},
+        ]
+    }
+    installed = {"it.enel.energy": {"id": "it.enel.energy", "version": 3, "enabled": True}}
+    row = snapshot(_ManagerHarness(catalog, installed))["parsers"][0]
+    assert row["feedback_fingerprint"] == "fingerprint:it.enel.energy:3"
+
+
+def test_parser_storage_generates_persistent_community_id():
+    storage = (
+        ROOT / "custom_components" / "bill_tracker" / "parser" / "storage.py"
+    ).read_text(encoding="utf-8")
+    assert '"community_id": ""' in storage
+    assert "community_id = uuid4().hex" in storage
+    assert "await self._store.async_save(self.data)" in storage
+
+
+def test_community_fingerprint_is_anonymous_and_version_scoped():
+    fingerprint = _load_method("community_fingerprint")
+    manager = SimpleNamespace(
+        storage=SimpleNamespace(data={"community_id": "local-secret-installation-id"})
+    )
+    version_one = fingerprint(manager, "it.heracomm.energy", 1)
+    version_two = fingerprint(manager, "it.heracomm.energy", 2)
+    assert len(version_one) == 64
+    assert version_one != version_two
+    assert "local-secret-installation-id" not in version_one
 
 
 def test_catalog_refresh_is_scheduled_daily_at_midnight():

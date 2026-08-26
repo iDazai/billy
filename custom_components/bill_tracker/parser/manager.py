@@ -6,9 +6,9 @@ import logging
 import re
 from datetime import datetime
 from typing import Any
-from uuid import uuid4
 
 import yaml
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_change
 
@@ -29,10 +29,17 @@ MAX_IMPORT_HISTORY = 500
 class ParserManager:
     """Own parser state while BillTrackerManager remains the owner of expenses."""
 
-    def __init__(self, hass: HomeAssistant, bill_manager, billy_version: str = "0.9.1") -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        bill_manager,
+        billy_version: str = "0.9.1",
+        config_entry: ConfigEntry | None = None,
+    ) -> None:
         self.hass = hass
         self.bill_manager = bill_manager
         self.billy_version = billy_version
+        self.config_entry = config_entry
         self.storage = ParserStorage(hass)
         self.catalog_client = ParserCatalogClient(hass)
         self.engine = ParserEngine()
@@ -44,6 +51,8 @@ class ParserManager:
 
     async def async_load(self) -> None:
         await self.storage.async_load()
+        if self._normalize_cached_catalog_country():
+            await self.storage.async_save()
         await self._reload_installed()
 
     async def async_start(self) -> None:
@@ -72,7 +81,7 @@ class ParserManager:
 
     @callback
     def _handle_catalog_refresh(self, _now) -> None:
-        """Refresh parser.json every day at local midnight without updating installed parsers."""
+        """Refresh the country catalog every day without updating installed parsers."""
         self.hass.async_create_task(self._async_scheduled_catalog_refresh())
 
     async def _async_scheduled_catalog_refresh(self) -> None:
@@ -163,18 +172,100 @@ class ParserManager:
             await self._record_error(envelope, prefetch_key, f"Unexpected error: {err}")
             return None
 
+    def catalog_country(self) -> str:
+        """Resolve the parser country from options, HA config, then legacy IT fallback."""
+        candidates: list[Any] = []
+        if self.config_entry is not None:
+            options = getattr(self.config_entry, "options", {}) or {}
+            data = getattr(self.config_entry, "data", {}) or {}
+            candidates.extend(
+                (
+                    options.get("parser_country"),
+                    options.get("country"),
+                    data.get("parser_country"),
+                    data.get("country"),
+                )
+            )
+        candidates.append(getattr(self.hass.config, "country", None))
+        for candidate in candidates:
+            country = self.catalog_client.normalize_country(candidate)
+            if country:
+                return country
+        return "IT"
+
+    def _normalize_cached_catalog_country(self) -> bool:
+        """Migrate the persisted global v1 catalog to the currently selected country."""
+        country = self.catalog_country()
+        changed = False
+        catalog = self.storage.data.get("catalog")
+        if isinstance(catalog, dict) and catalog.get("schema_version") in {1, 2}:
+            try:
+                normalized = self.catalog_client.normalize_stored_catalog(catalog, country)
+            except CatalogError:
+                normalized = {"country": country, "parsers": []}
+            if normalized != catalog:
+                self.storage.data["catalog"] = normalized
+                changed = True
+
+        cache = self.storage.data.get("catalog_cache")
+        if isinstance(cache, dict):
+            cached_country = self.catalog_client.normalize_country(cache.get("country"))
+            if cached_country and cached_country != country:
+                self.storage.data["catalog_cache"] = {
+                    "index": cache.get("index") if isinstance(cache.get("index"), dict) else {},
+                    "country": "",
+                    "path": "",
+                    "shard": {},
+                }
+                changed = True
+        return changed
+
+    def _stored_catalog_for_country(self, country: str) -> dict[str, Any]:
+        catalog = self.storage.data.get("catalog")
+        if not isinstance(catalog, dict) or not catalog.get("parsers"):
+            return {"country": country, "parsers": []}
+        try:
+            return self.catalog_client.normalize_stored_catalog(catalog, country)
+        except CatalogError:
+            return {"country": country, "parsers": []}
+
     async def async_refresh_catalog(self) -> dict[str, Any]:
-        catalog = await self.catalog_client.async_fetch_catalog()
+        country = self.catalog_country()
+        cache = self.storage.data.get("catalog_cache")
+        cache = cache if isinstance(cache, dict) else {}
+        previous = self._stored_catalog_for_country(country)
+        try:
+            catalog, next_cache, using_cache = await self.catalog_client.async_fetch_catalog(
+                country,
+                cache,
+            )
+        except CatalogError as err:
+            if previous.get("parsers"):
+                previous["using_cache"] = True
+                previous["refresh_error"] = str(err)
+                self.storage.data["catalog"] = previous
+                await self.storage.async_save()
+                return self.catalog_snapshot()
+            raise
+
+        catalog["using_cache"] = bool(using_cache)
+        catalog["refresh_error"] = (
+            "Remote catalog refresh failed; using cached catalog data"
+            if using_cache
+            else ""
+        )
         self.storage.data["catalog"] = {
             **catalog,
             "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
+        self.storage.data["catalog_cache"] = next_cache
         await self.storage.async_save()
         return self.catalog_snapshot()
 
     def catalog_snapshot(self) -> dict[str, Any]:
         """Return the remote catalog enriched with local installation state."""
-        catalog = dict(self.storage.data.get("catalog") or {})
+        country = self.catalog_country()
+        catalog = self._stored_catalog_for_country(country)
         installed = self.storage.data.get("installed", {})
         custom = self.storage.data.get("custom", {})
         rows: list[dict[str, Any]] = []
@@ -217,6 +308,13 @@ class ParserManager:
                     "deprecated": deprecated,
                     "catalog_status": str(row.get("catalog_status") or "experimental"),
                     "replacement": row.get("replacement"),
+                    "feedback_fingerprint": (
+                        self.community_fingerprint(
+                            parser_id, int(installed_version or remote_version)
+                        )
+                        if state
+                        else ""
+                    ),
                     "status": status,
                     "enabled": bool(state.get("enabled", True)) if state else False,
                     "category_id": state.get("category_id") if state else None,
@@ -233,6 +331,12 @@ class ParserManager:
                 continue
             parser = self.parsers.get(parser_id, {})
             metadata = parser.get("metadata", {}) if isinstance(parser, dict) else {}
+            installed_country = self.catalog_client.normalize_country(metadata.get("country"))
+            if installed_country and installed_country != country:
+                # Keep the parser installed and active, but do not mix another
+                # country's local parser into the selected catalog view.
+                continue
+            load_error = str(state.get("load_error") or "")
             rows.append(
                 {
                     "id": parser_id,
@@ -255,11 +359,11 @@ class ParserManager:
                     ),
                     "replacement": state.get("replacement"),
                     "removed_from_catalog": True,
-                    "status": "error" if state.get("load_error") else "removed",
+                    "status": "error" if load_error else "removed",
                     "enabled": bool(state.get("enabled", True)),
                     "category_id": state.get("category_id"),
                     "auto_import": bool(state.get("auto_import", False)),
-                    "load_error": str(state.get("load_error") or ""),
+                    "load_error": load_error,
                     "source": "official",
                 }
             )
@@ -280,7 +384,14 @@ class ParserManager:
         catalog["parsers"] = rows
         catalog["counts"] = counts
         catalog["custom_count"] = len(custom)
+        catalog["country"] = country
         return catalog
+
+    def community_fingerprint(self, parser_id: str, version: int) -> str:
+        """Return a parser-version-scoped anonymous installation fingerprint."""
+        community_id = str(self.storage.data.get("community_id") or "")
+        payload = f"{community_id}:{parser_id}:{int(version)}".encode()
+        return hashlib.sha256(payload).hexdigest()
 
     async def async_install(
         self,
@@ -296,10 +407,11 @@ class ParserManager:
             raise CatalogError(
                 "A custom parser with this ID already exists; remove it before installing the official parser"
             )
-        catalog = self.storage.data.get("catalog") or {}
+        country = self.catalog_country()
+        catalog = self._stored_catalog_for_country(country)
         if not catalog.get("parsers"):
             await self.async_refresh_catalog()
-            catalog = self.storage.data.get("catalog") or {}
+            catalog = self._stored_catalog_for_country(country)
         item = next((row for row in catalog.get("parsers", []) if row.get("id") == parser_id), None)
         if item is None:
             raise CatalogError("Parser not found in the remote catalog")

@@ -36,10 +36,10 @@ def test_frontend_and_manifest_use_rewrite_version():
     bootstrap = (FRONTEND / "bill-tracker-card.js").read_text(encoding="utf-8")
     implementation = (FRONTEND / "bill-tracker-card-impl.js").read_text(encoding="utf-8")
     manifest = (ROOT / "custom_components" / "bill_tracker" / "manifest.json").read_text(encoding="utf-8")
-    assert "BILLY_FRONTEND_VERSION = '0.9.1'" in bootstrap
-    assert "BILL_TRACKER_VERSION = '0.9.1'" in implementation
-    assert "./bill-tracker-i18n.js?v=0.9.1" in implementation
-    assert '"version": "0.9.1"' in manifest
+    assert "BILLY_FRONTEND_VERSION = '0.11.0'" in bootstrap
+    assert "BILL_TRACKER_VERSION = '0.11.0'" in implementation
+    assert "./bill-tracker-i18n.js?v=0.11.0" in implementation
+    assert '"version": "0.11.0"' in manifest
 
 
 def test_automatic_parsing_does_not_replace_lovelace_ui():
@@ -84,9 +84,10 @@ def test_billy_sidebar_panel_keeps_card_and_parser_manager():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
     for token in (
-        "billy-parser-manager.js?v=0.9.1",
+        "billy-parser-manager.js?v=0.11.0",
         '<billy-dashboard id="dashboard">',
         '<billy-bills id="bills-panel">',
+        '<billy-recurring id="recurring-panel">',
         '<billy-parser-manager id="parser-manager">',
         '<billy-settings id="settings-panel">',
         "customElements.define('billy-panel'",
@@ -121,6 +122,10 @@ def test_billy_panel_has_large_dashboard_and_native_settings():
         "categoryBreakdown",
         "upcomingBills",
         "recentBills",
+        "class BillyRecurring",
+        "bill_tracker/recurring/add",
+        "bill_tracker/recurring/update",
+        "bill_tracker/recurring/delete",
         "class BillySettings",
         "bill_tracker/category/add",
         "bill_tracker/category/update",
@@ -163,3 +168,40 @@ def test_bills_page_filters_and_flags_user_reimbursements():
     assert '"bill_tracker/set_reimbursement"' in init
     assert "async_set_reimbursement_done" in manager
     assert '"reimbursement_status": reimbursement["status"]' in manager
+
+
+def test_parser_manager_community_publish_flow():
+    manager = (FRONTEND / "billy-parser-manager.js").read_text(encoding="utf-8")
+    for token in (
+        "Publish Experimental",
+        "Pubblica Experimental",
+        "bill_tracker/parser/custom/export",
+        "billy-parser-submission:v1",
+        "github.com/robin994/billy-parser/issues/new",
+        "quality-experimental",
+        'id="quality"',
+    ):
+        assert token in manager
+
+
+def test_parser_tab_can_create_edit_export_and_test_custom_parsers():
+    panel = (FRONTEND / "billy-parser-manager.js").read_text(encoding="utf-8")
+    api = (ROOT / "custom_components" / "bill_tracker" / "parser_api.py").read_text(encoding="utf-8")
+    manager = (ROOT / "custom_components" / "bill_tracker" / "parser" / "manager.py").read_text(encoding="utf-8")
+    for token in (
+        'id="new-custom"',
+        "Nuovo parser custom",
+        "_openCustomEditor",
+        'id="custom-yaml"',
+        'id="custom-editor-test"',
+        'id="custom-editor-save"',
+        "bill_tracker/parser/custom/save",
+        "bill_tracker/parser/custom/export",
+        "bill_tracker/parser/test",
+        "edit-custom",
+        "export-custom",
+        "expected_parser_id",
+    ):
+        assert token in panel
+    assert 'vol.Optional("expected_parser_id"): str' in api
+    assert "Custom parser ID cannot be changed while editing" in manager

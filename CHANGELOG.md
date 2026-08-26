@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.11.0
+
+- Added a first-class **Recurring** tab to the Billy sidebar application for subscriptions, mortgages, installment plans and other predictable charges.
+- Recurring items support amount, billing frequency, activation date, optional expiration/renewal date, automatic renewal, renewal interval, provider, contract and notes.
+- Installment plans can define a total number of installments; Billy derives the final due date and exposes remaining installments and remaining committed amount.
+- Added pause/resume, edit, delete, search, kind and status filters for recurring items.
+- Exact recurring due months are merged into the standard forecast, while normalized forecast includes their monthly-equivalent cost.
+- Added recurring forecast totals to the Overview: monthly equivalent, next-month recurring charges, active recurring count and remaining installment commitment.
+- Upcoming expenses now include individual recurring charges alongside estimated provider bills.
+- Storage schema upgraded to v10 and persists recurring-expense rules independently from normal provider bills.
+- Preserved the Lovelace card and its unversioned `/bill_tracker/bill-tracker-card.js` resource.
+- Kept custom parser creation/edit/test/export/publish directly inside the Parser tab.
+
+## 0.10.1
+
+- Added custom parser authoring directly in the Billy Parser tab.
+- Added create/edit, validate/test, save, export, delete and Experimental publishing actions for local custom parsers.
+- Kept custom parser IDs immutable while editing to protect installed-parser identity.
+
+## 0.10.0
+
+- Added community Experimental parser publishing from Billy → Parser.
+- Custom parsers can open a pre-filled GitHub submission containing only parser YAML.
+- Added parser quality badges and filter: Verified, Tested, Experimental and Custom.
+- Experimental publishing does not upload invoices, email bodies or attachments.
+- Kept `/bill_tracker/bill-tracker-card.js` as the unversioned Lovelace resource.
+
 ## 0.9.1
 
 - Add a **User reimbursements** filter to the full Bills tab: all, pending/partial, reimbursed, or not applicable.

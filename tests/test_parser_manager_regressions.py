@@ -84,3 +84,10 @@ def test_catalog_refresh_is_scheduled_daily_at_midnight():
     assert "second=0" in source
     assert "self._unsubscribe_catalog_refresh()" in source
     assert "daily parser catalog refresh failed" in source
+
+
+def test_custom_parser_edit_locks_existing_parser_id():
+    source = MANAGER.read_text(encoding="utf-8")
+    assert "expected_parser_id: str | None = None" in source
+    assert "if expected_parser_id is not None and parser_id != expected_parser_id" in source
+    assert 'raise ValueError("Custom parser ID cannot be changed while editing")' in source

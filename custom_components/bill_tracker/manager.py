@@ -1,6 +1,7 @@
 """Persistent data model, bill splitting and forecasting for Bill Tracker."""
 from __future__ import annotations
 
+from calendar import monthrange
 from collections import defaultdict
 from copy import deepcopy
 from datetime import date, datetime
@@ -17,6 +18,8 @@ from .const import (
     DEFAULT_CATEGORIES,
     EVENT_UPDATED,
     FALLBACK_COLORS,
+    RECURRING_INTERVALS,
+    RECURRING_KINDS,
     STORAGE_KEY,
     STORAGE_SCHEMA_VERSION,
     STORAGE_VERSION,
@@ -45,6 +48,7 @@ class BillTrackerManager:
         self.categories: list[dict[str, Any]] = []
         self.payers: list[dict[str, Any]] = []
         self.settlements: list[dict[str, Any]] = []
+        self.recurring_expenses: list[dict[str, Any]] = []
 
     async def async_load(self) -> None:
         """Load and migrate the persistent database."""
@@ -53,6 +57,7 @@ class BillTrackerManager:
         self.expenses = [dict(x) for x in data.get("expenses", [])]
         self.payers = [dict(x) for x in data.get("payers", [])]
         self.settlements = [dict(x) for x in data.get("settlements", [])]
+        self.recurring_expenses = [dict(x) for x in data.get("recurring_expenses", [])]
 
         changed = False
         changed |= self._normalize_payers()
@@ -62,6 +67,7 @@ class BillTrackerManager:
         changed |= self._normalize_categories()
         changed |= self._migrate_expenses()
         changed |= self._migrate_settlements()
+        changed |= self._migrate_recurring_expenses()
         self._sort()
 
         if changed or data.get("schema_version") != STORAGE_SCHEMA_VERSION:
@@ -465,6 +471,119 @@ class BillTrackerManager:
         before = len(self.expenses)
         self.expenses = [x for x in self.expenses if x.get("id") != expense_id]
         changed = len(self.expenses) != before
+        if changed:
+            await self._save_and_notify()
+        return changed
+
+    # ------------------------------------------------------------------
+    # Recurring expenses (subscriptions, mortgages and installments)
+    # ------------------------------------------------------------------
+    def recurring_expense(self, recurring_id: str) -> dict[str, Any] | None:
+        return next((x for x in self.recurring_expenses if x.get("id") == recurring_id), None)
+
+    async def async_add_recurring(
+        self,
+        *,
+        name: str,
+        kind: str,
+        amount: float,
+        interval_months: int,
+        start_date: str,
+        end_date: str | None = None,
+        auto_renew: bool = False,
+        renewal_interval_months: int = 12,
+        installment_count: int | None = None,
+        provider: str = "",
+        contract: str = "",
+        note: str = "",
+        active: bool = True,
+    ) -> dict[str, Any]:
+        item = self._normalize_recurring_payload(
+            name=name,
+            kind=kind,
+            amount=amount,
+            interval_months=interval_months,
+            start_date=start_date,
+            end_date=end_date,
+            auto_renew=auto_renew,
+            renewal_interval_months=renewal_interval_months,
+            installment_count=installment_count,
+            provider=provider,
+            contract=contract,
+            note=note,
+            active=active,
+        )
+        item.update(
+            {
+                "id": uuid4().hex,
+                "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            }
+        )
+        self.recurring_expenses.append(item)
+        self._sort()
+        await self._save_and_notify()
+        return self._public_recurring_expense(item)
+
+    async def async_update_recurring(
+        self,
+        recurring_id: str,
+        *,
+        name: str,
+        kind: str,
+        amount: float,
+        interval_months: int,
+        start_date: str,
+        end_date: str | None = None,
+        auto_renew: bool = False,
+        renewal_interval_months: int = 12,
+        installment_count: int | None = None,
+        provider: str = "",
+        contract: str = "",
+        note: str = "",
+        active: bool = True,
+    ) -> dict[str, Any] | None:
+        current = self.recurring_expense(recurring_id)
+        if current is None:
+            return None
+        normalized = self._normalize_recurring_payload(
+            name=name,
+            kind=kind,
+            amount=amount,
+            interval_months=interval_months,
+            start_date=start_date,
+            end_date=end_date,
+            auto_renew=auto_renew,
+            renewal_interval_months=renewal_interval_months,
+            installment_count=installment_count,
+            provider=provider,
+            contract=contract,
+            note=note,
+            active=active,
+        )
+        current.update(normalized)
+        current["updated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        self._sort()
+        await self._save_and_notify()
+        return self._public_recurring_expense(current)
+
+    async def async_set_recurring_active(
+        self, recurring_id: str, active: bool
+    ) -> dict[str, Any] | None:
+        item = self.recurring_expense(recurring_id)
+        if item is None:
+            return None
+        item["active"] = bool(active)
+        item["updated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        self._sort()
+        await self._save_and_notify()
+        return self._public_recurring_expense(item)
+
+    async def async_delete_recurring(self, recurring_id: str) -> bool:
+        before = len(self.recurring_expenses)
+        self.recurring_expenses = [
+            x for x in self.recurring_expenses if x.get("id") != recurring_id
+        ]
+        changed = len(self.recurring_expenses) != before
         if changed:
             await self._save_and_notify()
         return changed
@@ -900,6 +1019,7 @@ class BillTrackerManager:
             "default_split": self.default_split(),
             "expenses": [self._public_expense(x) for x in self.expenses],
             "settlements": [self._public_settlement(x) for x in self.settlements],
+            "recurring_expenses": [self._public_recurring_expense(x) for x in self.recurring_expenses],
             "balances": self.balances(),
             "debts": self.debts(),
             "monthly": self.monthly_totals(),
@@ -946,15 +1066,19 @@ class BillTrackerManager:
         return self._rows_from_buckets(buckets, first, last)
 
     def forecast(self, months_ahead: int = 12) -> list[dict[str, Any]]:
+        """Forecast provider bills plus exact recurring-expense due months."""
         months_ahead = max(1, min(int(months_ahead), 24))
         today = date.today()
         start = self._next_month(today.year, today.month)
-        future_months = []
+        future_months: list[tuple[int, int]] = []
         y, m = start
         for _ in range(months_ahead):
             future_months.append((y, m))
             y, m = self._next_month(y, m)
-        buckets: dict[tuple[int, int], dict[str, float]] = defaultdict(lambda: defaultdict(float))
+
+        bill_buckets: dict[tuple[int, int], dict[str, float]] = defaultdict(
+            lambda: defaultdict(float)
+        )
         for category in self.categories:
             if not category.get("enabled", True):
                 continue
@@ -967,24 +1091,62 @@ class BillTrackerManager:
                 continue
             estimate = self._estimate_category_amount(history)
             interval = int(category["interval_months"])
-            due = self._add_months(int(history[-1]["paid_year"]), int(history[-1]["paid_month"]), interval)
+            due = self._add_months(
+                int(history[-1]["paid_year"]), int(history[-1]["paid_month"]), interval
+            )
             while due < start:
                 due = self._add_months(due[0], due[1], interval)
             end = future_months[-1]
             while due <= end:
-                buckets[due][cat_id] += estimate
+                bill_buckets[due][cat_id] += estimate
                 due = self._add_months(due[0], due[1], interval)
+
+        recurring_buckets: dict[tuple[int, int], dict[str, float]] = defaultdict(
+            lambda: defaultdict(float)
+        )
+        window_start = date(start[0], start[1], 1)
+        last_year, last_month = future_months[-1]
+        window_end = date(last_year, last_month, monthrange(last_year, last_month)[1])
+        for recurring in self.recurring_expenses:
+            if not bool(recurring.get("active", True)):
+                continue
+            for occurrence in self._recurring_occurrences_between(
+                recurring, window_start, window_end
+            ):
+                recurring_buckets[(occurrence.year, occurrence.month)][
+                    str(recurring.get("kind", "recurring"))
+                ] += float(recurring.get("amount", 0.0) or 0.0)
+
         rows = []
         for year, month in future_months:
-            by_category = self._named_category_values(buckets[(year, month)])
-            rows.append({"year": year, "month": month, "key": f"{year:04d}-{month:02d}", "total": round(sum(by_category.values()), 2), "categories": by_category})
+            by_category = self._named_category_values(bill_buckets[(year, month)])
+            recurring_by_kind = {
+                key: round(value, 2)
+                for key, value in recurring_buckets[(year, month)].items()
+                if value
+            }
+            bill_total = round(sum(by_category.values()), 2)
+            recurring_total = round(sum(recurring_by_kind.values()), 2)
+            rows.append(
+                {
+                    "year": year,
+                    "month": month,
+                    "key": f"{year:04d}-{month:02d}",
+                    "total": round(bill_total + recurring_total, 2),
+                    "bill_total": bill_total,
+                    "recurring_total": recurring_total,
+                    "categories": by_category,
+                    "recurring": recurring_by_kind,
+                }
+            )
         return rows
 
     def normalized_forecast(self, months_ahead: int = 12) -> list[dict[str, Any]]:
+        """Return monthly-equivalent forecast including recurring expenses."""
         months_ahead = max(1, min(int(months_ahead), 24))
         today = date.today()
         y, m = self._next_month(today.year, today.month)
-        recurring: dict[str, float] = {}
+        recurring_bills: dict[str, float] = {}
         for category in self.categories:
             if not category.get("enabled", True):
                 continue
@@ -994,22 +1156,106 @@ class BillTrackerManager:
                 key=lambda x: (int(x["paid_year"]), int(x["paid_month"])),
             )
             if history:
-                recurring[cat_id] = self._estimate_category_amount(history) / max(1, int(category["interval_months"]))
+                recurring_bills[cat_id] = self._estimate_category_amount(history) / max(
+                    1, int(category["interval_months"])
+                )
+
         rows = []
         for _ in range(months_ahead):
-            by_category = self._named_category_values(recurring)
-            rows.append({"year": y, "month": m, "key": f"{y:04d}-{m:02d}", "total": round(sum(by_category.values()), 2), "categories": by_category})
+            first_day = date(y, m, 1)
+            last_day = date(y, m, monthrange(y, m)[1])
+            recurring_by_kind: dict[str, float] = defaultdict(float)
+            for item in self.recurring_expenses:
+                if not bool(item.get("active", True)):
+                    continue
+                start_date = date.fromisoformat(str(item["start_date"]))
+                if start_date > last_day:
+                    continue
+                end_text = str(item.get("end_date") or "")
+                if end_text and not bool(item.get("auto_renew", False)):
+                    if date.fromisoformat(end_text) < first_day:
+                        continue
+                if self._next_recurring_due(item, first_day) is None:
+                    continue
+                recurring_by_kind[str(item.get("kind", "recurring"))] += (
+                    float(item.get("amount", 0.0) or 0.0)
+                    / max(1, int(item.get("interval_months", 1) or 1))
+                )
+            by_category = self._named_category_values(recurring_bills)
+            recurring_values = {
+                key: round(value, 2) for key, value in recurring_by_kind.items() if value
+            }
+            bill_total = round(sum(by_category.values()), 2)
+            recurring_total = round(sum(recurring_values.values()), 2)
+            rows.append(
+                {
+                    "year": y,
+                    "month": m,
+                    "key": f"{y:04d}-{m:02d}",
+                    "total": round(bill_total + recurring_total, 2),
+                    "bill_total": bill_total,
+                    "recurring_total": recurring_total,
+                    "categories": by_category,
+                    "recurring": recurring_values,
+                }
+            )
             y, m = self._next_month(y, m)
         return rows
 
     def upcoming(self, months_ahead: int = 12) -> list[dict[str, Any]]:
-        items = []
+        """Return upcoming estimated bills and exact recurring charge dates."""
+        items: list[dict[str, Any]] = []
         for row in self.forecast(months_ahead):
             for category_name, amount in row["categories"].items():
                 if amount <= 0:
                     continue
                 category = self.category_by_name(category_name)
-                items.append({"year": row["year"], "month": row["month"], "key": row["key"], "category_id": category.get("id") if category else None, "category": category_name, "amount": round(float(amount), 2)})
+                items.append(
+                    {
+                        "year": row["year"],
+                        "month": row["month"],
+                        "key": row["key"],
+                        "category_id": category.get("id") if category else None,
+                        "category": category_name,
+                        "amount": round(float(amount), 2),
+                        "source": "bill_forecast",
+                        "due_date": None,
+                    }
+                )
+
+        today = date.today()
+        first_year, first_month = self._next_month(today.year, today.month)
+        window_start = date(first_year, first_month, 1)
+        end_year, end_month = self._add_months(
+            first_year, first_month, max(0, months_ahead - 1)
+        )
+        window_end = date(end_year, end_month, monthrange(end_year, end_month)[1])
+        for recurring in self.recurring_expenses:
+            for occurrence in self._recurring_occurrences_between(
+                recurring, window_start, window_end
+            ):
+                items.append(
+                    {
+                        "year": occurrence.year,
+                        "month": occurrence.month,
+                        "key": f"{occurrence.year:04d}-{occurrence.month:02d}",
+                        "category_id": None,
+                        "category": str(recurring.get("name", "")),
+                        "amount": round(float(recurring.get("amount", 0.0) or 0.0), 2),
+                        "source": "recurring",
+                        "recurring_id": str(recurring.get("id", "")),
+                        "recurring_kind": str(recurring.get("kind", "recurring")),
+                        "due_date": occurrence.isoformat(),
+                    }
+                )
+        items.sort(
+            key=lambda row: (
+                int(row.get("year", 0)),
+                int(row.get("month", 0)),
+                str(row.get("due_date") or f"{int(row.get('year', 0)):04d}-{int(row.get('month', 0)):02d}-99"),
+                str(row.get("category", "")).casefold(),
+            )
+        )
         return items
 
     def contract_savings(self) -> list[dict[str, Any]]:
@@ -1119,6 +1365,19 @@ class BillTrackerManager:
             2,
         )
         reimbursement_total = round(sum(float(x["amount"]) for x in debts), 2)
+        public_recurring = [self._public_recurring_expense(x) for x in self.recurring_expenses]
+        active_recurring = [x for x in public_recurring if x.get("status") == "active"]
+        recurring_monthly_equivalent = round(
+            sum(float(x.get("monthly_equivalent", 0.0) or 0.0) for x in active_recurring), 2
+        )
+        installment_remaining_total = round(
+            sum(
+                float(x.get("remaining_amount", 0.0) or 0.0)
+                for x in active_recurring
+                if x.get("kind") == "installment" and x.get("remaining_amount") is not None
+            ),
+            2,
+        )
         return {
             "current_month": round(float(current["total"]), 2) if current else 0.0,
             "average_6_months": avg6,
@@ -1133,11 +1392,204 @@ class BillTrackerManager:
             "outstanding_total": unpaid_total,
             "unpaid_total": unpaid_total,
             "reimbursement_total": reimbursement_total,
+            "active_recurring": len(active_recurring),
+            "recurring_monthly_equivalent": recurring_monthly_equivalent,
+            "recurring_next_month": (
+                round(float(future[0].get("recurring_total", 0.0) or 0.0), 2) if future else 0.0
+            ),
+            "installment_remaining_total": installment_remaining_total,
         }
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    def _normalize_recurring_payload(
+        self,
+        *,
+        name: str,
+        kind: str,
+        amount: float,
+        interval_months: int,
+        start_date: str,
+        end_date: str | None,
+        auto_renew: bool,
+        renewal_interval_months: int,
+        installment_count: int | None,
+        provider: str,
+        contract: str,
+        note: str,
+        active: bool,
+    ) -> dict[str, Any]:
+        normalized_name = self._normalize_optional_text(name, 120)
+        if not normalized_name:
+            raise ValueError("Il nome della spesa ricorrente è obbligatorio")
+        normalized_kind = str(kind or "").strip().lower()
+        if normalized_kind not in RECURRING_KINDS:
+            raise ValueError("Tipo di spesa ricorrente non valido")
+        normalized_amount = float(amount)
+        if not isfinite(normalized_amount) or normalized_amount <= 0:
+            raise ValueError("L'importo della spesa ricorrente deve essere maggiore di zero")
+        normalized_interval = int(interval_months)
+        if normalized_interval not in RECURRING_INTERVALS:
+            raise ValueError("Frequenza della spesa ricorrente non supportata")
+        normalized_start = self._normalize_optional_iso_date(start_date)
+        if not normalized_start:
+            raise ValueError("La data di attivazione è obbligatoria")
+        normalized_end = self._normalize_optional_iso_date(end_date)
+        start = date.fromisoformat(normalized_start)
+        end = date.fromisoformat(normalized_end) if normalized_end else None
+        if end is not None and end < start:
+            raise ValueError("La data di scadenza non può precedere la data di attivazione")
+
+        renewal_interval = int(renewal_interval_months or 12)
+        if renewal_interval < 1 or renewal_interval > 120:
+            raise ValueError("Intervallo di rinnovo non valido")
+
+        normalized_installments: int | None = None
+        if installment_count not in (None, ""):
+            normalized_installments = int(installment_count)
+            if normalized_installments < 1 or normalized_installments > 1200:
+                raise ValueError("Numero di rate non valido")
+        if normalized_kind != "installment":
+            normalized_installments = None
+        if normalized_kind == "installment":
+            auto_renew = False
+            if normalized_installments:
+                end = self._add_months_date(
+                    start, (normalized_installments - 1) * normalized_interval
+                )
+                normalized_end = end.isoformat()
+
+        return {
+            "name": normalized_name,
+            "kind": normalized_kind,
+            "amount": round(normalized_amount, 2),
+            "interval_months": normalized_interval,
+            "start_date": normalized_start,
+            "end_date": normalized_end,
+            "auto_renew": bool(auto_renew),
+            "renewal_interval_months": renewal_interval,
+            "installment_count": normalized_installments,
+            "provider": self._normalize_optional_text(provider, 120),
+            "contract": self._normalize_optional_text(contract, 120),
+            "note": self._normalize_optional_text(note, 1000),
+            "active": bool(active),
+        }
+
+    @staticmethod
+    def _add_months_date(value: date, months: int) -> date:
+        absolute = value.year * 12 + (value.month - 1) + int(months)
+        year, month_zero = divmod(absolute, 12)
+        month = month_zero + 1
+        day = min(value.day, monthrange(year, month)[1])
+        return date(year, month, day)
+
+    def _recurring_occurrence(self, item: dict[str, Any], index: int) -> date | None:
+        if index < 0:
+            return None
+        count = item.get("installment_count")
+        if count is not None and index >= int(count):
+            return None
+        start = date.fromisoformat(str(item["start_date"]))
+        occurrence = self._add_months_date(
+            start, index * int(item.get("interval_months", 1) or 1)
+        )
+        end_text = str(item.get("end_date") or "")
+        if end_text and not bool(item.get("auto_renew", False)):
+            if occurrence > date.fromisoformat(end_text):
+                return None
+        return occurrence
+
+    def _next_recurring_due(
+        self, item: dict[str, Any], on_or_after: date
+    ) -> date | None:
+        start = date.fromisoformat(str(item["start_date"]))
+        interval = max(1, int(item.get("interval_months", 1) or 1))
+        if on_or_after <= start:
+            index = 0
+        else:
+            months = (on_or_after.year - start.year) * 12 + on_or_after.month - start.month
+            index = max(0, months // interval - 1)
+        for _ in range(0, 1202):
+            occurrence = self._recurring_occurrence(item, index)
+            if occurrence is None:
+                return None
+            if occurrence >= on_or_after:
+                return occurrence
+            index += 1
+        return None
+
+    def _recurring_occurrences_between(
+        self, item: dict[str, Any], start: date, end: date
+    ) -> list[date]:
+        if not bool(item.get("active", True)) or end < start:
+            return []
+        occurrence = self._next_recurring_due(item, start)
+        if occurrence is None:
+            return []
+        interval = max(1, int(item.get("interval_months", 1) or 1))
+        base = date.fromisoformat(str(item["start_date"]))
+        months = (occurrence.year - base.year) * 12 + occurrence.month - base.month
+        index = max(0, months // interval)
+        result: list[date] = []
+        while occurrence is not None and occurrence <= end and len(result) < 1200:
+            result.append(occurrence)
+            index += 1
+            occurrence = self._recurring_occurrence(item, index)
+        return result
+
+    def _recurring_progress(self, item: dict[str, Any], today: date) -> tuple[int, int | None]:
+        count = item.get("installment_count")
+        if count is None:
+            return 0, None
+        total = int(count)
+        elapsed = 0
+        for index in range(total):
+            occurrence = self._recurring_occurrence(item, index)
+            if occurrence is None or occurrence >= today:
+                break
+            elapsed += 1
+        return elapsed, max(0, total - elapsed)
+
+    def _next_renewal_date(self, item: dict[str, Any], today: date) -> str | None:
+        if not bool(item.get("auto_renew", False)) or not item.get("end_date"):
+            return None
+        renewal = date.fromisoformat(str(item["end_date"]))
+        step = max(1, int(item.get("renewal_interval_months", 12) or 12))
+        while renewal < today:
+            renewal = self._add_months_date(renewal, step)
+        return renewal.isoformat()
+
+    def _public_recurring_expense(self, item: dict[str, Any]) -> dict[str, Any]:
+        today = date.today()
+        next_due = self._next_recurring_due(item, today) if item.get("active", True) else None
+        elapsed, remaining = self._recurring_progress(item, today)
+        status = "active"
+        if not bool(item.get("active", True)):
+            status = "inactive"
+        elif next_due is None:
+            status = "ended"
+        remaining_amount = (
+            round(float(item.get("amount", 0.0) or 0.0) * remaining, 2)
+            if remaining is not None
+            else None
+        )
+        return {
+            **dict(item),
+            "currency": self.currency,
+            "status": status,
+            "next_due_date": next_due.isoformat() if next_due else None,
+            "next_renewal_date": self._next_renewal_date(item, today),
+            "monthly_equivalent": round(
+                float(item.get("amount", 0.0) or 0.0)
+                / max(1, int(item.get("interval_months", 1) or 1)),
+                2,
+            ),
+            "installments_elapsed": elapsed if remaining is not None else None,
+            "remaining_installments": remaining,
+            "remaining_amount": remaining_amount,
+        }
+
     def _expense_reimbursement_state(self, item: dict[str, Any]) -> dict[str, Any]:
         """Return the reimbursement state for one bill, independently from provider payment."""
         creditor = str(item.get("payer_id") or "")
@@ -1533,6 +1985,49 @@ class BillTrackerManager:
         self.settlements = migrated
         return changed
 
+    def _migrate_recurring_expenses(self) -> bool:
+        changed = False
+        migrated: list[dict[str, Any]] = []
+        for raw in self.recurring_expenses:
+            try:
+                normalized = self._normalize_recurring_payload(
+                    name=str(raw.get("name", "")),
+                    kind=str(raw.get("kind", "recurring")),
+                    amount=float(raw.get("amount", 0.0) or 0.0),
+                    interval_months=int(raw.get("interval_months", 1) or 1),
+                    start_date=str(raw.get("start_date", "")),
+                    end_date=str(raw.get("end_date") or "") or None,
+                    auto_renew=bool(raw.get("auto_renew", False)),
+                    renewal_interval_months=int(raw.get("renewal_interval_months", 12) or 12),
+                    installment_count=(
+                        int(raw["installment_count"])
+                        if raw.get("installment_count") not in (None, "")
+                        else None
+                    ),
+                    provider=str(raw.get("provider", "")),
+                    contract=str(raw.get("contract", "")),
+                    note=str(raw.get("note", "")),
+                    active=bool(raw.get("active", True)),
+                )
+            except (ValueError, TypeError, OverflowError):
+                changed = True
+                continue
+            item = {
+                "id": str(raw.get("id") or uuid4().hex),
+                **normalized,
+                "created_at": str(
+                    raw.get("created_at")
+                    or datetime.now().astimezone().isoformat(timespec="seconds")
+                ),
+            }
+            if raw.get("updated_at"):
+                item["updated_at"] = str(raw.get("updated_at"))
+            if item != raw:
+                changed = True
+            migrated.append(item)
+        self.recurring_expenses = migrated
+        return changed
+
     async def _save_and_notify(self) -> None:
         await self._save()
         self.hass.bus.async_fire(EVENT_UPDATED)
@@ -1545,12 +2040,14 @@ class BillTrackerManager:
                 "payers": self.payers,
                 "expenses": self.expenses,
                 "settlements": self.settlements,
+                "recurring_expenses": self.recurring_expenses,
             }
         )
 
     def _sort(self) -> None:
         self.expenses.sort(key=lambda x: (int(x.get("paid_year", 0)), int(x.get("paid_month", 0)), str(x.get("created_at", ""))), reverse=True)
         self.settlements.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+        self.recurring_expenses.sort(key=lambda x: (not bool(x.get("active", True)), str(x.get("name", "")).casefold()))
 
     def _validate_optional_payer(self, payer_id: str | None) -> str | None:
         value = str(payer_id or "")

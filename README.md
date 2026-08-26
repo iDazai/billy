@@ -1,3 +1,31 @@
+## Billy 0.11.0
+
+Billy keeps the Lovelace `custom:bill-tracker-card`, while `/billy` is the full-size application.
+
+### Recurring expenses
+
+The new **Ricorrenti / Recurring** tab tracks predictable costs that normally do not arrive as a monthly invoice email: subscriptions, mortgages, installment plans and other fixed recurring charges. Each rule can define an amount, cadence (monthly, every 2/3/4/6 months or yearly), activation date, optional expiration/renewal date, automatic renewal, provider/contract metadata and notes.
+
+Installment plans can also define a total installment count. Billy calculates the final due date, how many installments remain and the remaining committed amount. Recurring rules can be paused, resumed, edited or deleted without creating fake provider invoices in bill history.
+
+Recurring charges are included in the regular **forecast** on their exact due months. The normalized forecast also includes their monthly-equivalent cost, so an annual subscription contributes `amount / 12` to the normalized monthly planning view. Overview now shows recurring monthly equivalent, charges due next month, active recurring count and remaining installment commitment.
+
+Provider bills and recurring rules remain separate concepts: a recurring rule predicts a cost; it does not mark a provider invoice as paid and it is not an email-parser result.
+
+### Parser authoring in Billy
+
+The **Parser** tab can create a new local custom parser, edit it, validate/test it against optional email metadata, export it and publish its YAML as an Experimental community submission. No invoice PDF, email body or attachment is uploaded by the publish action.
+
+### Main sidebar areas
+
+- **Panoramica / Overview** — full-width dashboard, forecasts, reimbursements and recurring commitments.
+- **Bollette / Bills** — complete provider-bill history with manual CRUD, payment status and user-reimbursement status.
+- **Ricorrenti / Recurring** — subscriptions, mortgages, installments and predictable scheduled costs.
+- **Parser** — catalog plus local custom parser authoring and Experimental publishing.
+- **Impostazioni / Settings** — bill types, payers, IMAP sources, system status and developer/support links.
+
+The Lovelace resource remains `/bill_tracker/bill-tracker-card.js` without a version query string.
+
 ## Billy 0.9.1
 
 Billy keeps the Lovelace `custom:bill-tracker-card`, while the `/billy` sidebar panel is the full-size application.
@@ -81,3 +109,9 @@ See `docs/AUTOMATIC_PARSING.md` for parser setup and privacy details.
 ## Billy sidebar panel
 
 Billy 0.7.0 adds a sidebar panel at `/billy` while keeping `custom:bill-tracker-card` available for Lovelace dashboards. The panel reuses the existing bill UI and includes scalable parser management in the same application surface.
+
+## Community parser publishing
+
+Billy's Parser page can publish a locally saved custom parser to the community catalog as **Experimental**. Billy opens a pre-filled GitHub issue containing only the declarative YAML. The repository workflow validates it and can publish it automatically without maintainer approval. Parser quality is shown as Verified, Tested or Experimental in the catalog.
+
+Experimental ownership comes from the GitHub issue author; community submissions cannot overwrite official/tested/verified parsers or another contributor's experimental parser.

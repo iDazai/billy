@@ -77,6 +77,7 @@ async def ws_parser_refresh(hass, connection, msg):
         vol.Required("type"): "bill_tracker/parser/install",
         vol.Required("parser_id"): str,
         vol.Required("category_id"): str,
+        vol.Optional("expected_parser_id"): str,
         vol.Optional("enabled", default=True): bool,
         vol.Optional("auto_import", default=False): bool,
     }
@@ -148,6 +149,7 @@ async def ws_parser_custom_save(hass, connection, msg):
         result = await _manager(hass).async_save_custom(
             msg["content"],
             category_id=msg["category_id"],
+            expected_parser_id=msg.get("expected_parser_id"),
             enabled=msg["enabled"],
             auto_import=msg["auto_import"],
         )

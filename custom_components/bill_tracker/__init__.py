@@ -23,7 +23,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, FRONTEND_VERSION, SUPPORTED_INTERVALS
+from .const import (
+    DOMAIN,
+    FRONTEND_VERSION,
+    RECURRING_INTERVALS,
+    RECURRING_KINDS,
+    SUPPORTED_INTERVALS,
+)
 from .manager import BillTrackerManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -103,6 +109,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ws_update,
         ws_set_paid,
         ws_set_reimbursement,
+        ws_recurring_add,
+        ws_recurring_update,
+        ws_recurring_set_active,
+        ws_recurring_delete,
         ws_category_add,
         ws_category_update,
         ws_category_delete,
@@ -330,6 +340,118 @@ async def ws_set_reimbursement(hass, connection, msg):
 async def ws_delete(hass, connection, msg):
     try:
         deleted = await _manager(hass).async_delete(msg["expense_id"])
+    except RuntimeError as err:
+        connection.send_error(msg["id"], "not_configured", str(err))
+        return
+    connection.send_result(msg["id"], {"deleted": deleted})
+
+
+_RECURRING_COMMON = {
+    vol.Required("name"): str,
+    vol.Required("kind"): vol.In(RECURRING_KINDS),
+    vol.Required("amount"): vol.Coerce(float),
+    vol.Required("interval_months"): vol.In(RECURRING_INTERVALS),
+    vol.Required("start_date"): str,
+    vol.Optional("end_date", default=""): str,
+    vol.Optional("auto_renew", default=False): bool,
+    vol.Optional("renewal_interval_months", default=12): vol.All(
+        vol.Coerce(int), vol.Range(min=1, max=120)
+    ),
+    vol.Optional("installment_count"): vol.All(
+        vol.Coerce(int), vol.Range(min=1, max=1200)
+    ),
+    vol.Optional("provider", default=""): str,
+    vol.Optional("contract", default=""): str,
+    vol.Optional("note", default=""): str,
+    vol.Optional("active", default=True): bool,
+}
+
+
+def _recurring_kwargs(msg):
+    return {
+        "name": msg["name"],
+        "kind": msg["kind"],
+        "amount": msg["amount"],
+        "interval_months": msg["interval_months"],
+        "start_date": msg["start_date"],
+        "end_date": msg.get("end_date") or None,
+        "auto_renew": msg.get("auto_renew", False),
+        "renewal_interval_months": msg.get("renewal_interval_months", 12),
+        "installment_count": msg.get("installment_count"),
+        "provider": msg.get("provider", ""),
+        "contract": msg.get("contract", ""),
+        "note": msg.get("note", ""),
+        "active": msg.get("active", True),
+    }
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "bill_tracker/recurring/add", **_RECURRING_COMMON}
+)
+@websocket_api.async_response
+async def ws_recurring_add(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_add_recurring(**_recurring_kwargs(msg))
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_recurring", str(err))
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/recurring/update",
+        vol.Required("recurring_id"): str,
+        **_RECURRING_COMMON,
+    }
+)
+@websocket_api.async_response
+async def ws_recurring_update(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_update_recurring(
+            msg["recurring_id"], **_recurring_kwargs(msg)
+        )
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_recurring", str(err))
+        return
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Spesa ricorrente non trovata")
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/recurring/set_active",
+        vol.Required("recurring_id"): str,
+        vol.Required("active"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_recurring_set_active(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_set_recurring_active(
+            msg["recurring_id"], msg["active"]
+        )
+    except RuntimeError as err:
+        connection.send_error(msg["id"], "not_configured", str(err))
+        return
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Spesa ricorrente non trovata")
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/recurring/delete",
+        vol.Required("recurring_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_recurring_delete(hass, connection, msg):
+    try:
+        deleted = await _manager(hass).async_delete_recurring(msg["recurring_id"])
     except RuntimeError as err:
         connection.send_error(msg["id"], "not_configured", str(err))
         return

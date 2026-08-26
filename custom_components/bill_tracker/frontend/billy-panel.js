@@ -1,11 +1,12 @@
-import './billy-parser-manager.js?v=0.9.1'
+import './billy-parser-manager.js?v=0.11.0'
 
-const BILLY_PANEL_VERSION = '0.9.1'
+const BILLY_PANEL_VERSION = '0.11.0'
 
 const TEXT = {
   en: {
     dashboard: 'Overview',
     bills: 'Bills',
+    recurring: 'Recurring',
     parsers: 'Parsers',
     settings: 'Settings',
     subtitle: 'Bills, forecasts and automatic parsing in one place.',
@@ -77,6 +78,42 @@ const TEXT = {
     editBill: 'Edit bill',
     deleteBillConfirm: 'Delete this bill?',
     saveBill: 'Save bill',
+    recurringTitle: 'Recurring expenses',
+    recurringSubtitle: 'Subscriptions, mortgages, installments and other predictable charges that make forecasts more accurate.',
+    addRecurring: 'Add recurring expense',
+    searchRecurring: 'Search recurring expenses…',
+    allRecurringKinds: 'All types',
+    allRecurringStatuses: 'All statuses',
+    recurringActive: 'Active',
+    recurringInactive: 'Paused',
+    recurringEnded: 'Ended',
+    subscription: 'Subscription',
+    mortgage: 'Mortgage',
+    installment: 'Installment plan',
+    recurringGeneric: 'Other recurring',
+    activationDate: 'Activation / first charge',
+    expirationDate: 'Expiration / renewal date',
+    automaticRenewal: 'Automatic renewal',
+    renewalEvery: 'Renewal every',
+    installmentCount: 'Total installments',
+    installmentCountHint: 'For installment plans, the last due date is calculated from the number of installments.',
+    nextCharge: 'Next charge',
+    nextRenewal: 'Next renewal',
+    monthlyEquivalent: 'Monthly equivalent',
+    remainingInstallments: 'installments remaining',
+    remainingCommitment: 'Remaining installments',
+    pause: 'Pause',
+    resume: 'Resume',
+    deleteRecurringConfirm: 'Delete this recurring expense?',
+    noRecurring: 'No recurring expenses match these filters.',
+    recurringForecastHelp: 'Recurring expenses are forecast rules. They do not mark a provider bill as paid and are not imported from email.',
+    recurringOverview: 'Recurring commitments',
+    recurringOverviewHelp: 'Subscriptions, mortgages and installments are included in Billy forecasts even when no monthly email exists.',
+    recurringMonthly: 'Monthly equivalent',
+    recurringNextMonth: 'Due next month',
+    recurringActiveCount: 'Active recurring',
+    installmentsRemainingValue: 'Installments remaining',
+    manageRecurring: 'Manage recurring',
     settingsTitle: 'Billy settings',
     settingsSubtitle: 'Manage bill types, payers and automatic parsing without leaving Billy.',
     billTypes: 'Bill types',
@@ -143,6 +180,7 @@ const TEXT = {
   it: {
     dashboard: 'Panoramica',
     bills: 'Bollette',
+    recurring: 'Ricorrenti',
     parsers: 'Parser',
     settings: 'Impostazioni',
     subtitle: 'Bollette, previsioni e parsing automatico in un unico posto.',
@@ -214,6 +252,42 @@ const TEXT = {
     editBill: 'Modifica bolletta',
     deleteBillConfirm: 'Eliminare questa bolletta?',
     saveBill: 'Salva bolletta',
+    recurringTitle: 'Spese ricorrenti',
+    recurringSubtitle: 'Abbonamenti, mutui, rate e altre spese prevedibili che rendono il previsionale più preciso.',
+    addRecurring: 'Aggiungi spesa ricorrente',
+    searchRecurring: 'Cerca spese ricorrenti…',
+    allRecurringKinds: 'Tutte le tipologie',
+    allRecurringStatuses: 'Tutti gli stati',
+    recurringActive: 'Attiva',
+    recurringInactive: 'In pausa',
+    recurringEnded: 'Terminata',
+    subscription: 'Abbonamento',
+    mortgage: 'Mutuo',
+    installment: 'Rateizzazione',
+    recurringGeneric: 'Altra ricorrente',
+    activationDate: 'Attivazione / prima scadenza',
+    expirationDate: 'Scadenza / data rinnovo',
+    automaticRenewal: 'Rinnovo automatico',
+    renewalEvery: 'Rinnovo ogni',
+    installmentCount: 'Numero totale rate',
+    installmentCountHint: 'Per le rateizzazioni Billy calcola l’ultima scadenza dal numero totale di rate.',
+    nextCharge: 'Prossimo addebito',
+    nextRenewal: 'Prossimo rinnovo',
+    monthlyEquivalent: 'Equivalente mensile',
+    remainingInstallments: 'rate rimanenti',
+    remainingCommitment: 'Rate residue',
+    pause: 'Metti in pausa',
+    resume: 'Riattiva',
+    deleteRecurringConfirm: 'Eliminare questa spesa ricorrente?',
+    noRecurring: 'Nessuna spesa ricorrente corrisponde ai filtri.',
+    recurringForecastHelp: 'Le spese ricorrenti sono regole previsionali: non indicano che una bolletta al fornitore sia stata pagata e non dipendono dalle email.',
+    recurringOverview: 'Impegni ricorrenti',
+    recurringOverviewHelp: 'Abbonamenti, mutui e rate entrano nelle previsioni Billy anche quando non esiste una mail mensile.',
+    recurringMonthly: 'Equivalente mensile',
+    recurringNextMonth: 'In scadenza il prossimo mese',
+    recurringActiveCount: 'Ricorrenti attive',
+    installmentsRemainingValue: 'Rate residue',
+    manageRecurring: 'Gestisci ricorrenti',
     settingsTitle: 'Impostazioni Billy',
     settingsSubtitle: 'Gestisci tipologie, pagatori e parsing automatico senza uscire da Billy.',
     billTypes: 'Tipologie bolletta',
@@ -557,7 +631,7 @@ class BillyDashboard extends HTMLElement {
     if (!rows.length) return `<div class="empty">${escapeHtml(this._t('noUpcoming'))}</div>`
     return `<div class="compact-list">${rows
       .map(row => `<div class="compact-row">
-        <div><strong>${escapeHtml(row.category || '')}</strong><small>${escapeHtml(this._monthLabel(row, false))}</small></div>
+        <div><strong>${escapeHtml(row.category || '')}</strong><small>${escapeHtml(row.source === 'recurring' && row.due_date ? `${row.recurring_kind === 'subscription' ? this._t('subscription') : row.recurring_kind === 'mortgage' ? this._t('mortgage') : row.recurring_kind === 'installment' ? this._t('installment') : this._t('recurringGeneric')} · ${this._date(row.due_date)}` : this._monthLabel(row, false))}</small></div>
         <b>${escapeHtml(this._money(row.amount))}</b>
       </div>`)
       .join('')}</div>`
@@ -584,6 +658,28 @@ class BillyDashboard extends HTMLElement {
         </div>`
       })
       .join('')}</div>`
+  }
+
+  _recurringOverview () {
+    const summary = this._data?.summary || {}
+    const rows = (this._data?.recurring_expenses || [])
+      .filter(row => row.status === 'active')
+      .slice()
+      .sort((a, b) => String(a.next_due_date || '9999').localeCompare(String(b.next_due_date || '9999')))
+      .slice(0, 5)
+    const list = rows.length
+      ? `<div class="recurring-overview-list">${rows.map(row => `<div class="recurring-overview-row"><div><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(`${row.kind === 'subscription' ? this._t('subscription') : row.kind === 'mortgage' ? this._t('mortgage') : row.kind === 'installment' ? this._t('installment') : this._t('recurringGeneric')} · ${this._t('nextCharge')}: ${this._date(row.next_due_date)}`)}</small></div><b>${escapeHtml(this._money(row.amount))}</b></div>`).join('')}</div>`
+      : `<div class="empty">${escapeHtml(this._t('noRecurring'))}</div>`
+    return `<article class="panel recurring-overview-panel">
+      <div class="panel-head"><div><h2>${escapeHtml(this._t('recurringOverview'))}</h2><p>${escapeHtml(this._t('recurringOverviewHelp'))}</p></div><button class="secondary small" data-nav="recurring">${escapeHtml(this._t('manageRecurring'))}</button></div>
+      <div class="recurring-stats">
+        <div><span>${escapeHtml(this._t('recurringMonthly'))}</span><strong>${escapeHtml(this._money(summary.recurring_monthly_equivalent))}</strong></div>
+        <div><span>${escapeHtml(this._t('recurringNextMonth'))}</span><strong>${escapeHtml(this._money(summary.recurring_next_month))}</strong></div>
+        <div><span>${escapeHtml(this._t('recurringActiveCount'))}</span><strong>${Number(summary.active_recurring || 0)}</strong></div>
+        <div><span>${escapeHtml(this._t('installmentsRemainingValue'))}</span><strong>${escapeHtml(this._money(summary.installment_remaining_total))}</strong></div>
+      </div>
+      ${list}
+    </article>`
   }
 
   _reimbursements () {
@@ -715,6 +811,7 @@ class BillyDashboard extends HTMLElement {
             <button class="secondary full" data-nav="parsers">${escapeHtml(this._t('viewParsers'))}</button>
           </article>
         </div>
+        ${this._recurringOverview()}
         ${this._reimbursements()}
       </div>
     `
@@ -737,9 +834,9 @@ class BillyDashboard extends HTMLElement {
 
   _styles () {
     return `
-      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.dashboard{display:flex;flex-direction:column;gap:20px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:4px 2px 2px}.hero h1{font-size:30px;line-height:1.1;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.hero-actions{display:flex;gap:10px}.primary,.secondary,.error-card button{appearance:none;border-radius:10px;padding:10px 15px;font:inherit;font-weight:650;cursor:pointer}.primary{border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.kpi{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:center;min-width:0}.kpi ha-icon{color:var(--primary-color);--mdc-icon-size:24px}.kpi div{display:flex;flex-direction:column;gap:4px;min-width:0}.kpi span{font-size:12px;color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi strong{font-size:20px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.panel{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;padding:18px;min-width:0}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.panel-head h2{font-size:18px;margin:0}.panel-head p{font-size:12px;color:var(--secondary-text-color);margin:4px 0 0}.grid-main{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(300px,.9fr);gap:16px}.grid-bottom{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(380px,1.5fr) minmax(260px,.7fr);gap:16px}.chart-scroll{overflow:auto hidden}.chart-scroll svg{display:block;width:100%;min-width:720px;height:auto}.grid{stroke:var(--divider-color);stroke-width:1}.axis,.month{fill:var(--secondary-text-color);font-size:11px}.forecast-label{font-style:italic}.actual-bar{fill:var(--primary-color)}.forecast-bar{fill:var(--primary-color);opacity:.22;stroke:var(--primary-color);stroke-width:1.5;stroke-dasharray:4 3}.legend{display:flex;gap:14px;color:var(--secondary-text-color);font-size:12px}.legend span{display:flex;align-items:center;gap:6px}.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}.actual-dot{background:var(--primary-color)}.forecast-dot{background:color-mix(in srgb,var(--primary-color) 25%,transparent);border:1px dashed var(--primary-color)}.breakdown-list{display:flex;flex-direction:column;gap:14px}.breakdown-row{display:flex;flex-direction:column;gap:7px}.breakdown-head{display:flex;justify-content:space-between;gap:12px;font-size:13px}.breakdown-head span{display:flex;align-items:center;gap:8px;min-width:0}.breakdown-head i{width:10px;height:10px;border-radius:50%;flex:none}.breakdown-head strong{font-size:13px}.meter{height:7px;border-radius:99px;background:var(--secondary-background-color);overflow:hidden}.meter span{display:block;height:100%;border-radius:99px}.compact-list,.recent-list{display:flex;flex-direction:column}.compact-row,.recent-row{border-top:1px solid var(--divider-color);padding:12px 0}.compact-row:first-child,.recent-row:first-child{border-top:0;padding-top:2px}.compact-row{display:flex;justify-content:space-between;align-items:center;gap:16px}.compact-row div{display:flex;flex-direction:column;gap:3px}.compact-row small,.recent-row small{color:var(--secondary-text-color)}.recent-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:12px}.recent-row>i{width:10px;height:36px;border-radius:99px}.recent-main,.recent-value{display:flex;flex-direction:column;gap:3px}.recent-value{align-items:flex-end}.pill{font-size:10px;padding:2px 7px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.pill.ok{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 12%,transparent)}.pill.warn{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.parser-health{display:flex;flex-direction:column}.parser-stat{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--divider-color);font-size:13px}.parser-stat strong{font-size:18px}.attention{color:var(--warning-color,#f9a825)!important}.parser-message{font-size:12px;color:var(--secondary-text-color);padding:14px 0}.full{width:100%;margin-top:auto}.reimbursements-panel{display:flex;flex-direction:column;gap:4px}.reimbursement-list{display:flex;flex-direction:column}.reimbursement-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:16px;align-items:center;padding:13px 0;border-top:1px solid var(--divider-color)}.reimbursement-row:first-child{border-top:0}.reimbursement-main{display:flex;flex-direction:column;gap:3px}.reimbursement-main small,.history-row small{color:var(--secondary-text-color)}.reimbursement-actions{display:flex;gap:8px;align-items:center}.small{padding:7px 10px;font-size:12px}.paypal{display:inline-flex;align-items:center;justify-content:center;border-radius:10px;padding:8px 11px;background:#0070ba;color:white;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap}.reimbursement-empty{padding:16px;border-radius:12px;background:color-mix(in srgb,var(--success-color,#2e7d32) 10%,transparent);color:var(--success-color,#2e7d32)}.reimbursement-history{margin-top:14px;padding-top:14px;border-top:1px solid var(--divider-color)}.reimbursement-history h3{font-size:13px;margin:0 0 8px;color:var(--secondary-text-color)}.history-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 0}.history-row>div{display:flex;flex-direction:column;gap:2px}.empty{padding:28px 8px;text-align:center;color:var(--secondary-text-color);font-size:13px}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.loading{text-align:center;color:var(--secondary-text-color)}.error-card p{color:var(--secondary-text-color)}
+      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.dashboard{display:flex;flex-direction:column;gap:20px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:4px 2px 2px}.hero h1{font-size:30px;line-height:1.1;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.hero-actions{display:flex;gap:10px}.primary,.secondary,.error-card button{appearance:none;border-radius:10px;padding:10px 15px;font:inherit;font-weight:650;cursor:pointer}.primary{border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.kpi{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:center;min-width:0}.kpi ha-icon{color:var(--primary-color);--mdc-icon-size:24px}.kpi div{display:flex;flex-direction:column;gap:4px;min-width:0}.kpi span{font-size:12px;color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi strong{font-size:20px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.panel{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;padding:18px;min-width:0}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.panel-head h2{font-size:18px;margin:0}.panel-head p{font-size:12px;color:var(--secondary-text-color);margin:4px 0 0}.grid-main{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(300px,.9fr);gap:16px}.grid-bottom{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(380px,1.5fr) minmax(260px,.7fr);gap:16px}.chart-scroll{overflow:auto hidden}.chart-scroll svg{display:block;width:100%;min-width:720px;height:auto}.grid{stroke:var(--divider-color);stroke-width:1}.axis,.month{fill:var(--secondary-text-color);font-size:11px}.forecast-label{font-style:italic}.actual-bar{fill:var(--primary-color)}.forecast-bar{fill:var(--primary-color);opacity:.22;stroke:var(--primary-color);stroke-width:1.5;stroke-dasharray:4 3}.legend{display:flex;gap:14px;color:var(--secondary-text-color);font-size:12px}.legend span{display:flex;align-items:center;gap:6px}.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}.actual-dot{background:var(--primary-color)}.forecast-dot{background:color-mix(in srgb,var(--primary-color) 25%,transparent);border:1px dashed var(--primary-color)}.breakdown-list{display:flex;flex-direction:column;gap:14px}.breakdown-row{display:flex;flex-direction:column;gap:7px}.breakdown-head{display:flex;justify-content:space-between;gap:12px;font-size:13px}.breakdown-head span{display:flex;align-items:center;gap:8px;min-width:0}.breakdown-head i{width:10px;height:10px;border-radius:50%;flex:none}.breakdown-head strong{font-size:13px}.meter{height:7px;border-radius:99px;background:var(--secondary-background-color);overflow:hidden}.meter span{display:block;height:100%;border-radius:99px}.compact-list,.recent-list{display:flex;flex-direction:column}.compact-row,.recent-row{border-top:1px solid var(--divider-color);padding:12px 0}.compact-row:first-child,.recent-row:first-child{border-top:0;padding-top:2px}.compact-row{display:flex;justify-content:space-between;align-items:center;gap:16px}.compact-row div{display:flex;flex-direction:column;gap:3px}.compact-row small,.recent-row small{color:var(--secondary-text-color)}.recent-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:12px}.recent-row>i{width:10px;height:36px;border-radius:99px}.recent-main,.recent-value{display:flex;flex-direction:column;gap:3px}.recent-value{align-items:flex-end}.pill{font-size:10px;padding:2px 7px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color)}.pill.ok{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 12%,transparent)}.pill.warn{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.parser-health{display:flex;flex-direction:column}.parser-stat{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--divider-color);font-size:13px}.parser-stat strong{font-size:18px}.attention{color:var(--warning-color,#f9a825)!important}.parser-message{font-size:12px;color:var(--secondary-text-color);padding:14px 0}.full{width:100%;margin-top:auto}.recurring-overview-panel{display:flex;flex-direction:column;gap:10px}.recurring-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.recurring-stats>div{padding:12px;border-radius:12px;background:var(--secondary-background-color);display:flex;flex-direction:column;gap:4px}.recurring-stats span{font-size:11px;color:var(--secondary-text-color)}.recurring-stats strong{font-size:17px}.recurring-overview-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.recurring-overview-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--divider-color);border-radius:11px}.recurring-overview-row>div{display:flex;flex-direction:column;gap:3px;min-width:0}.recurring-overview-row small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.reimbursements-panel{display:flex;flex-direction:column;gap:4px}.reimbursement-list{display:flex;flex-direction:column}.reimbursement-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:16px;align-items:center;padding:13px 0;border-top:1px solid var(--divider-color)}.reimbursement-row:first-child{border-top:0}.reimbursement-main{display:flex;flex-direction:column;gap:3px}.reimbursement-main small,.history-row small{color:var(--secondary-text-color)}.reimbursement-actions{display:flex;gap:8px;align-items:center}.small{padding:7px 10px;font-size:12px}.paypal{display:inline-flex;align-items:center;justify-content:center;border-radius:10px;padding:8px 11px;background:#0070ba;color:white;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap}.reimbursement-empty{padding:16px;border-radius:12px;background:color-mix(in srgb,var(--success-color,#2e7d32) 10%,transparent);color:var(--success-color,#2e7d32)}.reimbursement-history{margin-top:14px;padding-top:14px;border-top:1px solid var(--divider-color)}.reimbursement-history h3{font-size:13px;margin:0 0 8px;color:var(--secondary-text-color)}.history-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 0}.history-row>div{display:flex;flex-direction:column;gap:2px}.empty{padding:28px 8px;text-align:center;color:var(--secondary-text-color);font-size:13px}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.loading{text-align:center;color:var(--secondary-text-color)}.error-card p{color:var(--secondary-text-color)}
       @media(max-width:1180px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.grid-main{grid-template-columns:1fr}.grid-bottom{grid-template-columns:1fr 1fr}.parser-health{grid-column:1/-1}}
-      @media(max-width:720px){.reimbursement-row,.history-row{grid-template-columns:1fr}.reimbursement-actions{flex-wrap:wrap}.hero{align-items:flex-start;flex-direction:column}.hero-actions{width:100%}.hero-actions button{flex:1}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-bottom{grid-template-columns:1fr}.parser-health{grid-column:auto}.panel{padding:14px}.legend{display:none}.hero h1{font-size:25px}}
+      @media(max-width:720px){.recurring-stats{grid-template-columns:1fr 1fr}.reimbursement-row,.history-row{grid-template-columns:1fr}.reimbursement-actions{flex-wrap:wrap}.hero{align-items:flex-start;flex-direction:column}.hero-actions{width:100%}.hero-actions button{flex:1}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid-bottom{grid-template-columns:1fr}.parser-health{grid-column:auto}.panel{padding:14px}.legend{display:none}.hero h1{font-size:25px}}
     `
   }
 }
@@ -1237,6 +1334,322 @@ class BillyBills extends HTMLElement {
   }
 }
 
+class BillyRecurring extends HTMLElement {
+  constructor () {
+    super()
+    this.attachShadow({ mode: 'open' })
+    this._hass = null
+    this._data = null
+    this._loading = false
+    this._error = null
+    this._search = ''
+    this._kind = 'all'
+    this._status = 'all'
+    this._editing = null
+    this._unsubscribe = null
+  }
+
+  set hass (value) {
+    const changed = value !== this._hass
+    this._hass = value
+    if (changed && this.isConnected) {
+      this._subscribe()
+      this._load()
+    }
+  }
+
+  get hass () { return this._hass }
+
+  connectedCallback () {
+    this._subscribe()
+    this._load()
+  }
+
+  disconnectedCallback () {
+    this._unsubscribe?.()
+    this._unsubscribe = null
+  }
+
+  _t (key) { return tFor(this._hass, key) }
+
+  async _subscribe () {
+    if (!this._hass || this._unsubscribe) return
+    try {
+      this._unsubscribe = await this._hass.connection.subscribeEvents(
+        () => this._load(false),
+        'bill_tracker_updated'
+      )
+    } catch (_error) {}
+  }
+
+  async _load (showLoading = true) {
+    if (!this._hass || this._loading) return
+    if (showLoading) this._loading = true
+    if (showLoading) this._render()
+    try {
+      this._data = await this._hass.callWS({ type: 'bill_tracker/list', forecast_months: 12 })
+      this._error = null
+    } catch (error) {
+      this._error = String(error?.message || error)
+    } finally {
+      this._loading = false
+      this._render()
+    }
+  }
+
+  _money (value) {
+    const currency = this._data?.currency || this._hass?.config?.currency || 'EUR'
+    try {
+      return new Intl.NumberFormat(localeOf(this._hass), { style: 'currency', currency }).format(Number(value || 0))
+    } catch (_error) {
+      return `${Number(value || 0).toFixed(2)} ${currency}`
+    }
+  }
+
+  _date (value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''))
+    if (!match) return '—'
+    return new Intl.DateTimeFormat(localeOf(this._hass), {
+      day: '2-digit', month: 'short', year: 'numeric'
+    }).format(new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+  }
+
+  _kindLabel (kind) {
+    if (kind === 'subscription') return this._t('subscription')
+    if (kind === 'mortgage') return this._t('mortgage')
+    if (kind === 'installment') return this._t('installment')
+    return this._t('recurringGeneric')
+  }
+
+  _kindIcon (kind) {
+    if (kind === 'subscription') return 'mdi:repeat'
+    if (kind === 'mortgage') return 'mdi:home-city-outline'
+    if (kind === 'installment') return 'mdi:calendar-sync-outline'
+    return 'mdi:calendar-refresh-outline'
+  }
+
+  _frequency (months) {
+    const value = Number(months || 1)
+    if (languageOf(this._hass) === 'it') {
+      const labels = { 1: 'Mensile', 2: 'Bimestrale', 3: 'Trimestrale', 4: 'Quadrimestrale', 6: 'Semestrale', 12: 'Annuale' }
+      return labels[value] || `Ogni ${value} mesi`
+    }
+    const labels = { 1: 'Monthly', 2: 'Every 2 months', 3: 'Quarterly', 4: 'Every 4 months', 6: 'Every 6 months', 12: 'Yearly' }
+    return labels[value] || `Every ${value} months`
+  }
+
+  _statusLabel (status) {
+    if (status === 'inactive') return this._t('recurringInactive')
+    if (status === 'ended') return this._t('recurringEnded')
+    return this._t('recurringActive')
+  }
+
+  _filtered () {
+    const query = this._search.trim().toLocaleLowerCase(localeOf(this._hass))
+    return (this._data?.recurring_expenses || [])
+      .filter(row => {
+        if (this._kind !== 'all' && row.kind !== this._kind) return false
+        if (this._status !== 'all' && row.status !== this._status) return false
+        if (!query) return true
+        return [row.name, row.provider, row.contract, row.note, this._kindLabel(row.kind)]
+          .join(' ')
+          .toLocaleLowerCase(localeOf(this._hass))
+          .includes(query)
+      })
+      .sort((a, b) => {
+        const statusA = a.status === 'active' ? 0 : a.status === 'inactive' ? 1 : 2
+        const statusB = b.status === 'active' ? 0 : b.status === 'inactive' ? 1 : 2
+        return statusA - statusB || String(a.next_due_date || '9999').localeCompare(String(b.next_due_date || '9999')) || String(a.name || '').localeCompare(String(b.name || ''), localeOf(this._hass))
+      })
+  }
+
+  _rowsHtml () {
+    const rows = this._filtered()
+    if (!rows.length) return `<div class="empty">${escapeHtml(this._t('noRecurring'))}</div>`
+    return rows.map(row => {
+      const details = [row.provider, row.contract].filter(Boolean).join(' · ')
+      const progress = row.kind === 'installment' && row.installment_count
+        ? `${Number(row.installments_elapsed || 0)}/${Number(row.installment_count)} · ${Number(row.remaining_installments || 0)} ${this._t('remainingInstallments')}`
+        : ''
+      const renewal = row.auto_renew && row.next_renewal_date
+        ? `${this._t('nextRenewal')}: ${this._date(row.next_renewal_date)}`
+        : row.end_date
+          ? `${this._t('expirationDate')}: ${this._date(row.end_date)}`
+          : ''
+      return `<article class="recurring-row">
+        <div class="kind-icon"><ha-icon icon="${this._kindIcon(row.kind)}"></ha-icon></div>
+        <div class="recurring-main"><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(this._kindLabel(row.kind))} · ${escapeHtml(this._frequency(row.interval_months))}</span><small>${escapeHtml(details || renewal || '—')}</small>${progress ? `<small>${escapeHtml(progress)}</small>` : ''}</div>
+        <div class="recurring-due"><span>${escapeHtml(this._t('nextCharge'))}</span><strong>${escapeHtml(this._date(row.next_due_date))}</strong>${renewal && details ? `<small>${escapeHtml(renewal)}</small>` : ''}</div>
+        <div class="recurring-value"><strong>${escapeHtml(this._money(row.amount))}</strong><small>${escapeHtml(`${this._t('monthlyEquivalent')}: ${this._money(row.monthly_equivalent)}`)}</small>${row.remaining_amount != null ? `<small>${escapeHtml(`${this._t('remainingCommitment')}: ${this._money(row.remaining_amount)}`)}</small>` : ''}</div>
+        <span class="status ${escapeHtml(row.status)}">${escapeHtml(this._statusLabel(row.status))}</span>
+        <div class="actions"><button type="button" data-edit-recurring="${escapeHtml(row.id)}">${escapeHtml(this._t('edit'))}</button>${row.status !== 'ended' ? `<button type="button" data-toggle-recurring="${escapeHtml(row.id)}" data-active="${row.active ? '1' : '0'}">${escapeHtml(row.active ? this._t('pause') : this._t('resume'))}</button>` : ''}<button type="button" class="danger" data-delete-recurring="${escapeHtml(row.id)}">${escapeHtml(this._t('delete'))}</button></div>
+      </article>`
+    }).join('')
+  }
+
+  _renderListOnly () {
+    const rows = this.shadowRoot.getElementById('recurring-rows')
+    if (rows) rows.innerHTML = this._rowsHtml()
+    this._wireRows()
+  }
+
+  _wireRows () {
+    for (const button of this.shadowRoot.querySelectorAll('[data-edit-recurring]')) {
+      button.addEventListener('click', () => this._openRecurring(button.dataset.editRecurring))
+    }
+    for (const button of this.shadowRoot.querySelectorAll('[data-toggle-recurring]')) {
+      button.addEventListener('click', () => this._toggleRecurring(button.dataset.toggleRecurring, button.dataset.active !== '1'))
+    }
+    for (const button of this.shadowRoot.querySelectorAll('[data-delete-recurring]')) {
+      button.addEventListener('click', () => this._deleteRecurring(button.dataset.deleteRecurring))
+    }
+  }
+
+  _render () {
+    if (this._loading && !this._data) {
+      this.shadowRoot.innerHTML = `<style>${this._styles()}</style><div class="loading">${escapeHtml(this._t('loading'))}</div>`
+      return
+    }
+    if (this._error && !this._data) {
+      this.shadowRoot.innerHTML = `<style>${this._styles()}</style><div class="error-card"><strong>${escapeHtml(this._t('error'))}</strong><p>${escapeHtml(this._error)}</p><button id="retry">${escapeHtml(this._t('retry'))}</button></div>`
+      this.shadowRoot.getElementById('retry')?.addEventListener('click', () => this._load())
+      return
+    }
+    if (!this._data) return
+    this.shadowRoot.innerHTML = `
+      <style>${this._styles()}</style>
+      <div class="recurring-page">
+        <div class="hero"><div><h1>${escapeHtml(this._t('recurringTitle'))}</h1><p>${escapeHtml(this._t('recurringSubtitle'))}</p></div><button class="primary" id="add-recurring"><ha-icon icon="mdi:plus"></ha-icon>${escapeHtml(this._t('addRecurring'))}</button></div>
+        <div class="info"><ha-icon icon="mdi:information-outline"></ha-icon><span>${escapeHtml(this._t('recurringForecastHelp'))}</span></div>
+        ${this._error ? `<div class="notice error">${escapeHtml(this._error)}</div>` : ''}
+        <div class="toolbar">
+          <label class="search"><ha-icon icon="mdi:magnify"></ha-icon><input id="recurring-search" type="search" value="${escapeHtml(this._search)}" placeholder="${escapeHtml(this._t('searchRecurring'))}"></label>
+          <select id="recurring-kind"><option value="all">${escapeHtml(this._t('allRecurringKinds'))}</option><option value="subscription" ${this._kind === 'subscription' ? 'selected' : ''}>${escapeHtml(this._t('subscription'))}</option><option value="mortgage" ${this._kind === 'mortgage' ? 'selected' : ''}>${escapeHtml(this._t('mortgage'))}</option><option value="installment" ${this._kind === 'installment' ? 'selected' : ''}>${escapeHtml(this._t('installment'))}</option><option value="recurring" ${this._kind === 'recurring' ? 'selected' : ''}>${escapeHtml(this._t('recurringGeneric'))}</option></select>
+          <select id="recurring-status"><option value="all">${escapeHtml(this._t('allRecurringStatuses'))}</option><option value="active" ${this._status === 'active' ? 'selected' : ''}>${escapeHtml(this._t('recurringActive'))}</option><option value="inactive" ${this._status === 'inactive' ? 'selected' : ''}>${escapeHtml(this._t('recurringInactive'))}</option><option value="ended" ${this._status === 'ended' ? 'selected' : ''}>${escapeHtml(this._t('recurringEnded'))}</option></select>
+        </div>
+        <div class="list-card" id="recurring-rows">${this._rowsHtml()}</div>
+      </div>
+      <div class="modal" id="recurring-modal" hidden><div class="modal-backdrop"></div><div class="modal-card" id="recurring-modal-card"></div></div>
+    `
+    this.shadowRoot.getElementById('add-recurring')?.addEventListener('click', () => this._openRecurring())
+    this.shadowRoot.getElementById('recurring-search')?.addEventListener('input', event => {
+      this._search = event.currentTarget.value
+      this._renderListOnly()
+    })
+    this.shadowRoot.getElementById('recurring-kind')?.addEventListener('change', event => {
+      this._kind = event.currentTarget.value
+      this._renderListOnly()
+    })
+    this.shadowRoot.getElementById('recurring-status')?.addEventListener('change', event => {
+      this._status = event.currentTarget.value
+      this._renderListOnly()
+    })
+    this._wireRows()
+  }
+
+  _today () {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  }
+
+  _openRecurring (id = null) {
+    const row = id ? (this._data?.recurring_expenses || []).find(item => item.id === id) : null
+    this._editing = row || null
+    const modal = this.shadowRoot.getElementById('recurring-modal')
+    const card = this.shadowRoot.getElementById('recurring-modal-card')
+    if (!modal || !card) return
+    const intervals = [1, 2, 3, 4, 6, 12]
+    card.innerHTML = `<form id="recurring-form">
+      <div class="modal-head"><h3>${escapeHtml(row ? this._t('edit') : this._t('addRecurring'))}</h3><button type="button" class="icon-close" id="recurring-close">×</button></div>
+      <div class="form-grid">
+        <label><span>${escapeHtml(this._t('billType'))}</span><select name="kind"><option value="subscription" ${row?.kind === 'subscription' || !row ? 'selected' : ''}>${escapeHtml(this._t('subscription'))}</option><option value="mortgage" ${row?.kind === 'mortgage' ? 'selected' : ''}>${escapeHtml(this._t('mortgage'))}</option><option value="installment" ${row?.kind === 'installment' ? 'selected' : ''}>${escapeHtml(this._t('installment'))}</option><option value="recurring" ${row?.kind === 'recurring' ? 'selected' : ''}>${escapeHtml(this._t('recurringGeneric'))}</option></select></label>
+        <label><span>${escapeHtml(this._t('name'))}</span><input name="name" required maxlength="120" value="${escapeHtml(row?.name || '')}"></label>
+        <label><span>${escapeHtml(this._t('amount'))}</span><input name="amount" type="number" min="0.01" step="0.01" required value="${escapeHtml(row?.amount ?? '')}"></label>
+        <label><span>${escapeHtml(this._t('interval'))}</span><select name="interval_months">${intervals.map(value => `<option value="${value}" ${Number(row?.interval_months || 1) === value ? 'selected' : ''}>${escapeHtml(this._frequency(value))}</option>`).join('')}</select></label>
+        <label><span>${escapeHtml(this._t('activationDate'))}</span><input name="start_date" type="date" required value="${escapeHtml(row?.start_date || this._today())}"></label>
+        <label><span>${escapeHtml(this._t('expirationDate'))}</span><input name="end_date" type="date" value="${escapeHtml(row?.end_date || '')}"></label>
+        <label><span>${escapeHtml(this._t('installmentCount'))}</span><input name="installment_count" type="number" min="1" max="1200" step="1" value="${escapeHtml(row?.installment_count ?? '')}"></label>
+        <label><span>${escapeHtml(this._t('renewalEvery'))}</span><select name="renewal_interval_months">${[1, 3, 6, 12, 24].map(value => `<option value="${value}" ${Number(row?.renewal_interval_months || 12) === value ? 'selected' : ''}>${value} ${escapeHtml(this._t('months'))}</option>`).join('')}</select></label>
+        <label><span>${escapeHtml(this._t('provider'))}</span><input name="provider" maxlength="120" value="${escapeHtml(row?.provider || '')}"></label>
+        <label><span>${escapeHtml(this._t('contract'))}</span><input name="contract" maxlength="120" value="${escapeHtml(row?.contract || '')}"></label>
+        <label class="check"><input name="auto_renew" type="checkbox" ${row?.auto_renew ? 'checked' : ''}><span>${escapeHtml(this._t('automaticRenewal'))}</span></label>
+        <label class="check"><input name="active" type="checkbox" ${row?.active !== false ? 'checked' : ''}><span>${escapeHtml(this._t('enabled'))}</span></label>
+        <div class="span2 hint">${escapeHtml(this._t('installmentCountHint'))}</div>
+        <label class="span2"><span>${escapeHtml(this._t('note'))}</span><textarea name="note" rows="3">${escapeHtml(row?.note || '')}</textarea></label>
+      </div>
+      <div class="modal-actions"><button type="button" class="secondary" id="recurring-cancel">${escapeHtml(this._t('cancel'))}</button><button type="submit" class="primary">${escapeHtml(this._t('save'))}</button></div>
+    </form>`
+    modal.hidden = false
+    const close = () => { modal.hidden = true; this._editing = null }
+    card.querySelector('#recurring-close')?.addEventListener('click', close)
+    card.querySelector('#recurring-cancel')?.addEventListener('click', close)
+    modal.querySelector('.modal-backdrop')?.addEventListener('click', close)
+    card.querySelector('#recurring-form')?.addEventListener('submit', event => this._saveRecurring(event, row?.id || null, close))
+  }
+
+  async _saveRecurring (event, id, close) {
+    event.preventDefault()
+    const values = new FormData(event.currentTarget)
+    const installmentText = String(values.get('installment_count') || '').trim()
+    const payload = {
+      type: id ? 'bill_tracker/recurring/update' : 'bill_tracker/recurring/add',
+      ...(id ? { recurring_id: id } : {}),
+      name: String(values.get('name') || '').trim(),
+      kind: String(values.get('kind') || 'recurring'),
+      amount: Number(values.get('amount') || 0),
+      interval_months: Number(values.get('interval_months') || 1),
+      start_date: String(values.get('start_date') || ''),
+      end_date: String(values.get('end_date') || ''),
+      auto_renew: values.get('auto_renew') === 'on',
+      renewal_interval_months: Number(values.get('renewal_interval_months') || 12),
+      provider: String(values.get('provider') || '').trim(),
+      contract: String(values.get('contract') || '').trim(),
+      note: String(values.get('note') || '').trim(),
+      active: values.get('active') === 'on'
+    }
+    if (installmentText) payload.installment_count = Number(installmentText)
+    try {
+      await this._hass.callWS(payload)
+      close()
+      await this._load(false)
+    } catch (error) {
+      this._error = String(error?.message || error)
+      close()
+      this._render()
+    }
+  }
+
+  async _toggleRecurring (id, active) {
+    if (!this._hass || !id) return
+    try {
+      await this._hass.callWS({ type: 'bill_tracker/recurring/set_active', recurring_id: id, active })
+      await this._load(false)
+    } catch (error) {
+      this._error = String(error?.message || error)
+      this._render()
+    }
+  }
+
+  async _deleteRecurring (id) {
+    if (!this._hass || !id || !window.confirm(this._t('deleteRecurringConfirm'))) return
+    try {
+      await this._hass.callWS({ type: 'bill_tracker/recurring/delete', recurring_id: id })
+      await this._load(false)
+    } catch (error) {
+      this._error = String(error?.message || error)
+      this._render()
+    }
+  }
+
+  _styles () {
+    return `
+      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.recurring-page{display:flex;flex-direction:column;gap:18px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.hero h1{font-size:30px;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.primary,.secondary,.actions button,.error-card button{appearance:none;border-radius:10px;padding:9px 13px;font:inherit;font-weight:650;cursor:pointer}.primary{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.actions button,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}.info{display:flex;align-items:flex-start;gap:9px;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--primary-color) 8%,var(--card-background-color));border:1px solid color-mix(in srgb,var(--primary-color) 24%,var(--divider-color));color:var(--secondary-text-color);font-size:12px}.info ha-icon{color:var(--primary-color);--mdc-icon-size:18px;flex:none}.toolbar{display:grid;grid-template-columns:minmax(260px,1fr) minmax(180px,auto) minmax(160px,auto);gap:10px}.toolbar select,.search{height:44px;border:1px solid var(--divider-color);border-radius:11px;background:var(--card-background-color);color:var(--primary-text-color)}.toolbar select{padding:0 10px;font:inherit}.search{display:flex;align-items:center;gap:8px;padding:0 12px}.search ha-icon{color:var(--secondary-text-color);--mdc-icon-size:19px}.search input{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit;min-width:0}.list-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;overflow:hidden}.recurring-row{display:grid;grid-template-columns:46px minmax(240px,1.4fr) minmax(160px,.7fr) minmax(170px,.75fr) auto auto;gap:14px;align-items:center;padding:15px 16px;border-top:1px solid var(--divider-color)}.recurring-row:first-child{border-top:0}.kind-icon{width:42px;height:42px;border-radius:12px;background:color-mix(in srgb,var(--primary-color) 11%,transparent);color:var(--primary-color);display:grid;place-items:center}.recurring-main,.recurring-due,.recurring-value{display:flex;flex-direction:column;gap:3px;min-width:0}.recurring-main span,.recurring-main small,.recurring-due span,.recurring-due small,.recurring-value small{font-size:11px;color:var(--secondary-text-color)}.recurring-main strong,.recurring-main small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.status{font-size:11px;padding:5px 8px;border-radius:999px;white-space:nowrap}.status.active{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.status.inactive{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.status.ended{color:var(--secondary-text-color);background:var(--secondary-background-color)}.actions{display:flex;gap:6px}.actions button{padding:6px 9px;font-size:11px}.actions .danger{color:var(--error-color,#d32f2f)}.empty{padding:50px 16px;text-align:center;color:var(--secondary-text-color)}.notice{padding:11px 14px;border-radius:10px}.notice.error{background:color-mix(in srgb,var(--error-color,#d32f2f) 10%,var(--card-background-color));color:var(--error-color,#d32f2f);border:1px solid color-mix(in srgb,var(--error-color,#d32f2f) 28%,transparent)}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px}.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}.modal-card{position:relative;z-index:1;width:min(820px,100%);max-height:min(90vh,900px);overflow:auto;background:var(--card-background-color);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.35);padding:20px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h3{font-size:20px;margin:0}.icon-close{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font-size:28px;cursor:pointer}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid label{display:flex;flex-direction:column;gap:6px}.form-grid label>span,.hint{font-size:12px;color:var(--secondary-text-color)}.form-grid input,.form-grid select,.form-grid textarea{width:100%;min-height:42px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color);padding:8px 11px;font:inherit;outline:none}.form-grid textarea{resize:vertical}.form-grid .check{flex-direction:row;align-items:center;padding-top:20px}.form-grid .check input{width:18px;min-height:18px;accent-color:var(--primary-color)}.span2{grid-column:1/-1}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid var(--divider-color)}
+      @media(max-width:1050px){.recurring-row{grid-template-columns:46px minmax(200px,1fr) auto auto}.recurring-due{grid-column:2}.recurring-value{grid-column:3;grid-row:1 / span 2}.status{grid-column:4;grid-row:1}.actions{grid-column:4;grid-row:2}}
+      @media(max-width:720px){.hero{align-items:flex-start;flex-direction:column}.hero .primary{width:100%;justify-content:center}.toolbar{grid-template-columns:1fr}.recurring-row{grid-template-columns:42px minmax(0,1fr);padding:12px}.recurring-due,.recurring-value,.status,.actions{grid-column:2;grid-row:auto}.actions{flex-wrap:wrap}.form-grid{grid-template-columns:1fr}.span2{grid-column:auto}.modal{padding:8px}.modal-card{padding:16px}}
+    `
+  }
+}
+
 class BillySettings extends HTMLElement {
   constructor () {
     super()
@@ -1629,7 +2042,7 @@ class BillyPanel extends HTMLElement {
   _viewFromLocation () {
     try {
       const view = new URLSearchParams(window.location.search).get('view')
-      return ['dashboard', 'bills', 'parsers', 'settings'].includes(view) ? view : 'dashboard'
+      return ['dashboard', 'bills', 'recurring', 'parsers', 'settings'].includes(view) ? view : 'dashboard'
     } catch (_error) {
       return 'dashboard'
     }
@@ -1639,7 +2052,7 @@ class BillyPanel extends HTMLElement {
     this._rendered = true
     this.shadowRoot.innerHTML = `
       <style>
-        :host{display:block;min-height:100%;color:var(--primary-text-color);background:var(--primary-background-color);box-sizing:border-box}*{box-sizing:border-box}.shell{min-height:100vh}.topbar{position:sticky;top:0;z-index:20;background:var(--app-header-background-color,var(--card-background-color));color:var(--app-header-text-color,var(--primary-text-color));border-bottom:1px solid var(--divider-color);box-shadow:0 1px 3px rgba(0,0,0,.08)}.topbar-inner{max-width:1560px;margin:0 auto;padding:16px 24px 0}.brand-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.title{font-size:25px;font-weight:750;line-height:1.15}.subtitle{color:var(--secondary-text-color);margin-top:4px;font-size:13px}.version{color:var(--secondary-text-color);font-size:11px;padding-top:6px;white-space:nowrap}nav{display:flex;gap:4px;margin-top:12px;overflow-x:auto}nav button{appearance:none;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--secondary-text-color);font:inherit;font-weight:650;padding:11px 14px 10px;cursor:pointer;white-space:nowrap}nav button.active{color:var(--primary-color);border-bottom-color:var(--primary-color)}main{max-width:1560px;margin:0 auto;padding:24px}section[hidden]{display:none!important}billy-bills,billy-parser-manager,billy-dashboard,billy-settings{display:block;width:100%}@media(max-width:700px){.topbar-inner{padding:13px 12px 0}main{padding:12px}.subtitle,.version{display:none}}
+        :host{display:block;min-height:100%;color:var(--primary-text-color);background:var(--primary-background-color);box-sizing:border-box}*{box-sizing:border-box}.shell{min-height:100vh}.topbar{position:sticky;top:0;z-index:20;background:var(--app-header-background-color,var(--card-background-color));color:var(--app-header-text-color,var(--primary-text-color));border-bottom:1px solid var(--divider-color);box-shadow:0 1px 3px rgba(0,0,0,.08)}.topbar-inner{max-width:1560px;margin:0 auto;padding:16px 24px 0}.brand-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.title{font-size:25px;font-weight:750;line-height:1.15}.subtitle{color:var(--secondary-text-color);margin-top:4px;font-size:13px}.version{color:var(--secondary-text-color);font-size:11px;padding-top:6px;white-space:nowrap}nav{display:flex;gap:4px;margin-top:12px;overflow-x:auto}nav button{appearance:none;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--secondary-text-color);font:inherit;font-weight:650;padding:11px 14px 10px;cursor:pointer;white-space:nowrap}nav button.active{color:var(--primary-color);border-bottom-color:var(--primary-color)}main{max-width:1560px;margin:0 auto;padding:24px}section[hidden]{display:none!important}billy-bills,billy-recurring,billy-parser-manager,billy-dashboard,billy-settings{display:block;width:100%}@media(max-width:700px){.topbar-inner{padding:13px 12px 0}main{padding:12px}.subtitle,.version{display:none}}
       </style>
       <div class="shell">
         <header class="topbar">
@@ -1648,6 +2061,7 @@ class BillyPanel extends HTMLElement {
             <nav>
               <button type="button" data-view="dashboard"></button>
               <button type="button" data-view="bills"></button>
+              <button type="button" data-view="recurring"></button>
               <button type="button" data-view="parsers"></button>
               <button type="button" data-view="settings"></button>
             </nav>
@@ -1656,6 +2070,7 @@ class BillyPanel extends HTMLElement {
         <main>
           <section data-section="dashboard"><billy-dashboard id="dashboard"></billy-dashboard></section>
           <section data-section="bills" hidden><billy-bills id="bills-panel"></billy-bills></section>
+          <section data-section="recurring" hidden><billy-recurring id="recurring-panel"></billy-recurring></section>
           <section data-section="parsers" hidden><billy-parser-manager id="parser-manager"></billy-parser-manager></section>
           <section data-section="settings" hidden><billy-settings id="settings-panel"></billy-settings></section>
         </main>
@@ -1674,7 +2089,7 @@ class BillyPanel extends HTMLElement {
   }
 
   _setView (view) {
-    if (!['dashboard', 'bills', 'parsers', 'settings'].includes(view)) return
+    if (!['dashboard', 'bills', 'recurring', 'parsers', 'settings'].includes(view)) return
     this._view = view
     this._applyView()
     try {
@@ -1699,7 +2114,7 @@ class BillyPanel extends HTMLElement {
   _updateLabels () {
     if (!this._rendered) return
     this.shadowRoot.getElementById('subtitle').textContent = this._t('subtitle')
-    for (const view of ['dashboard', 'bills', 'parsers', 'settings']) {
+    for (const view of ['dashboard', 'bills', 'recurring', 'parsers', 'settings']) {
       const button = this.shadowRoot.querySelector(`[data-view="${view}"]`)
       if (button) button.textContent = this._t(view)
     }
@@ -1707,7 +2122,7 @@ class BillyPanel extends HTMLElement {
 
   _syncHass () {
     if (!this._rendered || !this._hass) return
-    for (const id of ['dashboard', 'bills-panel', 'parser-manager', 'settings-panel']) {
+    for (const id of ['dashboard', 'bills-panel', 'recurring-panel', 'parser-manager', 'settings-panel']) {
       const element = this.shadowRoot.getElementById(id)
       if (element) element.hass = this._hass
     }
@@ -1716,5 +2131,6 @@ class BillyPanel extends HTMLElement {
 
 if (!customElements.get('billy-dashboard')) customElements.define('billy-dashboard', BillyDashboard)
 if (!customElements.get('billy-bills')) customElements.define('billy-bills', BillyBills)
+if (!customElements.get('billy-recurring')) customElements.define('billy-recurring', BillyRecurring)
 if (!customElements.get('billy-settings')) customElements.define('billy-settings', BillySettings)
 if (!customElements.get('billy-panel')) customElements.define('billy-panel', BillyPanel)

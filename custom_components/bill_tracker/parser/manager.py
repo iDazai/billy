@@ -276,6 +276,7 @@ class ParserManager:
         parser_id: str,
         *,
         category_id: str,
+        expected_parser_id: str | None = None,
         enabled: bool = True,
         auto_import: bool = False,
     ) -> dict[str, Any]:
@@ -356,6 +357,8 @@ class ParserManager:
         self._ensure_category(category_id)
         parser = load_parser_yaml(content)
         parser_id = str(parser["id"])
+        if expected_parser_id is not None and parser_id != expected_parser_id:
+            raise ValueError("Custom parser ID cannot be changed while editing")
         if parser_id in self.storage.data.get("installed", {}):
             raise ValueError(
                 "An official parser with this ID is installed; uninstall it before saving the custom parser"

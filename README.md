@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="docs/images/billy-logo.png" alt="Billy logo" width="180">
+</p>
+
+# Billy
+
 ## Billy 0.11.3
 
 Billy keeps the Lovelace `custom:bill-tracker-card`, while `/billy` is the full-size application.

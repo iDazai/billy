@@ -1,6 +1,20 @@
-## Billy 0.11.2
+## Billy 0.11.3
 
 Billy keeps the Lovelace `custom:bill-tracker-card`, while `/billy` is the full-size application.
+
+Billy is a Home Assistant bill manager focused on household expenses: provider bills, recurring costs, forecasts, payment tracking, shared expenses, reimbursements and automatic bill parsing from email.
+
+### What Billy can do
+
+- Track provider bills manually or import them automatically from email.
+- Track subscriptions, mortgages, installment plans and other recurring expenses independently from provider invoices.
+- Forecast future costs and normalize non-monthly bills into monthly-equivalent spending.
+- Split bills between multiple payers and track reimbursements separately from provider payment status.
+- Open PayPal.Me links with the exact reimbursement amount when configured.
+- Install declarative parsers from the community `billy-parser` catalog.
+- Create and test local custom parsers directly from Billy.
+- Share a custom parser with the community as Experimental without uploading the original invoice, email or PDF.
+- Use Billy either as the full `/billy` sidebar application or through compact Lovelace dashboard widgets.
 
 ### Recurring expenses
 
@@ -22,17 +36,249 @@ To avoid accidental historical debt, adding or migrating a long-running subscrip
 
 ### Parser authoring in Billy
 
-The **Parser** tab can create a new local custom parser, edit it, validate/test it against optional email metadata, export it and publish its YAML as an Experimental community submission. No invoice PDF, email body or attachment is uploaded by the publish action.
+The **Parser** tab can create a new local custom parser, edit it, validate/test it against optional email metadata, export it and share it with the community. No invoice PDF, email body or attachment is uploaded by the community publish action.
+
+## Automatic bill parsing
+
+Billy can listen to one or more Home Assistant IMAP sources and automatically detect supported provider emails. The parser runtime is deliberately declarative: community parsers are YAML definitions, not executable Python, JavaScript or shell code.
+
+The high-level flow is:
+
+```text
+Provider email arrives
+        ↓
+Home Assistant IMAP emits metadata
+        ↓
+Billy prefilters parsers by sender / subject
+        ↓
+Only potentially matching messages are fetched
+        ↓
+Email body and required attachments are extracted
+        ↓
+Parser detection rules calculate a score
+        ↓
+Fields are extracted from email and/or PDF text
+        ↓
+Cross-source verification and deduplication
+        ↓
+Review or automatic import, depending on configuration
+```
+
+### Privacy-first fetching
+
+Billy first evaluates inexpensive metadata such as sender, subject and attachment information. The complete message is fetched only when at least one installed parser passes its prefilter. Parsers can then use the email body and selected attachments.
+
+PDF attachments are processed as text documents. Billy does not currently perform OCR, so scanned image-only PDFs may require a future OCR-capable extractor or a parser that can rely on the email body instead.
+
+## Connecting your email
+
+Billy does **not** store your mailbox password and does not create its own mail account connection. It uses Home Assistant's existing **IMAP integration**.
+
+1. In Home Assistant, add and configure the **IMAP** integration for the mailbox that receives your bills.
+2. Verify that Home Assistant receives messages from that account correctly.
+3. Open **Billy → Settings → Automatic parsing / IMAP sources**.
+4. Select one or more IMAP entries that Billy is allowed to use.
+5. Open **Billy → Parser**, refresh the catalog and install the parsers for your providers.
+6. Configure each installed parser with the Billy bill type it should import into and choose whether automatic import is enabled.
+
+Billy can use multiple IMAP integrations at the same time, which is useful when household bills arrive on different mailboxes.
+
+The parser source configuration stores only the selected Home Assistant IMAP entry IDs. Mail credentials continue to be managed by Home Assistant.
+
+## The community parser catalog
+
+Official/community parsers live in the separate [`billy-parser`](https://github.com/robin994/billy-parser) repository. Billy uses the scalable Catalog v2 layout:
+
+```text
+catalog/
+  index.json
+  it.json
+  fr.json
+  ...
+
+parsers/
+  <country>/<provider>/<type>.yaml
+```
+
+Billy first downloads `catalog/index.json`, selects the shard for the configured/Home Assistant country and downloads only that country's catalog. Parser YAML is downloaded only when a parser is installed or updated.
+
+The catalog refreshes automatically every day at **00:00 Home Assistant local time**. Installed parsers are never silently replaced just because the remote catalog changed.
+
+### Parser lifecycle
+
+The parser lifecycle is community-driven:
+
+```text
+Local custom parser
+        ↓
+Share with community
+        ↓
+Automatic repository validation
+        ↓
+Experimental
+        ↓
+Users install and test it
+        ↓
+Community feedback
+        ↓
+Verified
+```
+
+Lifecycle values are:
+
+- **Experimental** — newly published parser that still needs community validation.
+- **Verified** — parser that reached the automatic community verification threshold.
+- **Outdated** — parser that is no longer recommended, usually because the provider format changed or a replacement exists.
+
+No maintainer review is required for the normal Experimental → Verified path. The `billy-parser` automation validates submissions, records feedback and regenerates the catalog.
+
+### Sharing a parser
+
+From a locally saved custom parser, click **Share with community / Condividi con la community**. Billy opens a machine-readable GitHub submission containing parser metadata and the YAML definition.
+
+Billy does **not** attach:
+
+- the original bill PDF;
+- the email body;
+- customer names or addresses;
+- bill amounts from the source message;
+- mailbox credentials.
+
+The repository automation validates the submission and, when valid, publishes it as `experimental`.
+
+### Community feedback
+
+Installed Experimental parsers can be rated from Billy as:
+
+- **Working**;
+- **Partial**;
+- **Failed**.
+
+Feedback is tied to a specific parser version. Billy generates a persistent random local community identifier and sends only a SHA-256 fingerprint scoped to `parser_id + version`, allowing duplicate votes to be avoided without sending the original local identifier or bill contents.
+
+When a new parser version is published, its feedback starts from zero. Votes for an older version are not inherited by the new one.
+
+## Lovelace dashboard widgets
+
+Billy now ships a set of small dashboard cards in addition to the full `custom:bill-tracker-card` and the `/billy` sidebar application. They all use the same Billy WebSocket data and do not duplicate the backend business logic.
+
+The widget pack is loaded automatically with Billy's existing Lovelace resource, so no additional resource URLs are required.
+
+Available cards:
+
+| Card | Lovelace type | Purpose |
+| --- | --- | --- |
+| Summary | `custom:billy-summary-card` | Current month, outstanding bills, next month, yearly total, recurring costs and reimbursements |
+| Spending | `custom:billy-spending-card` | Historical spending plus recurring costs and forecast |
+| Breakdown | `custom:billy-breakdown-card` | Ranked bill-type / recurring-cost breakdown |
+| Upcoming | `custom:billy-upcoming-card` | Upcoming unpaid bills, forecasts and recurring charges |
+| Recurring | `custom:billy-recurring-card` | Active subscriptions, mortgages, installments and next due dates |
+| Balances | `custom:billy-balances-card` | User-to-user reimbursements and PayPal quick-pay links |
+| Parser status | `custom:billy-parser-status-card` | Installed parsers, Experimental parsers, updates and errors |
+
+All cards are registered in `window.customCards`, so they are available from the Home Assistant Lovelace card picker as well as through YAML configuration.
+
+### Summary widget
+
+```yaml
+type: custom:billy-summary-card
+title: Billy
+```
+
+### Spending chart
+
+```yaml
+type: custom:billy-spending-card
+title: Spending
+months: 12
+forecast_months: 3
+show_recurring: true
+```
+
+### Expense breakdown
+
+```yaml
+type: custom:billy-breakdown-card
+title: This month
+limit: 8
+show_recurring: true
+```
+
+### Upcoming expenses
+
+```yaml
+type: custom:billy-upcoming-card
+title: Upcoming expenses
+days: 90
+limit: 8
+forecast_months: 3
+```
+
+### Recurring expenses
+
+```yaml
+type: custom:billy-recurring-card
+title: Recurring
+limit: 8
+active_only: true
+```
+
+### Reimbursements / balances
+
+```yaml
+type: custom:billy-balances-card
+title: Reimbursements
+limit: 6
+show_paypal: true
+```
+
+### Parser status
+
+```yaml
+type: custom:billy-parser-status-card
+title: Billy Parser
+```
+
+### Example Billy dashboard
+
+```yaml
+type: grid
+columns: 2
+square: false
+cards:
+  - type: custom:billy-summary-card
+
+  - type: custom:billy-parser-status-card
+
+  - type: custom:billy-spending-card
+    months: 12
+    forecast_months: 3
+    show_recurring: true
+
+  - type: custom:billy-breakdown-card
+    limit: 8
+    show_recurring: true
+
+  - type: custom:billy-upcoming-card
+    days: 90
+    limit: 8
+
+  - type: custom:billy-recurring-card
+    limit: 8
+
+  - type: custom:billy-balances-card
+    show_paypal: true
+```
 
 ### Main sidebar areas
 
 - **Panoramica / Overview** — full-width dashboard, forecasts, reimbursements and recurring commitments.
 - **Bollette / Bills** — complete provider-bill history with manual CRUD, payment status and user-reimbursement status.
 - **Ricorrenti / Recurring** — subscriptions, mortgages, installments and predictable scheduled costs.
-- **Parser** — catalog plus local custom parser authoring and Experimental publishing.
+- **Parser** — country-sharded community catalog, local parser authoring, testing, sharing and Experimental feedback.
 - **Impostazioni / Settings** — bill types, payers, IMAP sources, system status and developer/support links.
 
-The Lovelace resource remains `/bill_tracker/bill-tracker-card.js` without a version query string.
+The Lovelace resource remains `/bill_tracker/bill-tracker-card.js` without a version query string. The widget pack is loaded from this same bootstrap resource.
 
 ## Billy 0.9.1
 
@@ -91,7 +337,7 @@ translations, automatic parser runtime, IMAP source adapter and tests required b
 
 ## 0.6.x automatic parsing
 
-- External `billy-parser` catalog (`parser.json`) with SHA-256 verified downloads.
+- External `billy-parser` catalog with SHA-256 verified parser downloads. Current Billy versions use the country-sharded Catalog v2, with legacy `parser.json` retained only as compatibility fallback.
 - Declarative YAML parser schema v1; downloaded parsers cannot execute Python/JavaScript/shell code.
 - Official parsers stored under `/config/billy/parsers/official`.
 - Custom parsers stored under `/config/billy/parsers/custom` and exportable.
@@ -120,6 +366,6 @@ Billy 0.7.0 adds a sidebar panel at `/billy` while keeping `custom:bill-tracker-
 
 ## Community parser publishing
 
-Billy's Parser page can publish a locally saved custom parser to the community catalog as **Experimental**. Billy opens a pre-filled GitHub issue containing only the declarative YAML. The repository workflow validates it and can publish it automatically without maintainer approval. Parser quality is shown as Verified, Tested or Experimental in the catalog.
+Billy's Parser page can share a locally saved custom parser with the community. Billy opens a machine-readable GitHub submission containing parser metadata plus the declarative YAML. The `billy-parser` workflow validates it and publishes valid submissions automatically as **Experimental**, without maintainer approval.
 
-Experimental ownership comes from the GitHub issue author; community submissions cannot overwrite official/tested/verified parsers or another contributor's experimental parser.
+Community feedback is version-scoped and drives automatic promotion from **Experimental** to **Verified**. Parsers that are no longer recommended can be marked **Outdated** and point to a replacement. The catalog exposes only aggregate feedback counts; it does not expose installation fingerprints or bill data.

@@ -2,12 +2,76 @@ const BILLY_FRONTEND_VERSION = '0.11.3'
 const BILLY_IMPL_URL = `/bill_tracker/bill-tracker-card-impl.js?v=${BILLY_FRONTEND_VERSION}`
 const BILLY_WIDGETS_URL = `/bill_tracker/billy-widgets.js?v=${BILLY_FRONTEND_VERSION}`
 
+const BOOTSTRAP_TEXT = {
+  en: {
+    loading: 'Loading Billy…',
+    frontendError: 'Billy frontend failed to load',
+    editorLoading: 'Loading Billy editor…',
+    editorError: 'Billy editor failed to load',
+    cardName: 'Billy - Bill Tracker',
+    cardDescription:
+      'Recurring bills, expense splitting, balances and forecasts',
+  },
+  it: {
+    loading: 'Caricamento Billy…',
+    frontendError: 'Impossibile caricare il frontend di Billy',
+    editorLoading: 'Caricamento editor Billy…',
+    editorError: 'Impossibile caricare l’editor di Billy',
+    cardName: 'Billy - Gestione bollette',
+    cardDescription: 'Bollette ricorrenti, divisione spese, saldi e previsioni',
+  },
+  es: {
+    loading: 'Cargando Billy…',
+    frontendError: 'No se pudo cargar la interfaz de Billy',
+    editorLoading: 'Cargando el editor de Billy…',
+    editorError: 'No se pudo cargar el editor de Billy',
+    cardName: 'Billy - Gestión de facturas',
+    cardDescription:
+      'Facturas recurrentes, reparto de gastos, saldos y previsiones',
+  },
+  fr: {
+    loading: 'Chargement de Billy…',
+    frontendError: 'Impossible de charger l’interface Billy',
+    editorLoading: 'Chargement de l’éditeur Billy…',
+    editorError: 'Impossible de charger l’éditeur Billy',
+    cardName: 'Billy - Gestion des factures',
+    cardDescription:
+      'Factures récurrentes, partage des dépenses, soldes et prévisions',
+  },
+  de: {
+    loading: 'Billy wird geladen…',
+    frontendError: 'Billy-Oberfläche konnte nicht geladen werden',
+    editorLoading: 'Billy-Editor wird geladen…',
+    editorError: 'Billy-Editor konnte nicht geladen werden',
+    cardName: 'Billy - Rechnungsverwaltung',
+    cardDescription:
+      'Wiederkehrende Rechnungen, Kostenteilung, Salden und Prognosen',
+  },
+  pt: {
+    loading: 'A carregar Billy…',
+    frontendError: 'Não foi possível carregar a interface do Billy',
+    editorLoading: 'A carregar o editor do Billy…',
+    editorError: 'Não foi possível carregar o editor do Billy',
+    cardName: 'Billy - Gestão de contas',
+    cardDescription:
+      'Contas recorrentes, divisão de despesas, saldos e previsões',
+  },
+}
+
+function bootstrapText(key) {
+  const raw = String(navigator.language || 'en')
+    .toLowerCase()
+    .split(/[-_]/)[0]
+  const language = BOOTSTRAP_TEXT[raw] ? raw : 'en'
+  return BOOTSTRAP_TEXT[language][key] || BOOTSTRAP_TEXT.en[key] || key
+}
+
 let billyImplementationPromise = null
 let billyWidgetsPromise = null
 
-function loadBillyImplementation () {
+function loadBillyImplementation() {
   if (!billyImplementationPromise) {
-    billyImplementationPromise = import(BILLY_IMPL_URL).catch(error => {
+    billyImplementationPromise = import(BILLY_IMPL_URL).catch((error) => {
       billyImplementationPromise = null
       throw error
     })
@@ -15,9 +79,9 @@ function loadBillyImplementation () {
   return billyImplementationPromise
 }
 
-function loadBillyWidgets () {
+function loadBillyWidgets() {
   if (!billyWidgetsPromise) {
-    billyWidgetsPromise = import(BILLY_WIDGETS_URL).catch(error => {
+    billyWidgetsPromise = import(BILLY_WIDGETS_URL).catch((error) => {
       billyWidgetsPromise = null
       throw error
     })
@@ -26,7 +90,7 @@ function loadBillyWidgets () {
 }
 
 class BillyCardHost extends HTMLElement {
-  constructor () {
+  constructor() {
     super()
     this.attachShadow({ mode: 'open' })
     this._config = null
@@ -36,46 +100,46 @@ class BillyCardHost extends HTMLElement {
     this._loadError = null
   }
 
-  static getStubConfig () {
+  static getStubConfig() {
     return {
       title: '',
       columns: 'full',
       history_months: 12,
-      forecast_months: 12
+      forecast_months: 12,
     }
   }
 
-  static getConfigElement () {
+  static getConfigElement() {
     return document.createElement('bill-tracker-card-editor')
   }
 
-  connectedCallback () {
+  connectedCallback() {
     this._ensureImplementation()
   }
 
-  setConfig (config) {
+  setConfig(config) {
     this._config = { ...config }
     if (this._inner) this._inner.setConfig(this._config)
     else this._ensureImplementation()
   }
 
-  set hass (hass) {
+  set hass(hass) {
     this._hass = hass
     if (this._inner) this._inner.hass = hass
     else this._ensureImplementation()
   }
 
-  getCardSize () {
+  getCardSize() {
     return this._inner?.getCardSize?.() ?? 12
   }
 
-  getGridOptions () {
+  getGridOptions() {
     return (
       this._inner?.getGridOptions?.() ?? { columns: 'full', min_columns: 6 }
     )
   }
 
-  async _ensureImplementation () {
+  async _ensureImplementation() {
     if (this._inner || this._loading) return
     this._loading = true
     this._renderLoading()
@@ -98,15 +162,15 @@ class BillyCardHost extends HTMLElement {
     }
   }
 
-  _renderLoading () {
+  _renderLoading() {
     if (!this.shadowRoot || this._inner) return
     const message = this._loadError
-      ? `Billy frontend failed to load: ${this._escape(this._loadError)}`
-      : 'Loading Billy…'
+      ? `${bootstrapText('frontendError')}: ${this._escape(this._loadError)}`
+      : bootstrapText('loading')
     this.shadowRoot.innerHTML = `<ha-card><div style="padding:20px">${message}</div></ha-card>`
   }
 
-  _escape (value) {
+  _escape(value) {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
@@ -117,7 +181,7 @@ class BillyCardHost extends HTMLElement {
 }
 
 class BillyCardEditorHost extends HTMLElement {
-  constructor () {
+  constructor() {
     super()
     this.attachShadow({ mode: 'open' })
     this._config = BillyCardHost.getStubConfig()
@@ -127,22 +191,22 @@ class BillyCardEditorHost extends HTMLElement {
     this._loadError = null
   }
 
-  connectedCallback () {
+  connectedCallback() {
     this._ensureImplementation()
   }
 
-  setConfig (config) {
+  setConfig(config) {
     this._config = { ...BillyCardHost.getStubConfig(), ...config }
     if (this._inner) this._inner.setConfig(this._config)
     else this._ensureImplementation()
   }
 
-  set hass (hass) {
+  set hass(hass) {
     this._hass = hass
     if (this._inner) this._inner.hass = hass
   }
 
-  async _ensureImplementation () {
+  async _ensureImplementation() {
     if (this._inner || this._loading) return
     this._loading = true
     this._renderLoading()
@@ -164,15 +228,15 @@ class BillyCardEditorHost extends HTMLElement {
     }
   }
 
-  _renderLoading () {
+  _renderLoading() {
     if (!this.shadowRoot || this._inner) return
     const message = this._loadError
-      ? `Billy editor failed to load: ${this._escape(this._loadError)}`
-      : 'Loading Billy editor…'
+      ? `${bootstrapText('editorError')}: ${this._escape(this._loadError)}`
+      : bootstrapText('editorLoading')
     this.shadowRoot.innerHTML = `<div style="padding:16px;color:var(--primary-text-color)">${message}</div>`
   }
 
-  _escape (value) {
+  _escape(value) {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
@@ -193,22 +257,22 @@ if (!customElements.get('bill-tracker-card-editor')) {
 }
 
 window.customCards = window.customCards || []
-if (!window.customCards.some(card => card.type === 'bill-tracker-card')) {
+if (!window.customCards.some((card) => card.type === 'bill-tracker-card')) {
   window.customCards.push({
     type: 'bill-tracker-card',
-    name: 'Billy - Bill Tracker',
-    description: 'Recurring bills, expense splitting, balances and forecasts',
+    name: bootstrapText('cardName'),
+    description: bootstrapText('cardDescription'),
     preview: false,
-    documentationURL: 'https://github.com/robin994/billy'
+    documentationURL: 'https://github.com/robin994/billy',
   })
 }
 
 // Start preloading immediately, but the custom element hosts above are already
 // available even if the implementation takes longer to arrive.
-loadBillyImplementation().catch(error => {
+loadBillyImplementation().catch((error) => {
   console.error('Billy implementation preload failed', error)
 })
-loadBillyWidgets().catch(error => {
+loadBillyWidgets().catch((error) => {
   console.error('Billy widgets preload failed', error)
 })
 

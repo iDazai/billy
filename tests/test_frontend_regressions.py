@@ -1,3 +1,5 @@
+import json
+import re
 from pathlib import Path
 
 
@@ -297,6 +299,51 @@ def test_parser_manager_separates_catalog_and_installation_status():
     assert 'status = "outdated"' in manager
 
 
+def test_new_billy_frontends_support_all_shipped_languages():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    parser = (FRONTEND / "billy-parser-manager.js").read_text(encoding="utf-8")
+    widgets = (FRONTEND / "billy-widgets.js").read_text(encoding="utf-8")
+    bootstrap = (FRONTEND / "bill-tracker-card.js").read_text(encoding="utf-8")
+    extra = (FRONTEND / "billy-extra-i18n.js").read_text(encoding="utf-8")
+    init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
+
+    assert "BILLY_PANEL_EXTRA_TEXT" in panel
+    assert "BILLY_PARSER_EXTRA_TEXT" in parser
+    assert "billy-extra-i18n.js?v=0.11.3" in panel
+    assert "billy-extra-i18n.js?v=0.11.3" in parser
+    assert "['en', 'it', 'es', 'fr', 'de', 'pt']" in panel
+    assert "['en', 'it', 'es', 'fr', 'de', 'pt']" in parser
+    for language in ("es", "fr", "de", "pt"):
+        assert f"  {language}: {{" in extra
+        assert f"  {language}: [" in widgets
+        assert f"  {language}: {{" in bootstrap
+    assert 'EXTRA_I18N_URL = "/bill_tracker/billy-extra-i18n.js"' in init
+    assert "StaticPathConfig(EXTRA_I18N_URL, str(EXTRA_I18N_PATH), False)" in init
+
+
+def test_home_assistant_translation_files_have_matching_keys():
+    import json
+
+    translations = ROOT / "custom_components" / "bill_tracker" / "translations"
+
+    def flatten(value, prefix=""):
+        keys = set()
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else key
+            if isinstance(child, dict):
+                keys |= flatten(child, path)
+            else:
+                keys.add(path)
+        return keys
+
+    english = flatten(json.loads((translations / "en.json").read_text(encoding="utf-8")))
+    for language in ("it", "es", "fr", "de", "pt"):
+        localized = flatten(
+            json.loads((translations / f"{language}.json").read_text(encoding="utf-8"))
+        )
+        assert localized == english
+
+
 def test_bill_and_recurring_exports_allow_date_and_type_filters():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
@@ -426,3 +473,39 @@ def test_recurring_expenses_have_persistent_configurable_colors():
     assert 'name="color" type="color"' in panel
     assert '"color": self._normalize_color(color, color_index)' in manager
     assert 'vol.Optional("color", default=""): str' in init
+
+
+def test_home_assistant_translation_files_are_complete_and_localized():
+    translations = ROOT / "custom_components" / "bill_tracker" / "translations"
+
+    def flatten(value, prefix=""):
+        rows = {}
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else key
+            if isinstance(child, dict):
+                rows.update(flatten(child, path))
+            else:
+                rows[path] = str(child)
+        return rows
+
+    english = flatten(
+        json.loads((translations / "en.json").read_text(encoding="utf-8"))
+    )
+    placeholders = re.compile(r"\{[^}]+\}")
+
+    for language in ("it", "es", "fr", "de", "pt"):
+        localized = flatten(
+            json.loads((translations / f"{language}.json").read_text(encoding="utf-8"))
+        )
+        assert set(localized) == set(english)
+        same_as_english = [
+            key for key, value in localized.items() if value == english[key]
+        ]
+        assert len(same_as_english) <= 15, (
+            f"{language}.json looks mostly untranslated: "
+            f"{len(same_as_english)} strings still match en.json"
+        )
+        for key, english_value in english.items():
+            assert sorted(placeholders.findall(localized[key])) == sorted(
+                placeholders.findall(english_value)
+            ), f"Placeholder mismatch in {language}.json at {key}"

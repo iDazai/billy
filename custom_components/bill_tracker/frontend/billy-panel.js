@@ -1,4 +1,5 @@
 import './billy-parser-manager.js?v=0.11.3'
+import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.3'
 
 const BILLY_PANEL_VERSION = '0.11.3'
 
@@ -510,10 +511,14 @@ const TEXT = {
     openRepository: 'Apri repository',
   },
 }
+Object.assign(TEXT, BILLY_PANEL_EXTRA_TEXT)
 function languageOf(hass) {
   const raw =
     hass?.language || hass?.locale?.language || navigator.language || 'en'
-  return String(raw).toLowerCase().split(/[-_]/)[0] === 'it' ? 'it' : 'en'
+  const language = String(raw).toLowerCase().split(/[-_]/)[0]
+  return ['en', 'it', 'es', 'fr', 'de', 'pt'].includes(language)
+    ? language
+    : 'en'
 }
 
 function localeOf(hass) {

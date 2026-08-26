@@ -1,38 +1,480 @@
 const BILLY_WIDGETS_VERSION = '0.11.3'
 
-const CARD_META = [
-  ['billy-summary-card', 'Billy - Summary', 'Compact monthly bill summary'],
-  [
-    'billy-spending-card',
-    'Billy - Spending',
-    'Historical spending and forecast',
+const WIDGET_TEXT = {
+  en: {
+    openBilly: 'Open Billy',
+    loading: 'Loading Billy…',
+    thisMonth: 'This month',
+    outstanding: 'Outstanding',
+    nextMonth: 'Next month',
+    yearTotal: 'Year total',
+    monthlyRecurring: 'Monthly recurring',
+    reimbursements: 'Reimbursements',
+    summarySubtitle: 'Household bills at a glance',
+    spending: 'Spending',
+    bills: 'Bills',
+    recurring: 'Recurring',
+    forecast: 'Forecast',
+    noSpending: 'No spending data yet.',
+    historyForecast: 'History and forecast',
+    noExpensesMonth: 'No expenses this month.',
+    breakdown: 'Spending breakdown',
+    upcoming: 'Upcoming',
+    bill: 'Bill',
+    estimatedBill: 'Estimated bill',
+    nothingDue: 'Nothing due in this window.',
+    nextDays: 'Next {days} days',
+    recurringExpenses: 'Recurring expenses',
+    subscription: 'Subscription',
+    mortgage: 'Mortgage',
+    installment: 'Installment',
+    otherRecurring: 'Other recurring',
+    monthly: 'monthly',
+    everyMonths: 'every {months} months',
+    next: 'next',
+    left: '{count} left',
+    noRecurring: 'No recurring expenses.',
+    shown: '{count} shown',
+    payer: 'Payer',
+    items: '{count} items',
+    everyoneEven: 'Everyone is even.',
+    outstandingBalances: 'Outstanding balances',
+    installed: 'Installed',
+    experimental: 'Experimental',
+    updates: 'Updates',
+    errors: 'Errors',
+    parserHealth: 'Community parser health',
+  },
+  it: {
+    openBilly: 'Apri Billy',
+    loading: 'Caricamento Billy…',
+    thisMonth: 'Questo mese',
+    outstanding: 'Da pagare',
+    nextMonth: 'Prossimo mese',
+    yearTotal: 'Totale anno',
+    monthlyRecurring: 'Ricorrenti mensili',
+    reimbursements: 'Rimborsi',
+    summarySubtitle: 'Bollette domestiche a colpo d’occhio',
+    spending: 'Spese',
+    bills: 'Bollette',
+    recurring: 'Ricorrenti',
+    forecast: 'Previsione',
+    noSpending: 'Nessun dato di spesa disponibile.',
+    historyForecast: 'Storico e previsione',
+    noExpensesMonth: 'Nessuna spesa questo mese.',
+    breakdown: 'Ripartizione spese',
+    upcoming: 'Prossime spese',
+    bill: 'Bolletta',
+    estimatedBill: 'Bolletta stimata',
+    nothingDue: 'Nessuna scadenza in questo intervallo.',
+    nextDays: 'Prossimi {days} giorni',
+    recurringExpenses: 'Spese ricorrenti',
+    subscription: 'Abbonamento',
+    mortgage: 'Mutuo',
+    installment: 'Rateizzazione',
+    otherRecurring: 'Altra ricorrente',
+    monthly: 'mensile',
+    everyMonths: 'ogni {months} mesi',
+    next: 'prossima',
+    left: '{count} rimanenti',
+    noRecurring: 'Nessuna spesa ricorrente.',
+    shown: '{count} mostrate',
+    payer: 'Pagante',
+    items: '{count} voci',
+    everyoneEven: 'Tutti i saldi sono in pari.',
+    outstandingBalances: 'Rimborsi da regolare',
+    installed: 'Installati',
+    experimental: 'Sperimentali',
+    updates: 'Aggiornamenti',
+    errors: 'Errori',
+    parserHealth: 'Stato parser community',
+  },
+  es: {
+    openBilly: 'Abrir Billy',
+    loading: 'Cargando Billy…',
+    thisMonth: 'Este mes',
+    outstanding: 'Pendiente',
+    nextMonth: 'Próximo mes',
+    yearTotal: 'Total anual',
+    monthlyRecurring: 'Recurrentes mensuales',
+    reimbursements: 'Reembolsos',
+    summarySubtitle: 'Facturas del hogar de un vistazo',
+    spending: 'Gastos',
+    bills: 'Facturas',
+    recurring: 'Recurrentes',
+    forecast: 'Previsión',
+    noSpending: 'Todavía no hay datos de gastos.',
+    historyForecast: 'Historial y previsión',
+    noExpensesMonth: 'No hay gastos este mes.',
+    breakdown: 'Desglose de gastos',
+    upcoming: 'Próximos gastos',
+    bill: 'Factura',
+    estimatedBill: 'Factura estimada',
+    nothingDue: 'No hay vencimientos en este periodo.',
+    nextDays: 'Próximos {days} días',
+    recurringExpenses: 'Gastos recurrentes',
+    subscription: 'Suscripción',
+    mortgage: 'Hipoteca',
+    installment: 'Pago a plazos',
+    otherRecurring: 'Otro recurrente',
+    monthly: 'mensual',
+    everyMonths: 'cada {months} meses',
+    next: 'próximo',
+    left: '{count} restantes',
+    noRecurring: 'No hay gastos recurrentes.',
+    shown: '{count} mostrados',
+    payer: 'Pagador',
+    items: '{count} elementos',
+    everyoneEven: 'Todos están al día.',
+    outstandingBalances: 'Reembolsos pendientes',
+    installed: 'Instalados',
+    experimental: 'Experimentales',
+    updates: 'Actualizaciones',
+    errors: 'Errores',
+    parserHealth: 'Estado de parsers de la comunidad',
+  },
+  fr: {
+    openBilly: 'Ouvrir Billy',
+    loading: 'Chargement de Billy…',
+    thisMonth: 'Ce mois-ci',
+    outstanding: 'À payer',
+    nextMonth: 'Mois prochain',
+    yearTotal: 'Total annuel',
+    monthlyRecurring: 'Récurrents mensuels',
+    reimbursements: 'Remboursements',
+    summarySubtitle: 'Les factures du foyer en un coup d’œil',
+    spending: 'Dépenses',
+    bills: 'Factures',
+    recurring: 'Récurrentes',
+    forecast: 'Prévision',
+    noSpending: 'Aucune donnée de dépense pour le moment.',
+    historyForecast: 'Historique et prévision',
+    noExpensesMonth: 'Aucune dépense ce mois-ci.',
+    breakdown: 'Répartition des dépenses',
+    upcoming: 'Dépenses à venir',
+    bill: 'Facture',
+    estimatedBill: 'Facture estimée',
+    nothingDue: 'Aucune échéance sur cette période.',
+    nextDays: 'Prochains {days} jours',
+    recurringExpenses: 'Dépenses récurrentes',
+    subscription: 'Abonnement',
+    mortgage: 'Prêt immobilier',
+    installment: 'Paiement échelonné',
+    otherRecurring: 'Autre récurrente',
+    monthly: 'mensuel',
+    everyMonths: 'tous les {months} mois',
+    next: 'prochaine',
+    left: '{count} restantes',
+    noRecurring: 'Aucune dépense récurrente.',
+    shown: '{count} affichées',
+    payer: 'Payeur',
+    items: '{count} éléments',
+    everyoneEven: 'Tous les comptes sont équilibrés.',
+    outstandingBalances: 'Remboursements en attente',
+    installed: 'Installés',
+    experimental: 'Expérimentaux',
+    updates: 'Mises à jour',
+    errors: 'Erreurs',
+    parserHealth: 'État des parsers communautaires',
+  },
+  de: {
+    openBilly: 'Billy öffnen',
+    loading: 'Billy wird geladen…',
+    thisMonth: 'Dieser Monat',
+    outstanding: 'Offen',
+    nextMonth: 'Nächster Monat',
+    yearTotal: 'Jahressumme',
+    monthlyRecurring: 'Monatlich wiederkehrend',
+    reimbursements: 'Erstattungen',
+    summarySubtitle: 'Haushaltsrechnungen auf einen Blick',
+    spending: 'Ausgaben',
+    bills: 'Rechnungen',
+    recurring: 'Wiederkehrend',
+    forecast: 'Prognose',
+    noSpending: 'Noch keine Ausgabendaten vorhanden.',
+    historyForecast: 'Verlauf und Prognose',
+    noExpensesMonth: 'Keine Ausgaben in diesem Monat.',
+    breakdown: 'Ausgabenaufteilung',
+    upcoming: 'Anstehende Ausgaben',
+    bill: 'Rechnung',
+    estimatedBill: 'Geschätzte Rechnung',
+    nothingDue: 'In diesem Zeitraum ist nichts fällig.',
+    nextDays: 'Nächste {days} Tage',
+    recurringExpenses: 'Wiederkehrende Ausgaben',
+    subscription: 'Abonnement',
+    mortgage: 'Hypothek',
+    installment: 'Ratenzahlung',
+    otherRecurring: 'Sonstige wiederkehrend',
+    monthly: 'monatlich',
+    everyMonths: 'alle {months} Monate',
+    next: 'nächste',
+    left: '{count} verbleibend',
+    noRecurring: 'Keine wiederkehrenden Ausgaben.',
+    shown: '{count} angezeigt',
+    payer: 'Zahler',
+    items: '{count} Positionen',
+    everyoneEven: 'Alle Salden sind ausgeglichen.',
+    outstandingBalances: 'Offene Erstattungen',
+    installed: 'Installiert',
+    experimental: 'Experimentell',
+    updates: 'Updates',
+    errors: 'Fehler',
+    parserHealth: 'Status der Community-Parser',
+  },
+  pt: {
+    openBilly: 'Abrir Billy',
+    loading: 'A carregar Billy…',
+    thisMonth: 'Este mês',
+    outstanding: 'Por pagar',
+    nextMonth: 'Próximo mês',
+    yearTotal: 'Total anual',
+    monthlyRecurring: 'Recorrentes mensais',
+    reimbursements: 'Reembolsos',
+    summarySubtitle: 'Contas domésticas num relance',
+    spending: 'Despesas',
+    bills: 'Contas',
+    recurring: 'Recorrentes',
+    forecast: 'Previsão',
+    noSpending: 'Ainda não existem dados de despesas.',
+    historyForecast: 'Histórico e previsão',
+    noExpensesMonth: 'Sem despesas este mês.',
+    breakdown: 'Distribuição das despesas',
+    upcoming: 'Próximas despesas',
+    bill: 'Conta',
+    estimatedBill: 'Conta estimada',
+    nothingDue: 'Nada a vencer neste período.',
+    nextDays: 'Próximos {days} dias',
+    recurringExpenses: 'Despesas recorrentes',
+    subscription: 'Subscrição',
+    mortgage: 'Hipoteca',
+    installment: 'Pagamento em prestações',
+    otherRecurring: 'Outra recorrente',
+    monthly: 'mensal',
+    everyMonths: 'a cada {months} meses',
+    next: 'próxima',
+    left: '{count} restantes',
+    noRecurring: 'Sem despesas recorrentes.',
+    shown: '{count} apresentadas',
+    payer: 'Pagador',
+    items: '{count} itens',
+    everyoneEven: 'Todos os saldos estão equilibrados.',
+    outstandingBalances: 'Reembolsos pendentes',
+    installed: 'Instalados',
+    experimental: 'Experimentais',
+    updates: 'Atualizações',
+    errors: 'Erros',
+    parserHealth: 'Estado dos parsers da comunidade',
+  },
+}
+
+const CARD_META = {
+  en: [
+    ['billy-summary-card', 'Billy - Summary', 'Compact monthly bill summary'],
+    [
+      'billy-spending-card',
+      'Billy - Spending',
+      'Historical spending and forecast',
+    ],
+    [
+      'billy-breakdown-card',
+      'Billy - Breakdown',
+      'Current spending by bill type',
+    ],
+    [
+      'billy-upcoming-card',
+      'Billy - Upcoming',
+      'Upcoming bills and recurring charges',
+    ],
+    [
+      'billy-recurring-card',
+      'Billy - Recurring',
+      'Recurring expenses and installments',
+    ],
+    [
+      'billy-balances-card',
+      'Billy - Balances',
+      'Outstanding reimbursements between payers',
+    ],
+    [
+      'billy-parser-status-card',
+      'Billy - Parser status',
+      'Parser health and update status',
+    ],
   ],
-  [
-    'billy-breakdown-card',
-    'Billy - Breakdown',
-    'Current spending by bill type',
+  it: [
+    [
+      'billy-summary-card',
+      'Billy - Riepilogo',
+      'Riepilogo mensile compatto delle bollette',
+    ],
+    ['billy-spending-card', 'Billy - Spese', 'Storico spese e previsione'],
+    [
+      'billy-breakdown-card',
+      'Billy - Ripartizione',
+      'Spese correnti per tipologia',
+    ],
+    [
+      'billy-upcoming-card',
+      'Billy - Prossime spese',
+      'Bollette e ricorrenti in scadenza',
+    ],
+    ['billy-recurring-card', 'Billy - Ricorrenti', 'Spese ricorrenti e rate'],
+    [
+      'billy-balances-card',
+      'Billy - Rimborsi',
+      'Rimborsi da regolare tra pagatori',
+    ],
+    [
+      'billy-parser-status-card',
+      'Billy - Stato parser',
+      'Stato e aggiornamenti dei parser',
+    ],
   ],
-  [
-    'billy-upcoming-card',
-    'Billy - Upcoming',
-    'Upcoming bills and recurring charges',
+  es: [
+    [
+      'billy-summary-card',
+      'Billy - Resumen',
+      'Resumen mensual compacto de facturas',
+    ],
+    [
+      'billy-spending-card',
+      'Billy - Gastos',
+      'Historial de gastos y previsión',
+    ],
+    [
+      'billy-breakdown-card',
+      'Billy - Desglose',
+      'Gastos actuales por tipo de factura',
+    ],
+    [
+      'billy-upcoming-card',
+      'Billy - Próximos gastos',
+      'Facturas y recurrentes próximos',
+    ],
+    [
+      'billy-recurring-card',
+      'Billy - Recurrentes',
+      'Gastos recurrentes y cuotas',
+    ],
+    [
+      'billy-balances-card',
+      'Billy - Reembolsos',
+      'Reembolsos pendientes entre pagadores',
+    ],
+    [
+      'billy-parser-status-card',
+      'Billy - Estado de parsers',
+      'Estado y actualizaciones de parsers',
+    ],
   ],
-  [
-    'billy-recurring-card',
-    'Billy - Recurring',
-    'Recurring expenses and installments',
+  fr: [
+    [
+      'billy-summary-card',
+      'Billy - Résumé',
+      'Résumé mensuel compact des factures',
+    ],
+    [
+      'billy-spending-card',
+      'Billy - Dépenses',
+      'Historique des dépenses et prévision',
+    ],
+    [
+      'billy-breakdown-card',
+      'Billy - Répartition',
+      'Dépenses actuelles par type de facture',
+    ],
+    [
+      'billy-upcoming-card',
+      'Billy - À venir',
+      'Factures et charges récurrentes à venir',
+    ],
+    [
+      'billy-recurring-card',
+      'Billy - Récurrentes',
+      'Dépenses récurrentes et échéances',
+    ],
+    [
+      'billy-balances-card',
+      'Billy - Remboursements',
+      'Remboursements en attente entre payeurs',
+    ],
+    [
+      'billy-parser-status-card',
+      'Billy - État des parsers',
+      'État et mises à jour des parsers',
+    ],
   ],
-  [
-    'billy-balances-card',
-    'Billy - Balances',
-    'Outstanding reimbursements between payers',
+  de: [
+    [
+      'billy-summary-card',
+      'Billy - Übersicht',
+      'Kompakte monatliche Rechnungsübersicht',
+    ],
+    ['billy-spending-card', 'Billy - Ausgaben', 'Ausgabenverlauf und Prognose'],
+    [
+      'billy-breakdown-card',
+      'Billy - Aufteilung',
+      'Aktuelle Ausgaben nach Rechnungstyp',
+    ],
+    [
+      'billy-upcoming-card',
+      'Billy - Anstehend',
+      'Anstehende Rechnungen und wiederkehrende Kosten',
+    ],
+    [
+      'billy-recurring-card',
+      'Billy - Wiederkehrend',
+      'Wiederkehrende Ausgaben und Raten',
+    ],
+    [
+      'billy-balances-card',
+      'Billy - Erstattungen',
+      'Offene Erstattungen zwischen Zahlern',
+    ],
+    [
+      'billy-parser-status-card',
+      'Billy - Parser-Status',
+      'Parser-Status und Updates',
+    ],
   ],
-  [
-    'billy-parser-status-card',
-    'Billy - Parser status',
-    'Parser health and update status',
+  pt: [
+    [
+      'billy-summary-card',
+      'Billy - Resumo',
+      'Resumo mensal compacto das contas',
+    ],
+    [
+      'billy-spending-card',
+      'Billy - Despesas',
+      'Histórico de despesas e previsão',
+    ],
+    [
+      'billy-breakdown-card',
+      'Billy - Distribuição',
+      'Despesas atuais por tipo de conta',
+    ],
+    [
+      'billy-upcoming-card',
+      'Billy - Próximas despesas',
+      'Contas e recorrentes a vencer',
+    ],
+    [
+      'billy-recurring-card',
+      'Billy - Recorrentes',
+      'Despesas recorrentes e prestações',
+    ],
+    [
+      'billy-balances-card',
+      'Billy - Reembolsos',
+      'Reembolsos pendentes entre pagadores',
+    ],
+    [
+      'billy-parser-status-card',
+      'Billy - Estado dos parsers',
+      'Estado e atualizações dos parsers',
+    ],
   ],
-]
+}
 
 function esc(value) {
   return String(value ?? '')
@@ -129,6 +571,21 @@ class BillyWidgetBase extends HTMLElement {
     )
   }
 
+  get language() {
+    const raw = String(this.locale || 'en')
+      .toLowerCase()
+      .split(/[-_]/)[0]
+    return WIDGET_TEXT[raw] ? raw : 'en'
+  }
+
+  t(key, vars = {}) {
+    let text = WIDGET_TEXT[this.language]?.[key] ?? WIDGET_TEXT.en[key] ?? key
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value))
+    }
+    return text
+  }
+
   get currency() {
     return this._data?.currency || this._hass?.config?.currency || 'EUR'
   }
@@ -195,7 +652,7 @@ class BillyWidgetBase extends HTMLElement {
 
   _shell(title, subtitle, body, view = 'dashboard') {
     if (this._loading && !this._data)
-      body = '<div class="loading">Loading Billy…</div>'
+      body = `<div class="loading">${esc(this.t('loading'))}</div>`
     if (this._error) body = `<div class="error">${esc(this._error)}</div>`
     return `
       <style>${this._styles(this.extraStyles || '')}</style>
@@ -203,7 +660,7 @@ class BillyWidgetBase extends HTMLElement {
         <div class="card">
           <div class="head">
             <div><h2>${esc(title)}</h2>${subtitle ? `<p>${esc(subtitle)}</p>` : ''}</div>
-            <button class="link" data-open-billy>Open Billy</button>
+            <button class="link" data-open-billy>${esc(this.t('openBilly'))}</button>
           </div>
           ${body}
         </div>
@@ -242,18 +699,18 @@ class BillySummaryCard extends BillyWidgetBase {
     const summary = this._data?.summary || {}
     const body = `
       <div class="hero">
-        <div class="metric primary"><span class="label">This month</span><span class="value amount">${this.money(summary.current_month)}</span></div>
-        <div class="metric"><span class="label">Outstanding</span><span class="value amount">${this.money(summary.outstanding_total)}</span></div>
+        <div class="metric primary"><span class="label">${esc(this.t('thisMonth'))}</span><span class="value amount">${this.money(summary.current_month)}</span></div>
+        <div class="metric"><span class="label">${esc(this.t('outstanding'))}</span><span class="value amount">${this.money(summary.outstanding_total)}</span></div>
       </div>
       <div class="grid">
-        <div class="metric"><span class="label">Next month</span><span class="value amount">${this.money(summary.next_month_estimate)}</span></div>
-        <div class="metric"><span class="label">Year total</span><span class="value amount">${this.money(summary.year_total)}</span></div>
-        <div class="metric"><span class="label">Monthly recurring</span><span class="value amount">${this.money(summary.recurring_monthly_equivalent)}</span></div>
-        <div class="metric"><span class="label">Reimbursements</span><span class="value amount">${this.money(summary.reimbursement_total)}</span></div>
+        <div class="metric"><span class="label">${esc(this.t('nextMonth'))}</span><span class="value amount">${this.money(summary.next_month_estimate)}</span></div>
+        <div class="metric"><span class="label">${esc(this.t('yearTotal'))}</span><span class="value amount">${this.money(summary.year_total)}</span></div>
+        <div class="metric"><span class="label">${esc(this.t('monthlyRecurring'))}</span><span class="value amount">${this.money(summary.recurring_monthly_equivalent)}</span></div>
+        <div class="metric"><span class="label">${esc(this.t('reimbursements'))}</span><span class="value amount">${this.money(summary.reimbursement_total)}</span></div>
       </div>`
     this.shadowRoot.innerHTML = this._shell(
       this._config.title || 'Billy',
-      'Household bills at a glance',
+      this.t('summarySubtitle'),
       body,
     )
     this._bind('dashboard')
@@ -263,7 +720,7 @@ class BillySummaryCard extends BillyWidgetBase {
 class BillySpendingCard extends BillyWidgetBase {
   static getStubConfig() {
     return {
-      title: 'Spending',
+      title: '',
       months: 12,
       forecast_months: 3,
       show_recurring: true,
@@ -366,11 +823,11 @@ class BillySpendingCard extends BillyWidgetBase {
       })
       .join('')
     const body = rows.length
-      ? `<div class="chart">${bars}</div><div class="legend"><span><i></i>Bills</span><span class="rec"><i></i>Recurring</span><span class="for"><i></i>Forecast</span></div>`
-      : '<div class="empty">No spending data yet.</div>'
+      ? `<div class="chart">${bars}</div><div class="legend"><span><i></i>${esc(this.t('bills'))}</span><span class="rec"><i></i>${esc(this.t('recurring'))}</span><span class="for"><i></i>${esc(this.t('forecast'))}</span></div>`
+      : `<div class="empty">${esc(this.t('noSpending'))}</div>`
     this.shadowRoot.innerHTML = this._shell(
-      this._config.title || 'Spending',
-      'History and forecast',
+      this._config.title || this.t('spending'),
+      this.t('historyForecast'),
       body,
     )
     this._bind('dashboard')
@@ -379,7 +836,7 @@ class BillySpendingCard extends BillyWidgetBase {
 
 class BillyBreakdownCard extends BillyWidgetBase {
   static getStubConfig() {
-    return { title: 'This month', limit: 8, show_recurring: true }
+    return { title: '', limit: 8, show_recurring: true }
   }
 
   get extraStyles() {
@@ -424,10 +881,10 @@ class BillyBreakdownCard extends BillyWidgetBase {
               `<div class="row"><div class="name">${esc(item.name)}</div><div class="track"><div class="fill" style="width:${Math.max(2, (item.amount / max) * 100)}%"></div></div><div class="price amount">${this.money(item.amount)}</div></div>`,
           )
           .join('')}</div>`
-      : '<div class="empty">No expenses this month.</div>'
+      : `<div class="empty">${esc(this.t('noExpensesMonth'))}</div>`
     this.shadowRoot.innerHTML = this._shell(
-      this._config.title || 'This month',
-      'Spending breakdown',
+      this._config.title || this.t('thisMonth'),
+      this.t('breakdown'),
       body,
     )
     this._bind('dashboard')
@@ -436,7 +893,7 @@ class BillyBreakdownCard extends BillyWidgetBase {
 
 class BillyUpcomingCard extends BillyWidgetBase {
   static getStubConfig() {
-    return { title: 'Upcoming', limit: 6, days: 90, forecast_months: 3 }
+    return { title: '', limit: 6, days: 90, forecast_months: 3 }
   }
 
   get extraStyles() {
@@ -458,7 +915,7 @@ class BillyUpcomingCard extends BillyWidgetBase {
       const due = String(expense.due_date || '')
       if (expense.paid || !due || due < today || due > maxIso) continue
       items.push({
-        name: expense.category || expense.provider || 'Bill',
+        name: expense.category || expense.provider || this.t('bill'),
         amount: number(expense.amount),
         due,
         source: 'bill',
@@ -468,7 +925,7 @@ class BillyUpcomingCard extends BillyWidgetBase {
       const due = item.due_date || `${item.key}-28`
       if (due < today || due > maxIso) continue
       items.push({
-        name: item.category || 'Upcoming',
+        name: item.category || this.t('upcoming'),
         amount: number(item.amount),
         due,
         source: item.source,
@@ -493,13 +950,13 @@ class BillyUpcomingCard extends BillyWidgetBase {
       ? `<div class="list">${items
           .map(
             (item) =>
-              `<div class="item"><div class="date">${esc(dateLabel(item.due, this.locale))}</div><div class="name">${esc(item.name)}<span class="kind">${item.source === 'recurring' ? 'Recurring' : item.source === 'bill_forecast' ? 'Estimated bill' : 'Bill'}</span></div><div class="price amount">${this.money(item.amount)}</div></div>`,
+              `<div class="item"><div class="date">${esc(dateLabel(item.due, this.locale))}</div><div class="name">${esc(item.name)}<span class="kind">${esc(item.source === 'recurring' ? this.t('recurring') : item.source === 'bill_forecast' ? this.t('estimatedBill') : this.t('bill'))}</span></div><div class="price amount">${this.money(item.amount)}</div></div>`,
           )
           .join('')}</div>`
-      : '<div class="empty">Nothing due in this window.</div>'
+      : `<div class="empty">${esc(this.t('nothingDue'))}</div>`
     this.shadowRoot.innerHTML = this._shell(
-      this._config.title || 'Upcoming',
-      `Next ${Number(this._config.days || 90)} days`,
+      this._config.title || this.t('upcoming'),
+      this.t('nextDays', { days: Number(this._config.days || 90) }),
       body,
     )
     this._bind('bills')
@@ -508,7 +965,7 @@ class BillyUpcomingCard extends BillyWidgetBase {
 
 class BillyRecurringCard extends BillyWidgetBase {
   static getStubConfig() {
-    return { title: 'Recurring expenses', limit: 6, active_only: true }
+    return { title: '', limit: 6, active_only: true }
   }
 
   get extraStyles() {
@@ -539,17 +996,27 @@ class BillyRecurringCard extends BillyWidgetBase {
           .map((item) => {
             const installment =
               item.kind === 'installment' && item.remaining_installments != null
+            const kindKey =
+              item.kind === 'subscription'
+                ? 'subscription'
+                : item.kind === 'mortgage'
+                  ? 'mortgage'
+                  : item.kind === 'installment'
+                    ? 'installment'
+                    : 'otherRecurring'
             const cadence =
               Number(item.interval_months || 1) === 1
-                ? 'monthly'
-                : `every ${Number(item.interval_months)} months`
-            return `<div class="item"><div class="dot" style="background:${esc(item.color || 'var(--primary-color)')}"></div><div><div class="name">${esc(item.name)}</div><span class="meta">${esc(item.kind || 'recurring')} · ${cadence}${item.next_due_date ? ` · next ${esc(dateLabel(item.next_due_date, this.locale))}` : ''}</span></div><div class="price amount">${this.money(item.amount)}${installment ? `<span class="remaining">${Number(item.remaining_installments)} left</span>` : ''}</div></div>`
+                ? this.t('monthly')
+                : this.t('everyMonths', {
+                    months: Number(item.interval_months),
+                  })
+            return `<div class="item"><div class="dot" style="background:${esc(item.color || 'var(--primary-color)')}"></div><div><div class="name">${esc(item.name)}</div><span class="meta">${esc(this.t(kindKey))} · ${esc(cadence)}${item.next_due_date ? ` · ${esc(this.t('next'))} ${esc(dateLabel(item.next_due_date, this.locale))}` : ''}</span></div><div class="price amount">${this.money(item.amount)}${installment ? `<span class="remaining">${esc(this.t('left', { count: Number(item.remaining_installments) }))}</span>` : ''}</div></div>`
           })
           .join('')}</div>`
-      : '<div class="empty">No recurring expenses.</div>'
+      : `<div class="empty">${esc(this.t('noRecurring'))}</div>`
     this.shadowRoot.innerHTML = this._shell(
-      this._config.title || 'Recurring expenses',
-      `${items.length} shown`,
+      this._config.title || this.t('recurringExpenses'),
+      this.t('shown', { count: items.length }),
       body,
     )
     this._bind('recurring')
@@ -558,7 +1025,7 @@ class BillyRecurringCard extends BillyWidgetBase {
 
 class BillyBalancesCard extends BillyWidgetBase {
   static getStubConfig() {
-    return { title: 'Reimbursements', limit: 6, show_paypal: true }
+    return { title: '', limit: 6, show_paypal: true }
   }
 
   get extraStyles() {
@@ -582,17 +1049,19 @@ class BillyBalancesCard extends BillyWidgetBase {
             const from =
               debt.from_name ||
               payerMap.get(String(debt.from_payer_id)) ||
-              'Payer'
+              this.t('payer')
             const to =
-              debt.to_name || payerMap.get(String(debt.to_payer_id)) || 'Payer'
+              debt.to_name ||
+              payerMap.get(String(debt.to_payer_id)) ||
+              this.t('payer')
             const paypal = this._config.show_paypal !== false && debt.paypal_url
-            return `<div class="debt"><div class="route"><strong>${esc(from)}</strong> → ${esc(to)}<span class="meta">${Number(debt.item_count || debt.expense_count || 0)} items</span></div><div class="right"><span class="price amount">${this.money(debt.amount)}</span>${paypal ? `<a class="paypal" href="${esc(debt.paypal_url)}" target="_blank" rel="noopener">PayPal</a>` : ''}</div></div>`
+            return `<div class="debt"><div class="route"><strong>${esc(from)}</strong> → ${esc(to)}<span class="meta">${esc(this.t('items', { count: Number(debt.item_count || debt.expense_count || 0) }))}</span></div><div class="right"><span class="price amount">${this.money(debt.amount)}</span>${paypal ? `<a class="paypal" href="${esc(debt.paypal_url)}" target="_blank" rel="noopener">PayPal</a>` : ''}</div></div>`
           })
           .join('')}</div>`
-      : '<div class="empty">Everyone is even.</div>'
+      : `<div class="empty">${esc(this.t('everyoneEven'))}</div>`
     this.shadowRoot.innerHTML = this._shell(
-      this._config.title || 'Reimbursements',
-      'Outstanding balances',
+      this._config.title || this.t('reimbursements'),
+      this.t('outstandingBalances'),
       body,
     )
     this._bind('bills')
@@ -623,14 +1092,14 @@ class BillyParserStatusCard extends BillyWidgetBase {
     ).length
     const errors = rows.filter((row) => row.status === 'error').length
     const body = `<div class="stats">
-      <div class="stat"><span class="value">${Number(counts.installed || rows.filter((row) => row.installed).length)}</span><span class="label">Installed</span></div>
-      <div class="stat"><span class="value alert">${experimental}</span><span class="label">Experimental</span></div>
-      <div class="stat"><span class="value alert">${Number(counts.outdated || 0)}</span><span class="label">Updates</span></div>
-      <div class="stat"><span class="value ${errors ? 'bad' : ''}">${errors}</span><span class="label">Errors</span></div>
+      <div class="stat"><span class="value">${Number(counts.installed || rows.filter((row) => row.installed).length)}</span><span class="label">${esc(this.t('installed'))}</span></div>
+      <div class="stat"><span class="value alert">${experimental}</span><span class="label">${esc(this.t('experimental'))}</span></div>
+      <div class="stat"><span class="value alert">${Number(counts.outdated || 0)}</span><span class="label">${esc(this.t('updates'))}</span></div>
+      <div class="stat"><span class="value ${errors ? 'bad' : ''}">${errors}</span><span class="label">${esc(this.t('errors'))}</span></div>
     </div>`
     this.shadowRoot.innerHTML = this._shell(
       this._config.title || 'Billy Parser',
-      'Community parser health',
+      this.t('parserHealth'),
       body,
       'parsers',
     )
@@ -653,7 +1122,11 @@ for (const [name, klass] of DEFINITIONS) {
 }
 
 window.customCards = window.customCards || []
-for (const [type, name, description] of CARD_META) {
+const pickerLanguage = String(navigator.language || 'en')
+  .toLowerCase()
+  .split(/[-_]/)[0]
+const pickerCards = CARD_META[pickerLanguage] || CARD_META.en
+for (const [type, name, description] of pickerCards) {
   if (window.customCards.some((card) => card.type === type)) continue
   window.customCards.push({
     type,

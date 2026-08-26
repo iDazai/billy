@@ -1,4 +1,4 @@
-const BILLY_PARSER_MANAGER_VERSION = '0.11.0'
+const BILLY_PARSER_MANAGER_VERSION = '0.11.3'
 
 const TEXT = {
   en: {

@@ -4,7 +4,7 @@ from __future__ import annotations
 from calendar import monthrange
 from collections import defaultdict
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from math import isfinite
 from statistics import mean
 from typing import Any
@@ -49,6 +49,7 @@ class BillTrackerManager:
         self.payers: list[dict[str, Any]] = []
         self.settlements: list[dict[str, Any]] = []
         self.recurring_expenses: list[dict[str, Any]] = []
+        self.recurring_occurrences: list[dict[str, Any]] = []
 
     async def async_load(self) -> None:
         """Load and migrate the persistent database."""
@@ -58,6 +59,7 @@ class BillTrackerManager:
         self.payers = [dict(x) for x in data.get("payers", [])]
         self.settlements = [dict(x) for x in data.get("settlements", [])]
         self.recurring_expenses = [dict(x) for x in data.get("recurring_expenses", [])]
+        self.recurring_occurrences = [dict(x) for x in data.get("recurring_occurrences", [])]
 
         changed = False
         changed |= self._normalize_payers()
@@ -68,6 +70,8 @@ class BillTrackerManager:
         changed |= self._migrate_expenses()
         changed |= self._migrate_settlements()
         changed |= self._migrate_recurring_expenses()
+        changed |= self._migrate_recurring_occurrences()
+        changed |= self._sync_recurring_occurrences()
         self._sort()
 
         if changed or data.get("schema_version") != STORAGE_SCHEMA_VERSION:
@@ -153,6 +157,19 @@ class BillTrackerManager:
             for x in self.expenses
         ):
             raise ValueError("Questo pagante è presente nello storico: disattivalo invece di eliminarlo")
+        if any(x.get("payer_id") == payer_id for x in self.recurring_expenses):
+            raise ValueError("Questo pagante è usato da una spesa ricorrente: disattivalo invece di eliminarlo")
+        if any(
+            any(part.get("payer_id") == payer_id for part in x.get("split", []))
+            for x in self.recurring_expenses
+        ):
+            raise ValueError("Questo pagante è usato da una spesa ricorrente: disattivalo invece di eliminarlo")
+        if any(
+            x.get("payer_id") == payer_id
+            or any(part.get("payer_id") == payer_id for part in x.get("split", []))
+            for x in self.recurring_occurrences
+        ):
+            raise ValueError("Questo pagante è presente nello storico delle spese ricorrenti: disattivalo invece di eliminarlo")
         if any(x.get("default_payer_id") == payer_id for x in self.categories):
             raise ValueError("Questo pagante è impostato come pagatore predefinito di una bolletta")
         if any(
@@ -493,8 +510,11 @@ class BillTrackerManager:
         auto_renew: bool = False,
         renewal_interval_months: int = 12,
         installment_count: int | None = None,
+        payer_id: str | None = None,
+        split: list[dict[str, Any]] | None = None,
         provider: str = "",
         contract: str = "",
+        color: str | None = None,
         note: str = "",
         active: bool = True,
     ) -> dict[str, Any]:
@@ -508,8 +528,11 @@ class BillTrackerManager:
             auto_renew=auto_renew,
             renewal_interval_months=renewal_interval_months,
             installment_count=installment_count,
+            payer_id=payer_id,
+            split=split,
             provider=provider,
             contract=contract,
+            color=color,
             note=note,
             active=active,
         )
@@ -519,7 +542,9 @@ class BillTrackerManager:
                 "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             }
         )
+        item["reimbursement_tracking_start_date"] = self._recurring_tracking_start(item)
         self.recurring_expenses.append(item)
+        self._sync_recurring_occurrences()
         self._sort()
         await self._save_and_notify()
         return self._public_recurring_expense(item)
@@ -537,14 +562,18 @@ class BillTrackerManager:
         auto_renew: bool = False,
         renewal_interval_months: int = 12,
         installment_count: int | None = None,
+        payer_id: str | None = None,
+        split: list[dict[str, Any]] | None = None,
         provider: str = "",
         contract: str = "",
+        color: str | None = None,
         note: str = "",
         active: bool = True,
     ) -> dict[str, Any] | None:
         current = self.recurring_expense(recurring_id)
         if current is None:
             return None
+        was_active = bool(current.get("active", True))
         normalized = self._normalize_recurring_payload(
             name=name,
             kind=kind,
@@ -555,13 +584,26 @@ class BillTrackerManager:
             auto_renew=auto_renew,
             renewal_interval_months=renewal_interval_months,
             installment_count=installment_count,
+            payer_id=payer_id,
+            split=split,
             provider=provider,
             contract=contract,
+            color=color or current.get("color"),
             note=note,
             active=active,
         )
+        schedule_changed = any(
+            current.get(key) != normalized.get(key)
+            for key in ("start_date", "end_date", "interval_months", "installment_count")
+        )
         current.update(normalized)
+        if schedule_changed or (not was_active and bool(current.get("active", True))):
+            current["reimbursement_tracking_start_date"] = self._recurring_tracking_start(
+                current, on_or_after=date.today() + timedelta(days=1)
+            )
+        self._refresh_open_recurring_occurrences(current)
         current["updated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        self._sync_recurring_occurrences()
         self._sort()
         await self._save_and_notify()
         return self._public_recurring_expense(current)
@@ -572,21 +614,70 @@ class BillTrackerManager:
         item = self.recurring_expense(recurring_id)
         if item is None:
             return None
+        was_active = bool(item.get("active", True))
         item["active"] = bool(active)
+        if not was_active and active:
+            # Resume from the next real charge and do not backfill the paused gap.
+            item["reimbursement_tracking_start_date"] = self._recurring_tracking_start(
+                item, on_or_after=date.today()
+            )
+            self._sync_recurring_occurrences()
         item["updated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
         self._sort()
         await self._save_and_notify()
         return self._public_recurring_expense(item)
 
     async def async_delete_recurring(self, recurring_id: str) -> bool:
+        linked_occurrence_ids = {
+            str(x.get("id"))
+            for x in self.recurring_occurrences
+            if x.get("recurring_id") == recurring_id
+        }
+        if linked_occurrence_ids and any(
+            linked_occurrence_ids.intersection(
+                {str(value) for value in settlement.get("recurring_occurrence_ids", []) if value}
+            )
+            for settlement in self.settlements
+        ):
+            raise ValueError(
+                "Questa spesa ricorrente è presente nello storico rimborsi: disattivala invece di eliminarla"
+            )
         before = len(self.recurring_expenses)
         self.recurring_expenses = [
             x for x in self.recurring_expenses if x.get("id") != recurring_id
         ]
         changed = len(self.recurring_expenses) != before
         if changed:
+            self.recurring_occurrences = [
+                x for x in self.recurring_occurrences if x.get("recurring_id") != recurring_id
+            ]
             await self._save_and_notify()
         return changed
+
+    async def async_set_recurring_reimbursement_done(
+        self, occurrence_id: str, done: bool
+    ) -> dict[str, Any] | None:
+        """Mark one materialized recurring charge reimbursement done or pending."""
+        self._sync_recurring_occurrences()
+        item = next(
+            (x for x in self.recurring_occurrences if x.get("id") == occurrence_id),
+            None,
+        )
+        if item is None:
+            return None
+        state = self._recurring_occurrence_reimbursement_state(item)
+        if state["status"] == "none":
+            raise ValueError("Questa spesa ricorrente non prevede rimborsi tra utenti")
+        if state["has_recorded_settlement"]:
+            raise ValueError(
+                "Questa rata ricorrente è collegata a un rimborso registrato: gestiscilo dallo storico rimborsi"
+            )
+        item["reimbursement_manual_done"] = bool(done)
+        item["reimbursement_manual_at"] = (
+            datetime.now().astimezone().isoformat(timespec="seconds") if done else None
+        )
+        await self._save_and_notify()
+        return self._public_recurring_occurrence(item)
 
     async def async_import_csv(
         self,
@@ -863,8 +954,11 @@ class BillTrackerManager:
             raise ValueError("Per ora Billy può registrare solo l'intero rimborso aperto")
 
         expense_ids = [str(x) for x in debt.get("expense_ids", []) if x]
-        if not expense_ids:
-            raise ValueError("Nessuna bolletta associata a questo rimborso")
+        recurring_occurrence_ids = [
+            str(x) for x in debt.get("recurring_occurrence_ids", []) if x
+        ]
+        if not expense_ids and not recurring_occurrence_ids:
+            raise ValueError("Nessuna spesa associata a questo rimborso")
 
         item = {
             "id": uuid4().hex,
@@ -872,6 +966,7 @@ class BillTrackerManager:
             "to_payer_id": to_payer_id,
             "amount": round(outstanding, 2),
             "expense_ids": expense_ids,
+            "recurring_occurrence_ids": recurring_occurrence_ids,
             "note": note.strip(),
             "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
@@ -891,8 +986,10 @@ class BillTrackerManager:
 
     def _pairwise_debts(self) -> list[dict[str, Any]]:
         """Build outstanding reimbursements independently from bill payment status."""
+        self._sync_recurring_occurrences()
         gross: dict[tuple[str, str], float] = defaultdict(float)
         expense_ids: dict[tuple[str, str], set[str]] = defaultdict(set)
+        recurring_occurrence_ids: dict[tuple[str, str], set[str]] = defaultdict(set)
 
         # Every split bill creates a reimbursement obligation towards the payer
         # who advanced the provider bill. Whether that provider bill is paid is
@@ -919,6 +1016,32 @@ class BillTrackerManager:
                 gross[key] += share
                 if item_id:
                     expense_ids[key].add(item_id)
+
+        # Due recurring charges use the same split logic as normal bills. Each
+        # materialized occurrence keeps an amount/payer/split snapshot so later
+        # edits to the recurring rule do not rewrite reimbursement history.
+        for item in self.recurring_occurrences:
+            if bool(item.get("reimbursement_manual_done", False)):
+                continue
+            creditor = str(item.get("payer_id") or "")
+            if self.payer(creditor) is None:
+                continue
+            amount = float(item.get("amount", 0.0) or 0.0)
+            if amount <= 0:
+                continue
+            occurrence_id = str(item.get("id") or "")
+            for part in item.get("split", []):
+                debtor = str(part.get("payer_id") or "")
+                if not debtor or debtor == creditor or self.payer(debtor) is None:
+                    continue
+                percentage = float(part.get("percentage", 0.0) or 0.0)
+                share = amount * percentage / 100.0
+                if share <= 0.009:
+                    continue
+                key = (debtor, creditor)
+                gross[key] += share
+                if occurrence_id:
+                    recurring_occurrence_ids[key].add(occurrence_id)
 
         # Recorded reimbursements reduce only the participant-to-participant
         # balance. They never mutate ``expense.paid``.
@@ -958,6 +1081,10 @@ class BillTrackerManager:
                     expense_ids.get((left, right), set())
                     | expense_ids.get((right, left), set())
                 )
+                recurring_linked = sorted(
+                    recurring_occurrence_ids.get((left, right), set())
+                    | recurring_occurrence_ids.get((right, left), set())
+                )
                 paypal_me = str(target.get("paypal_me", ""))
                 result.append(
                     {
@@ -968,6 +1095,9 @@ class BillTrackerManager:
                         "amount": round(value, 2),
                         "expense_ids": linked,
                         "expense_count": len(linked),
+                        "recurring_occurrence_ids": recurring_linked,
+                        "recurring_count": len(recurring_linked),
+                        "item_count": len(linked) + len(recurring_linked),
                         "paypal_me": paypal_me,
                         "paypal_url": self._paypal_url(paypal_me, value, self.currency),
                     }
@@ -1009,6 +1139,8 @@ class BillTrackerManager:
     # ------------------------------------------------------------------
     def snapshot(self, forecast_months: int = 12) -> dict[str, Any]:
         forecast_months = max(1, min(int(forecast_months), 24))
+        self._sync_recurring_occurrences()
+        today = date.today()
         return {
             "schema_version": STORAGE_SCHEMA_VERSION,
             "currency": self.currency,
@@ -1020,6 +1152,10 @@ class BillTrackerManager:
             "expenses": [self._public_expense(x) for x in self.expenses],
             "settlements": [self._public_settlement(x) for x in self.settlements],
             "recurring_expenses": [self._public_recurring_expense(x) for x in self.recurring_expenses],
+            "recurring_occurrences": [
+                self._public_recurring_occurrence(x) for x in self.recurring_occurrences
+            ],
+            "current_month_recurring": self.recurring_month_items(today.year, today.month),
             "balances": self.balances(),
             "debts": self.debts(),
             "monthly": self.monthly_totals(),
@@ -1030,6 +1166,26 @@ class BillTrackerManager:
             "contract_savings": self.contract_savings(),
             "summary": self.summary(),
         }
+
+    def recurring_month_items(self, year: int, month: int) -> list[dict[str, Any]]:
+        """Return all expected recurring charges due in one calendar month."""
+        first_day = date(int(year), int(month), 1)
+        last_day = date(first_day.year, first_day.month, monthrange(first_day.year, first_day.month)[1])
+        items: list[dict[str, Any]] = []
+        for recurring in self.recurring_expenses:
+            for due in self._recurring_occurrences_between(recurring, first_day, last_day):
+                items.append(
+                    {
+                        "id": str(recurring.get("id", "")),
+                        "name": str(recurring.get("name", "")),
+                        "kind": str(recurring.get("kind", "recurring")),
+                        "color": self._normalize_color(recurring.get("color"), 0),
+                        "amount": round(float(recurring.get("amount", 0.0) or 0.0), 2),
+                        "due_date": due.isoformat(),
+                    }
+                )
+        items.sort(key=lambda x: (str(x.get("due_date", "")), str(x.get("name", "")).casefold()))
+        return items
 
     def monthly_totals(self) -> list[dict[str, Any]]:
         if not self.expenses:
@@ -1104,6 +1260,7 @@ class BillTrackerManager:
         recurring_buckets: dict[tuple[int, int], dict[str, float]] = defaultdict(
             lambda: defaultdict(float)
         )
+        recurring_items: dict[tuple[int, int], list[dict[str, Any]]] = defaultdict(list)
         window_start = date(start[0], start[1], 1)
         last_year, last_month = future_months[-1]
         window_end = date(last_year, last_month, monthrange(last_year, last_month)[1])
@@ -1113,9 +1270,20 @@ class BillTrackerManager:
             for occurrence in self._recurring_occurrences_between(
                 recurring, window_start, window_end
             ):
-                recurring_buckets[(occurrence.year, occurrence.month)][
-                    str(recurring.get("kind", "recurring"))
-                ] += float(recurring.get("amount", 0.0) or 0.0)
+                key = (occurrence.year, occurrence.month)
+                amount = round(float(recurring.get("amount", 0.0) or 0.0), 2)
+                kind = str(recurring.get("kind", "recurring"))
+                recurring_buckets[key][kind] += amount
+                recurring_items[key].append(
+                    {
+                        "id": str(recurring.get("id", "")),
+                        "name": str(recurring.get("name", "")),
+                        "kind": kind,
+                        "color": self._normalize_color(recurring.get("color"), 0),
+                        "amount": amount,
+                        "due_date": occurrence.isoformat(),
+                    }
+                )
 
         rows = []
         for year, month in future_months:
@@ -1137,6 +1305,7 @@ class BillTrackerManager:
                     "recurring_total": recurring_total,
                     "categories": by_category,
                     "recurring": recurring_by_kind,
+                    "recurring_items": recurring_items[(year, month)],
                 }
             )
         return rows
@@ -1245,6 +1414,7 @@ class BillTrackerManager:
                         "source": "recurring",
                         "recurring_id": str(recurring.get("id", "")),
                         "recurring_kind": str(recurring.get("kind", "recurring")),
+                        "color": self._normalize_color(recurring.get("color"), 0),
                         "due_date": occurrence.isoformat(),
                     }
                 )
@@ -1415,10 +1585,13 @@ class BillTrackerManager:
         auto_renew: bool,
         renewal_interval_months: int,
         installment_count: int | None,
-        provider: str,
-        contract: str,
-        note: str,
-        active: bool,
+        payer_id: str | None = None,
+        split: list[dict[str, Any]] | None = None,
+        provider: str = "",
+        contract: str = "",
+        color: str | None = None,
+        note: str = "",
+        active: bool = True,
     ) -> dict[str, Any]:
         normalized_name = self._normalize_optional_text(name, 120)
         if not normalized_name:
@@ -1460,6 +1633,13 @@ class BillTrackerManager:
                 )
                 normalized_end = end.isoformat()
 
+        resolved_payer = self._validate_optional_payer(payer_id)
+        if resolved_payer is None:
+            active = self.active_payers()
+            resolved_payer = str(active[0]["id"]) if active else None
+        normalized_split = self._resolve_expense_split(split, resolved_payer)
+        color_index = sum(ord(char) for char in f"{normalized_kind}:{normalized_name}")
+
         return {
             "name": normalized_name,
             "kind": normalized_kind,
@@ -1470,8 +1650,11 @@ class BillTrackerManager:
             "auto_renew": bool(auto_renew),
             "renewal_interval_months": renewal_interval,
             "installment_count": normalized_installments,
+            "payer_id": resolved_payer,
+            "split": normalized_split,
             "provider": self._normalize_optional_text(provider, 120),
             "contract": self._normalize_optional_text(contract, 120),
+            "color": self._normalize_color(color, color_index),
             "note": self._normalize_optional_text(note, 1000),
             "active": bool(active),
         }
@@ -1560,6 +1743,188 @@ class BillTrackerManager:
             renewal = self._add_months_date(renewal, step)
         return renewal.isoformat()
 
+    def _recurring_tracking_start(
+        self, item: dict[str, Any], on_or_after: date | None = None
+    ) -> str:
+        """Choose the first occurrence Billy should materialize for reimbursements.
+
+        A newly configured long-running mortgage/subscription must not create
+        years of retroactive debts. For an existing series we therefore start
+        from the latest charge due today; when resuming a paused rule we start
+        from the next charge on/after the resume date.
+        """
+        today = on_or_after or date.today()
+        start = date.fromisoformat(str(item["start_date"]))
+        if on_or_after is not None:
+            next_due = self._next_recurring_due(item, today)
+            return (next_due or today).isoformat()
+        if start >= today:
+            return start.isoformat()
+        latest = start
+        for index in range(1200):
+            occurrence = self._recurring_occurrence(item, index)
+            if occurrence is None or occurrence > today:
+                break
+            latest = occurrence
+        return latest.isoformat()
+
+    def _sync_recurring_occurrences(self, today: date | None = None) -> bool:
+        """Materialize due recurring charges with payer/split snapshots."""
+        today = today or date.today()
+        existing = {str(x.get("id")) for x in self.recurring_occurrences if x.get("id")}
+        changed = False
+        for recurring in self.recurring_expenses:
+            if not bool(recurring.get("active", True)):
+                continue
+            recurring_id = str(recurring.get("id") or "")
+            if not recurring_id:
+                continue
+            tracking_text = str(recurring.get("reimbursement_tracking_start_date") or "")
+            if not tracking_text:
+                tracking_text = self._recurring_tracking_start(recurring)
+                recurring["reimbursement_tracking_start_date"] = tracking_text
+                changed = True
+            tracking_start = date.fromisoformat(tracking_text)
+            if tracking_start > today:
+                continue
+            for due in self._recurring_occurrences_between(recurring, tracking_start, today):
+                occurrence_id = f"{recurring_id}@{due.isoformat()}"
+                if occurrence_id in existing:
+                    continue
+                self.recurring_occurrences.append(
+                    {
+                        "id": occurrence_id,
+                        "recurring_id": recurring_id,
+                        "due_date": due.isoformat(),
+                        "name": str(recurring.get("name", "")),
+                        "kind": str(recurring.get("kind", "recurring")),
+                        "color": self._normalize_color(recurring.get("color"), 0),
+                        "amount": round(float(recurring.get("amount", 0.0) or 0.0), 2),
+                        "payer_id": recurring.get("payer_id"),
+                        "split": [dict(x) for x in recurring.get("split", [])],
+                        "reimbursement_manual_done": False,
+                        "reimbursement_manual_at": None,
+                        "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                    }
+                )
+                existing.add(occurrence_id)
+                changed = True
+        if changed:
+            self._sort()
+        return changed
+
+    def _refresh_open_recurring_occurrences(self, recurring: dict[str, Any]) -> bool:
+        """Apply rule edits to still-open occurrences without rewriting settled history."""
+        changed = False
+        recurring_id = str(recurring.get("id") or "")
+        for occurrence in self.recurring_occurrences:
+            if occurrence.get("recurring_id") != recurring_id:
+                continue
+            state = self._recurring_occurrence_reimbursement_state(occurrence)
+            if bool(occurrence.get("reimbursement_manual_done", False)) or state[
+                "has_recorded_settlement"
+            ]:
+                continue
+            replacement = {
+                "name": str(recurring.get("name", "")),
+                "kind": str(recurring.get("kind", "recurring")),
+                "color": self._normalize_color(recurring.get("color"), 0),
+                "amount": round(float(recurring.get("amount", 0.0) or 0.0), 2),
+                "payer_id": recurring.get("payer_id"),
+                "split": [dict(x) for x in recurring.get("split", [])],
+            }
+            if any(occurrence.get(key) != value for key, value in replacement.items()):
+                occurrence.update(replacement)
+                changed = True
+        return changed
+
+    async def async_sync_recurring_occurrences(self) -> bool:
+        """Persist newly due recurring charges, normally called at midnight."""
+        changed = self._sync_recurring_occurrences()
+        if changed:
+            await self._save_and_notify()
+        return changed
+
+    def _recurring_occurrence_reimbursement_state(
+        self, item: dict[str, Any]
+    ) -> dict[str, Any]:
+        creditor = str(item.get("payer_id") or "")
+        occurrence_id = str(item.get("id") or "")
+        obligations: list[str] = []
+        if creditor and self.payer(creditor) is not None:
+            for part in item.get("split", []):
+                debtor = str(part.get("payer_id") or "")
+                percentage = float(part.get("percentage", 0.0) or 0.0)
+                if (
+                    debtor
+                    and debtor != creditor
+                    and percentage > 0.009
+                    and self.payer(debtor) is not None
+                    and debtor not in obligations
+                ):
+                    obligations.append(debtor)
+        total = len(obligations)
+        if total == 0:
+            return {
+                "status": "none",
+                "completed": 0,
+                "total": 0,
+                "manual_done": False,
+                "has_recorded_settlement": False,
+                "can_toggle": False,
+            }
+        manual_done = bool(item.get("reimbursement_manual_done", False))
+        linked_pairs: set[frozenset[str]] = set()
+        for settlement in self.settlements:
+            if occurrence_id not in {
+                str(value)
+                for value in settlement.get("recurring_occurrence_ids", [])
+                if value
+            }:
+                continue
+            source = str(settlement.get("from_payer_id") or "")
+            target = str(settlement.get("to_payer_id") or "")
+            if source and target and source != target:
+                linked_pairs.add(frozenset((source, target)))
+        completed = total if manual_done else sum(
+            1 for debtor in obligations if frozenset((debtor, creditor)) in linked_pairs
+        )
+        status = "done" if completed >= total else "partial" if completed > 0 else "pending"
+        return {
+            "status": status,
+            "completed": completed,
+            "total": total,
+            "manual_done": manual_done,
+            "has_recorded_settlement": bool(linked_pairs),
+            "can_toggle": not bool(linked_pairs),
+        }
+
+    def _public_recurring_occurrence(self, item: dict[str, Any]) -> dict[str, Any]:
+        payer = self.payer(str(item.get("payer_id", ""))) if item.get("payer_id") else None
+        split = []
+        for part in item.get("split", []):
+            participant = self.payer(str(part.get("payer_id", "")))
+            split.append(
+                {
+                    **dict(part),
+                    "name": str(participant.get("name")) if participant else "Pagante rimosso",
+                }
+            )
+        reimbursement = self._recurring_occurrence_reimbursement_state(item)
+        return {
+            **dict(item),
+            "currency": self.currency,
+            "payer": str(payer.get("name")) if payer else "",
+            "split": split,
+            "reimbursement_status": reimbursement["status"],
+            "reimbursement_done": reimbursement["status"] == "done",
+            "reimbursement_completed_count": reimbursement["completed"],
+            "reimbursement_total_count": reimbursement["total"],
+            "reimbursement_manual_done": reimbursement["manual_done"],
+            "reimbursement_has_settlement": reimbursement["has_recorded_settlement"],
+            "reimbursement_can_toggle": reimbursement["can_toggle"],
+        }
+
     def _public_recurring_expense(self, item: dict[str, Any]) -> dict[str, Any]:
         today = date.today()
         next_due = self._next_recurring_due(item, today) if item.get("active", True) else None
@@ -1574,9 +1939,38 @@ class BillTrackerManager:
             if remaining is not None
             else None
         )
+        payer = self.payer(str(item.get("payer_id", ""))) if item.get("payer_id") else None
+        split = []
+        for part in item.get("split", []):
+            participant = self.payer(str(part.get("payer_id", "")))
+            split.append(
+                {
+                    **dict(part),
+                    "name": str(participant.get("name")) if participant else "Pagante rimosso",
+                }
+            )
+        occurrences = [
+            self._public_recurring_occurrence(x)
+            for x in self.recurring_occurrences
+            if x.get("recurring_id") == item.get("id")
+        ]
+        occurrences.sort(key=lambda x: str(x.get("due_date", "")), reverse=True)
+        reimbursable = [x for x in occurrences if x.get("reimbursement_status") != "none"]
+        pending = [x for x in reimbursable if x.get("reimbursement_status") in ("pending", "partial")]
+        completed_reimbursements = [x for x in reimbursable if x.get("reimbursement_status") == "done"]
+        if not reimbursable:
+            reimbursement_status = "none"
+        elif pending and completed_reimbursements:
+            reimbursement_status = "partial"
+        elif pending:
+            reimbursement_status = "pending"
+        else:
+            reimbursement_status = "done"
         return {
             **dict(item),
             "currency": self.currency,
+            "payer": str(payer.get("name")) if payer else "",
+            "split": split,
             "status": status,
             "next_due_date": next_due.isoformat() if next_due else None,
             "next_renewal_date": self._next_renewal_date(item, today),
@@ -1588,6 +1982,10 @@ class BillTrackerManager:
             "installments_elapsed": elapsed if remaining is not None else None,
             "remaining_installments": remaining,
             "remaining_amount": remaining_amount,
+            "reimbursement_status": reimbursement_status,
+            "reimbursement_pending_count": len(pending),
+            "reimbursement_done_count": len(completed_reimbursements),
+            "reimbursement_occurrences": occurrences,
         }
 
     def _expense_reimbursement_state(self, item: dict[str, Any]) -> dict[str, Any]:
@@ -1678,10 +2076,17 @@ class BillTrackerManager:
     def _public_settlement(self, item: dict[str, Any]) -> dict[str, Any]:
         source = self.payer(str(item.get("from_payer_id", "")))
         target = self.payer(str(item.get("to_payer_id", "")))
+        expense_count = len([x for x in item.get("expense_ids", []) if x])
+        recurring_count = len(
+            [x for x in item.get("recurring_occurrence_ids", []) if x]
+        )
         return {
             **dict(item),
             "from_name": str(source.get("name")) if source else "Pagante rimosso",
             "to_name": str(target.get("name")) if target else "Pagante rimosso",
+            "expense_count": expense_count,
+            "recurring_count": recurring_count,
+            "item_count": expense_count + recurring_count,
         }
 
     def _rows_from_buckets(self, buckets, first, last) -> list[dict[str, Any]]:
@@ -1752,10 +2157,10 @@ class BillTrackerManager:
             if percentage > 0:
                 combined[payer_id] += percentage
         if not combined:
-            raise ValueError("La divisione della bolletta è vuota")
+            raise ValueError("La divisione della spesa è vuota")
         total = sum(combined.values())
         if abs(total - 100.0) > 0.05:
-            raise ValueError("Le quote della bolletta devono sommare al 100%")
+            raise ValueError("Le quote della spesa devono sommare al 100%")
         result = [{"payer_id": payer_id, "percentage": round(value, 2)} for payer_id, value in combined.items() if value > 0]
         if result:
             delta = round(100.0 - sum(float(x["percentage"]) for x in result), 2)
@@ -1976,6 +2381,9 @@ class BillTrackerManager:
                 "from_payer_id": source, "to_payer_id": target,
                 "amount": round(amount, 2),
                 "expense_ids": [str(x) for x in raw.get("expense_ids", []) if x],
+                "recurring_occurrence_ids": [
+                    str(x) for x in raw.get("recurring_occurrence_ids", []) if x
+                ],
                 "note": str(raw.get("note", "")).strip(),
                 "created_at": str(raw.get("created_at") or datetime.now().astimezone().isoformat(timespec="seconds")),
             }
@@ -2004,8 +2412,11 @@ class BillTrackerManager:
                         if raw.get("installment_count") not in (None, "")
                         else None
                     ),
+                    payer_id=str(raw.get("payer_id") or "") or None,
+                    split=[dict(x) for x in raw.get("split", [])] or None,
                     provider=str(raw.get("provider", "")),
                     contract=str(raw.get("contract", "")),
+                    color=str(raw.get("color", "")) or None,
                     note=str(raw.get("note", "")),
                     active=bool(raw.get("active", True)),
                 )
@@ -2022,10 +2433,87 @@ class BillTrackerManager:
             }
             if raw.get("updated_at"):
                 item["updated_at"] = str(raw.get("updated_at"))
+            tracking = str(raw.get("reimbursement_tracking_start_date") or "")
+            if tracking:
+                try:
+                    item["reimbursement_tracking_start_date"] = date.fromisoformat(
+                        tracking
+                    ).isoformat()
+                except ValueError:
+                    item["reimbursement_tracking_start_date"] = self._recurring_tracking_start(item)
+            else:
+                item["reimbursement_tracking_start_date"] = self._recurring_tracking_start(item)
             if item != raw:
                 changed = True
             migrated.append(item)
         self.recurring_expenses = migrated
+        return changed
+
+    def _migrate_recurring_occurrences(self) -> bool:
+        changed = False
+        migrated: list[dict[str, Any]] = []
+        recurring_by_id = {
+            str(x.get("id")): x for x in self.recurring_expenses if x.get("id")
+        }
+        recurring_ids = set(recurring_by_id)
+        seen: set[str] = set()
+        for raw in self.recurring_occurrences:
+            recurring_id = str(raw.get("recurring_id") or "")
+            if recurring_id not in recurring_ids:
+                changed = True
+                continue
+            try:
+                due_date = date.fromisoformat(str(raw.get("due_date") or "")).isoformat()
+                amount = round(float(raw.get("amount", 0.0) or 0.0), 2)
+            except (ValueError, TypeError, OverflowError):
+                changed = True
+                continue
+            occurrence_id = str(raw.get("id") or f"{recurring_id}@{due_date}")
+            if occurrence_id in seen or amount <= 0:
+                changed = True
+                continue
+            seen.add(occurrence_id)
+            try:
+                payer_id = self._validate_optional_payer(
+                    str(raw.get("payer_id") or "") or None
+                )
+            except ValueError:
+                payer_id = None
+                changed = True
+            raw_split = [dict(x) for x in raw.get("split", [])]
+            try:
+                split = self._resolve_expense_split(raw_split or None, payer_id)
+            except ValueError:
+                split = []
+                payer_id = None
+                changed = True
+            item = {
+                "id": occurrence_id,
+                "recurring_id": recurring_id,
+                "due_date": due_date,
+                "name": self._normalize_optional_text(raw.get("name", ""), 120),
+                "kind": str(raw.get("kind", "recurring")),
+                "color": self._normalize_color(
+                    raw.get("color")
+                    or recurring_by_id.get(recurring_id, {}).get("color"),
+                    0,
+                ),
+                "amount": amount,
+                "payer_id": payer_id,
+                "split": split,
+                "reimbursement_manual_done": bool(
+                    raw.get("reimbursement_manual_done", False)
+                ),
+                "reimbursement_manual_at": raw.get("reimbursement_manual_at"),
+                "created_at": str(
+                    raw.get("created_at")
+                    or datetime.now().astimezone().isoformat(timespec="seconds")
+                ),
+            }
+            if item != raw:
+                changed = True
+            migrated.append(item)
+        self.recurring_occurrences = migrated
         return changed
 
     async def _save_and_notify(self) -> None:
@@ -2041,6 +2529,7 @@ class BillTrackerManager:
                 "expenses": self.expenses,
                 "settlements": self.settlements,
                 "recurring_expenses": self.recurring_expenses,
+                "recurring_occurrences": self.recurring_occurrences,
             }
         )
 
@@ -2048,6 +2537,7 @@ class BillTrackerManager:
         self.expenses.sort(key=lambda x: (int(x.get("paid_year", 0)), int(x.get("paid_month", 0)), str(x.get("created_at", ""))), reverse=True)
         self.settlements.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
         self.recurring_expenses.sort(key=lambda x: (not bool(x.get("active", True)), str(x.get("name", "")).casefold()))
+        self.recurring_occurrences.sort(key=lambda x: (str(x.get("due_date", "")), str(x.get("id", ""))), reverse=True)
 
     def _validate_optional_payer(self, payer_id: str | None) -> str | None:
         value = str(payer_id or "")

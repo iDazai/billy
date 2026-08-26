@@ -36,10 +36,10 @@ def test_frontend_and_manifest_use_rewrite_version():
     bootstrap = (FRONTEND / "bill-tracker-card.js").read_text(encoding="utf-8")
     implementation = (FRONTEND / "bill-tracker-card-impl.js").read_text(encoding="utf-8")
     manifest = (ROOT / "custom_components" / "bill_tracker" / "manifest.json").read_text(encoding="utf-8")
-    assert "BILLY_FRONTEND_VERSION = '0.11.0'" in bootstrap
-    assert "BILL_TRACKER_VERSION = '0.11.0'" in implementation
-    assert "./bill-tracker-i18n.js?v=0.11.0" in implementation
-    assert '"version": "0.11.0"' in manifest
+    assert "BILLY_FRONTEND_VERSION = '0.11.3'" in bootstrap
+    assert "BILL_TRACKER_VERSION = '0.11.3'" in implementation
+    assert "./bill-tracker-i18n.js?v=0.11.3" in implementation
+    assert '"version": "0.11.3"' in manifest
 
 
 def test_automatic_parsing_does_not_replace_lovelace_ui():
@@ -84,7 +84,7 @@ def test_billy_sidebar_panel_keeps_card_and_parser_manager():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
     for token in (
-        "billy-parser-manager.js?v=0.11.0",
+        "billy-parser-manager.js?v=0.11.3",
         '<billy-dashboard id="dashboard">',
         '<billy-bills id="bills-panel">',
         '<billy-recurring id="recurring-panel">',
@@ -170,6 +170,15 @@ def test_bills_page_filters_and_flags_user_reimbursements():
     assert '"reimbursement_status": reimbursement["status"]' in manager
 
 
+def test_panel_modals_do_not_reload_on_every_hass_object_update():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    # Home Assistant replaces the hass object frequently. Reloading data from
+    # every setter call destroys open modal DOM (most visible in Recurring).
+    assert "const changed = value !== this._hass" not in panel
+    assert panel.count("const previousConnection = this._hass?.connection") >= 4
+    assert panel.count("if (firstAssignment || connectionChanged || !this._data) this._load()") >= 4
+
+
 def test_parser_manager_community_publish_flow():
     manager = (FRONTEND / "billy-parser-manager.js").read_text(encoding="utf-8")
     for token in (
@@ -205,3 +214,42 @@ def test_parser_tab_can_create_edit_export_and_test_custom_parsers():
         assert token in panel
     assert 'vol.Optional("expected_parser_id"): str' in api
     assert "Custom parser ID cannot be changed while editing" in manager
+
+
+def test_overview_chart_includes_recurring_expenses_in_actual_and_forecast_bars():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    for token in (
+        "_actualChartRows()",
+        "this._data?.recurring_occurrences || []",
+        "recurring_total: recurringTotal",
+        "current_month_recurring",
+        "recurring_items",
+        "chart-filter",
+        "chart-months",
+        "chart-year",
+        "chart-view",
+        "chartSeparate",
+        "safeColor(recurring.color)",
+        "chartRecurring: 'Spese ricorrenti'",
+    ):
+        assert token in panel
+
+
+def test_overview_breakdown_includes_expected_current_month_recurring_expenses():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    manager = (ROOT / "custom_components" / "bill_tracker" / "manager.py").read_text(encoding="utf-8")
+    for token in (
+        "current_month_recurring",
+        "expectedRecurring",
+        "recurring_month_items",
+    ):
+        assert token in panel or token in manager
+
+
+def test_recurring_expenses_have_persistent_configurable_colors():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    manager = (ROOT / "custom_components" / "bill_tracker" / "manager.py").read_text(encoding="utf-8")
+    init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
+    assert 'name="color" type="color"' in panel
+    assert '"color": self._normalize_color(color, color_index)' in manager
+    assert 'vol.Optional("color", default=""): str' in init

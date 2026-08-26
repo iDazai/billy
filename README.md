@@ -1,4 +1,4 @@
-## Billy 0.11.0
+## Billy 0.11.2
 
 Billy keeps the Lovelace `custom:bill-tracker-card`, while `/billy` is the full-size application.
 
@@ -11,6 +11,14 @@ Installment plans can also define a total installment count. Billy calculates th
 Recurring charges are included in the regular **forecast** on their exact due months. The normalized forecast also includes their monthly-equivalent cost, so an annual subscription contributes `amount / 12` to the normalized monthly planning view. Overview now shows recurring monthly equivalent, charges due next month, active recurring count and remaining installment commitment.
 
 Provider bills and recurring rules remain separate concepts: a recurring rule predicts a cost; it does not mark a provider invoice as paid and it is not an email-parser result.
+
+### Split and reimbursements for recurring expenses
+
+Recurring charges use the same payer/split model as normal bills. A recurring rule stores its usual payer and split percentages; when a charge becomes due, Billy materializes a lightweight occurrence containing the amount and payer/split snapshot. That occurrence participates in **Rimborsi tra utenti / User reimbursements** and in PayPal quick-pay exactly like a split bill, but it is not inserted into provider-bill history.
+
+Each due recurring occurrence has its own reimbursement status and can be marked reimbursed/pending from **Billy → Ricorrenti → Gestisci rimborsi**. Reimbursements confirmed from Overview are stored in the shared reimbursement history and cannot be overridden by the quick checkbox until the recorded reimbursement is undone.
+
+To avoid accidental historical debt, adding or migrating a long-running subscription/mortgage starts reimbursement tracking from its latest due charge, not from the original activation date. Future due occurrences are materialized daily at Home Assistant local midnight. Pausing a recurring rule stops new occurrences; resuming starts again from the next real charge without backfilling the paused gap.
 
 ### Parser authoring in Billy
 

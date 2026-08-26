@@ -21,6 +21,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ID, CONF_TYPE, CONF_URL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
@@ -112,6 +113,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ws_recurring_add,
         ws_recurring_update,
         ws_recurring_set_active,
+        ws_recurring_set_reimbursement,
         ws_recurring_delete,
         ws_category_add,
         ws_category_update,
@@ -159,6 +161,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Bill Tracker from a config entry."""
     manager = BillTrackerManager(hass)
     await manager.async_load()
+
+    async def _sync_recurring_at_midnight(_now) -> None:
+        await manager.async_sync_recurring_occurrences()
+
+    entry.async_on_unload(
+        async_track_time_change(
+            hass,
+            _sync_recurring_at_midnight,
+            hour=0,
+            minute=0,
+            second=0,
+        )
+    )
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = manager
     hass.data[DOMAIN]["manager"] = manager
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -360,8 +375,11 @@ _RECURRING_COMMON = {
     vol.Optional("installment_count"): vol.All(
         vol.Coerce(int), vol.Range(min=1, max=1200)
     ),
+    vol.Optional("payer_id"): str,
+    vol.Optional("split"): [_SPLIT_ITEM_SCHEMA],
     vol.Optional("provider", default=""): str,
     vol.Optional("contract", default=""): str,
+    vol.Optional("color", default=""): str,
     vol.Optional("note", default=""): str,
     vol.Optional("active", default=True): bool,
 }
@@ -378,8 +396,11 @@ def _recurring_kwargs(msg):
         "auto_renew": msg.get("auto_renew", False),
         "renewal_interval_months": msg.get("renewal_interval_months", 12),
         "installment_count": msg.get("installment_count"),
+        "payer_id": msg.get("payer_id"),
+        "split": msg.get("split"),
         "provider": msg.get("provider", ""),
         "contract": msg.get("contract", ""),
+        "color": msg.get("color", ""),
         "note": msg.get("note", ""),
         "active": msg.get("active", True),
     }
@@ -444,6 +465,28 @@ async def ws_recurring_set_active(hass, connection, msg):
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): "bill_tracker/recurring/set_reimbursement",
+        vol.Required("occurrence_id"): str,
+        vol.Required("done"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_recurring_set_reimbursement(hass, connection, msg):
+    try:
+        item = await _manager(hass).async_set_recurring_reimbursement_done(
+            msg["occurrence_id"], msg["done"]
+        )
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_reimbursement", str(err))
+        return
+    if item is None:
+        connection.send_error(msg["id"], "not_found", "Scadenza ricorrente non trovata")
+        return
+    connection.send_result(msg["id"], item)
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): "bill_tracker/recurring/delete",
         vol.Required("recurring_id"): str,
     }
@@ -452,8 +495,8 @@ async def ws_recurring_set_active(hass, connection, msg):
 async def ws_recurring_delete(hass, connection, msg):
     try:
         deleted = await _manager(hass).async_delete_recurring(msg["recurring_id"])
-    except RuntimeError as err:
-        connection.send_error(msg["id"], "not_configured", str(err))
+    except (ValueError, RuntimeError) as err:
+        connection.send_error(msg["id"], "invalid_recurring", str(err))
         return
     connection.send_result(msg["id"], {"deleted": deleted})
 

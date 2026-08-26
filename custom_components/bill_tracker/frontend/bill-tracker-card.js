@@ -1,4 +1,4 @@
-const BILLY_FRONTEND_VERSION = '0.11.0'
+const BILLY_FRONTEND_VERSION = '0.11.3'
 const BILLY_IMPL_URL = `/bill_tracker/bill-tracker-card-impl.js?v=${BILLY_FRONTEND_VERSION}`
 
 let billyImplementationPromise = null

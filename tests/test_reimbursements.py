@@ -25,6 +25,7 @@ class DummyManager:
             {"id": "b", "name": "B", "paypal_me": "payerB"},
         ]
         self.expenses = []
+        self.recurring_occurrences = []
         self.settlements = []
         self.currency = "EUR"
 
@@ -34,6 +35,9 @@ class DummyManager:
     @staticmethod
     def _paypal_url(handle, amount, currency):
         return f"https://paypal.me/{handle}/{amount:.2f}{currency}" if handle else ""
+
+    def _sync_recurring_occurrences(self):
+        return False
 
 
 def test_reimbursements_are_independent_from_provider_bill_payment():
@@ -92,6 +96,35 @@ def test_manual_bill_reimbursement_flag_removes_it_from_open_debts():
     ]
     assert manager._pairwise_debts() == []
     assert manager.expenses[0]["paid"] is False
+
+
+def test_due_recurring_occurrence_uses_the_same_split_debt_logic():
+    manager = DummyManager()
+    manager._pairwise_debts = MethodType(_load_pairwise_debts(), manager)
+    manager.recurring_occurrences = [
+        {
+            "id": "rec-1@2026-08-15",
+            "recurring_id": "rec-1",
+            "payer_id": "a",
+            "amount": 40.0,
+            "split": [
+                {"payer_id": "a", "percentage": 50.0},
+                {"payer_id": "b", "percentage": 50.0},
+            ],
+            "reimbursement_manual_done": False,
+        }
+    ]
+    debts = manager._pairwise_debts()
+    assert len(debts) == 1
+    assert debts[0]["from_payer_id"] == "b"
+    assert debts[0]["to_payer_id"] == "a"
+    assert debts[0]["amount"] == 20.0
+    assert debts[0]["recurring_count"] == 1
+    assert debts[0]["item_count"] == 1
+    assert debts[0]["recurring_occurrence_ids"] == ["rec-1@2026-08-15"]
+
+    manager.recurring_occurrences[0]["reimbursement_manual_done"] = True
+    assert manager._pairwise_debts() == []
 
 
 def test_manual_reimbursement_state_is_migrated_and_kept_separate_from_paid():

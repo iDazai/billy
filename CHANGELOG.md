@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.11.3
+
+- Fixed the Overview spending chart so recurring expenses are visible instead of being hidden inside forecast totals.
+- Actual 12-month chart bars now combine paid provider bills with materialized recurring charges due in the same month.
+- Forecast bars now visibly split provider-bill estimates from recurring charges.
+- Added a dedicated recurring-expense legend/segment while preserving the existing bill-category stacks.
+
+## 0.11.2
+
+- Fixed Billy panel modals being destroyed by normal Home Assistant state refreshes.
+- The Recurring add/edit and reimbursement dialogs now stay open while the Home Assistant `hass` object is refreshed.
+- Applied the same lifecycle fix to Dashboard, Bills and Settings data components so their UI is not unnecessarily reloaded on every HA state change.
+- Data is still reloaded when the Billy update event fires or the Home Assistant websocket connection changes.
+
+## 0.11.1
+
+- Apply Billy's payer/split model to recurring expenses as well as provider bills.
+- Add payer selection and editable split percentages to the Recurring create/edit dialog.
+- Materialize each due recurring charge with an amount/payer/split snapshot so reimbursements are tracked per occurrence without creating fake provider bills.
+- Add a reimbursement filter and reimbursement status badges to the Recurring tab.
+- Add a per-occurrence reimbursement manager with quick reimbursed/pending checkboxes.
+- Include due recurring charges in Overview/Lovelace split balances, PayPal quick-pay and recorded reimbursement history.
+- Extend settlements with recurring occurrence IDs while keeping provider-payment status independent.
+- Preserve completed reimbursement history when recurring rules are edited; open occurrences follow updated amount/payer/split values.
+- Avoid retroactive debt when enabling an existing long-running recurring rule: tracking begins at the latest due occurrence, and paused periods are not backfilled when resumed.
+- Refresh due recurring occurrences at Home Assistant local midnight.
+- Upgrade storage schema to v11 with the new `recurring_occurrences` ledger.
+
 ## 0.11.0
 
 - Added a first-class **Recurring** tab to the Billy sidebar application for subscriptions, mortgages, installment plans and other predictable charges.

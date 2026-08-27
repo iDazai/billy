@@ -38,6 +38,8 @@ const TEXT = {
     chartYearHelp: 'January–December {year}',
     expectedRecurring: 'Expected recurring',
     categoryBreakdown: 'This month by bill type',
+    dueThisMonth: 'Bills due this month',
+    noBillsDueThisMonth: 'No unpaid bills are due this month.',
     upcomingBills: 'Upcoming bills',
     recentBills: 'Recent bills',
     viewBills: 'Manage bills',
@@ -302,6 +304,8 @@ const TEXT = {
     chartYearHelp: 'Gennaio–dicembre {year}',
     expectedRecurring: 'Ricorrente prevista',
     categoryBreakdown: 'Questo mese per tipologia',
+    dueThisMonth: 'Bollette in scadenza questo mese',
+    noBillsDueThisMonth: 'Nessuna bolletta non pagata scade questo mese.',
     upcomingBills: 'Prossime bollette',
     recentBills: 'Bollette recenti',
     viewBills: 'Gestisci bollette',
@@ -1314,41 +1318,24 @@ class BillyDashboard extends HTMLElement {
     return items.join('')
   }
 
-  _breakdown() {
-    const row = this._currentRow()
-    const entries = Object.entries(row?.categories || {})
-      .filter(([, value]) => Number(value) > 0)
-      .map(([name, value]) => ({
-        name,
-        value: Number(value || 0),
-        color: safeColor(this._categoryByName(name)?.color),
-        recurring: false,
-      }))
-    for (const recurring of this._data?.current_month_recurring || []) {
-      const value = Math.max(0, Number(recurring.amount || 0))
-      if (!value) continue
-      entries.push({
-        name: recurring.name || this._recurringKindLabel(recurring.kind),
-        value,
-        color: safeColor(recurring.color),
-        recurring: true,
-      })
-    }
-    entries.sort((a, b) => b.value - a.value)
-    if (!entries.length)
-      return `<div class="empty">${escapeHtml(this._t('noData'))}</div>`
-    const total = Math.max(
-      1,
-      entries.reduce((sum, entry) => sum + entry.value, 0),
-    )
-    return `<div class="breakdown-list">${entries
-      .map((entry) => {
-        const percent = Math.max(0, Math.min(100, (entry.value / total) * 100))
-        return `<div class="breakdown-row">
-          <div class="breakdown-head"><span><i style="background:${entry.color}"></i><span>${escapeHtml(entry.name)}${entry.recurring ? `<small>${escapeHtml(this._t('expectedRecurring'))}</small>` : ''}</span></span><strong>${escapeHtml(this._money(entry.value))}</strong></div>
-          <div class="meter"><span style="width:${percent}%;background:${entry.color}"></span></div>
-        </div>`
-      })
+  _dueThisMonth() {
+    const now = new Date()
+    const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`
+    const rows = (this._data?.expenses || [])
+      .filter(
+        (row) => !row.paid && String(row.due_date || '').startsWith(prefix),
+      )
+      .slice()
+      .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
+    if (!rows.length)
+      return `<div class="empty">${escapeHtml(this._t('noBillsDueThisMonth'))}</div>`
+    return `<div class="compact-list">${rows
+      .map(
+        (row) => `<div class="compact-row">
+          <div><strong>${escapeHtml(row.category || '')}</strong><small>${escapeHtml([row.provider, `${this._t('due')}: ${this._date(row.due_date)}`].filter(Boolean).join(' · '))}</small></div>
+          <strong>${escapeHtml(this._money(row.amount))}</strong>
+        </div>`,
+      )
       .join('')}</div>`
   }
 
@@ -1601,8 +1588,8 @@ class BillyDashboard extends HTMLElement {
             ${this._chart()}
           </article>
           <article class="panel breakdown-panel">
-            <div class="panel-head"><div><h2>${escapeHtml(this._t('categoryBreakdown'))}</h2></div></div>
-            ${this._breakdown()}
+            <div class="panel-head"><div><h2>${escapeHtml(this._t('dueThisMonth'))}</h2></div></div>
+            ${this._dueThisMonth()}
           </article>
         </div>
         <div class="grid-bottom">

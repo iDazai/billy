@@ -21,6 +21,7 @@ Billy is a Home Assistant bill manager focused on household expenses: provider b
 - **Multiple reimbursement providers** — each payer can configure PayPal.Me, Revolut, Venmo and Cash App and select a preferred payment method.
 - **Provider-aware payment buttons** — reimbursement actions automatically use the payer's preferred provider and show labels such as `Pay with Revolut`, `Pay with Venmo` or `Pay with Cash App` instead of assuming PayPal.
 - **Backward-compatible PayPal migration** — existing `paypal_me` payer settings are automatically migrated to the new multi-payment model.
+- **Cashflow-aware monthly spending** — paid bills are counted in the month of their actual `payment_date`, while recurring charges are counted in the month of their scheduled due date, so monthly and yearly spending reflects when money really leaves the household budget.
 - **New Lovelace widget pack** — Billy now provides dedicated Summary, Spending, Breakdown, Upcoming, Recurring, Balances and Parser Status cards for custom Home Assistant dashboards.
 - **Improved localization** — Billy's sidebar, parser manager, widgets, payment settings and Home Assistant configuration strings are now fully localized in English, Italian, Spanish, French, German and Portuguese.
 - **Community parser workflow documentation** — the README now documents Catalog v2, country-specific parser catalogs, Experimental/Verified lifecycle, anonymous community feedback and how to connect Home Assistant IMAP sources.

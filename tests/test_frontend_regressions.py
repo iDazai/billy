@@ -478,15 +478,27 @@ def test_overview_recurring_chart_history_is_generated_from_start_date():
     assert "this._data?.recurring_history || []" in panel
 
 
-def test_overview_breakdown_includes_expected_current_month_recurring_expenses():
+def test_overview_shows_unpaid_bills_due_this_month_instead_of_category_breakdown():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
-    manager = (ROOT / "custom_components" / "bill_tracker" / "manager.py").read_text(encoding="utf-8")
     for token in (
-        "current_month_recurring",
-        "expectedRecurring",
-        "recurring_month_items",
+        "_dueThisMonth()",
+        "dueThisMonth",
+        "noBillsDueThisMonth",
+        "!row.paid",
+        "row.due_date",
     ):
-        assert token in panel or token in manager
+        assert token in panel
+    assert "${this._breakdown()}" not in panel
+
+
+def test_cashflow_uses_payment_date_instead_of_billing_reference_month():
+    manager = (
+        ROOT / "custom_components" / "bill_tracker" / "manager.py"
+    ).read_text(encoding="utf-8")
+    assert "def _expense_cashflow_month" in manager
+    assert "cashflow_key = self._expense_cashflow_month(item)" in manager
+    assert "item[\"payment_date\"] = date.today().isoformat()" in manager
+    assert "item[\"payment_date\"] = None" in manager
 
 
 def test_overview_does_not_hide_recurring_kinds_or_inactive_rules():

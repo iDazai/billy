@@ -30,6 +30,8 @@ def _recurring_helper_class():
         "_recurring_occurrences_between",
         "recurring_month_items",
         "recurring_history_items",
+        "cashflow_monthly_totals",
+        "_month_range",
         "_recurring_progress",
         "_next_renewal_date",
         "payer",
@@ -109,6 +111,28 @@ def test_recurring_without_payers_keeps_requested_active_state():
     )
     assert item["active"] is True
     assert item["payer_id"] is None
+
+
+def test_monthly_cashflow_includes_recurring_charges_in_their_due_month():
+    manager = _recurring_helper_class()()
+    manager.monthly_totals = lambda: [
+        {
+            "key": "2026-08",
+            "year": 2026,
+            "month": 8,
+            "total": 120.0,
+            "categories": {"Electricity": 120.0},
+        }
+    ]
+    manager.recurring_history_items = lambda: [
+        {"name": "Internet", "amount": 30.0, "due_date": "2026-08-01"},
+    ]
+
+    august = next(row for row in manager.cashflow_monthly_totals() if row["key"] == "2026-08")
+    assert august["bill_total"] == 120.0
+    assert august["recurring_total"] == 30.0
+    assert august["total"] == 150.0
+    assert august["categories"] == {"Electricity": 120.0}
 
 
 def test_current_month_recurring_includes_mortgage_rules():

@@ -91,3 +91,21 @@ def test_split_tariff_bills_are_normalized_to_one_cycle_before_forecast_average(
 
     estimate = manager._estimate_category_amount(history)
     assert 95 <= estimate <= 110
+
+
+def test_cashflow_month_prefers_payment_date_over_billing_month():
+    manager = _manager_harness("_expense_cashflow_month")
+    item = {
+        "paid_year": 2026,
+        "paid_month": 7,
+        "payment_date": "2026-08-05",
+    }
+
+    assert manager._expense_cashflow_month(item) == (2026, 8)
+
+
+def test_cashflow_month_falls_back_to_billing_month_without_payment_date():
+    manager = _manager_harness("_expense_cashflow_month")
+    item = {"paid_year": 2026, "paid_month": 7, "payment_date": None}
+
+    assert manager._expense_cashflow_month(item) == (2026, 7)

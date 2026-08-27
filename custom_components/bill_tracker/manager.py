@@ -357,6 +357,8 @@ class BillTrackerManager:
         normalized_split = self._resolve_expense_split(split, resolved_payer)
         normalized_payment_date = self._normalize_optional_iso_date(payment_date)
         normalized_due_date = self._normalize_optional_iso_date(due_date)
+        if paid and not normalized_payment_date:
+            normalized_payment_date = date.today().isoformat()
         normalized_period_start_date = self._normalize_optional_iso_date(period_start_date)
         normalized_period_end_date = self._normalize_optional_iso_date(period_end_date)
         if normalized_period_start_date and normalized_period_end_date:
@@ -459,6 +461,14 @@ class BillTrackerManager:
         for item in self.expenses:
             if item.get("id") != expense_id:
                 continue
+            resolved_paid = bool(paid) if paid is not None else bool(item.get("paid", False))
+            resolved_payment_date = (
+                normalized_payment_date if payment_date is not None else item.get("payment_date")
+            )
+            if resolved_paid and not resolved_payment_date:
+                resolved_payment_date = date.today().isoformat()
+            if not resolved_paid:
+                resolved_payment_date = None
             reimbursement_changed = (
                 round(float(item.get("amount", 0.0) or 0.0), 2) != round(float(amount), 2)
                 or str(item.get("payer_id") or "") != str(resolved_payer or "")
@@ -492,10 +502,8 @@ class BillTrackerManager:
                     "reimbursement_manual_at": (
                         None if reimbursement_changed else item.get("reimbursement_manual_at")
                     ),
-                    "paid": bool(paid) if paid is not None else bool(item.get("paid", False)),
-                    "payment_date": (
-                        normalized_payment_date if payment_date is not None else item.get("payment_date")
-                    ),
+                    "paid": resolved_paid,
+                    "payment_date": resolved_payment_date,
                     "due_date": normalized_due_date if due_date is not None else item.get("due_date"),
                     "provider": self._normalize_optional_text(provider, 100) if provider is not None else str(item.get("provider", "")),
                     "contract": self._normalize_optional_text(contract, 100) if contract is not None else str(item.get("contract", "")),
@@ -515,6 +523,11 @@ class BillTrackerManager:
             if item.get("id") != expense_id:
                 continue
             item["paid"] = bool(paid)
+            if paid:
+                if not item.get("payment_date"):
+                    item["payment_date"] = date.today().isoformat()
+            else:
+                item["payment_date"] = None
             await self._save_and_notify()
             return self._public_expense(item)
         return None
@@ -1376,6 +1389,7 @@ class BillTrackerManager:
             "balances": self.balances(),
             "debts": self.debts(),
             "monthly": self.monthly_totals(),
+            "cashflow_monthly": self.cashflow_monthly_totals(),
             "normalized_monthly": self.normalized_monthly_totals(),
             "forecast": self.forecast(forecast_months),
             "normalized_forecast": self.normalized_forecast(forecast_months),
@@ -1442,13 +1456,53 @@ class BillTrackerManager:
         for item in self.expenses:
             if not bool(item.get("paid", False)):
                 continue
-            buckets[(int(item["paid_year"]), int(item["paid_month"]))][str(item["category_id"])] += float(item["amount"])
+            cashflow_key = self._expense_cashflow_month(item)
+            buckets[cashflow_key][str(item["category_id"])] += float(item["amount"])
         if not buckets:
             return []
         first = min(buckets)
         today = date.today()
         last = max(max(buckets), (today.year, today.month))
         return self._rows_from_buckets(buckets, first, last)
+
+    def cashflow_monthly_totals(self) -> list[dict[str, Any]]:
+        """Return real monthly outflow, including scheduled recurring charges."""
+        bill_rows = {str(row["key"]): row for row in self.monthly_totals()}
+        recurring_by_key: dict[str, float] = defaultdict(float)
+        for item in self.recurring_history_items():
+            try:
+                due = date.fromisoformat(str(item.get("due_date") or ""))
+            except ValueError:
+                continue
+            key = f"{due.year:04d}-{due.month:02d}"
+            recurring_by_key[key] += max(0.0, float(item.get("amount", 0.0) or 0.0))
+
+        keys = set(bill_rows) | set(recurring_by_key)
+        if not keys:
+            return []
+
+        first_year, first_month = map(int, min(keys).split("-"))
+        today = date.today()
+        last_key = max(max(keys), f"{today.year:04d}-{today.month:02d}")
+        last_year, last_month = map(int, last_key.split("-"))
+        rows: list[dict[str, Any]] = []
+        for year, month in self._month_range(first_year, first_month, last_year, last_month):
+            key = f"{year:04d}-{month:02d}"
+            bill_row = bill_rows.get(key, {})
+            bill_total = round(float(bill_row.get("total", 0.0) or 0.0), 2)
+            recurring_total = round(float(recurring_by_key.get(key, 0.0) or 0.0), 2)
+            rows.append(
+                {
+                    "key": key,
+                    "year": year,
+                    "month": month,
+                    "total": round(bill_total + recurring_total, 2),
+                    "bill_total": bill_total,
+                    "recurring_total": recurring_total,
+                    "categories": dict(bill_row.get("categories", {})),
+                }
+            )
+        return rows
 
     def normalized_monthly_totals(self) -> list[dict[str, Any]]:
         if not self.expenses:
@@ -1787,7 +1841,7 @@ class BillTrackerManager:
         return results
 
     def summary(self) -> dict[str, Any]:
-        monthly = self.monthly_totals()
+        monthly = self.cashflow_monthly_totals()
         normalized = self.normalized_monthly_totals()
         today = date.today()
         current_key = f"{today.year:04d}-{today.month:02d}"
@@ -1820,7 +1874,10 @@ class BillTrackerManager:
             "average_6_months": avg6,
             "next_month_estimate": future[0]["total"] if future else 0.0,
             "normalized_current_month": round(float(normalized_current["total"]), 2) if normalized_current else 0.0,
-            "year_total": round(sum(float(x["amount"]) for x in self.expenses if int(x["paid_year"]) == today.year and bool(x.get("paid", False))), 2),
+            "year_total": round(
+                sum(float(row.get("total", 0.0) or 0.0) for row in monthly if int(row["year"]) == today.year),
+                2,
+            ),
             "entries": len(self.expenses),
             "paid_entries": sum(1 for x in self.expenses if bool(x.get("paid", False))),
             "unpaid_entries": sum(1 for x in self.expenses if not bool(x.get("paid", False))),
@@ -2933,6 +2990,17 @@ class BillTrackerManager:
         if parsed.year < 2000 or parsed.year > 2200:
             raise ValueError("Data non valida")
         return parsed.isoformat()
+
+    @staticmethod
+    def _expense_cashflow_month(item: dict[str, Any]) -> tuple[int, int]:
+        payment_date = str(item.get("payment_date") or "").strip()
+        if payment_date:
+            try:
+                parsed = date.fromisoformat(payment_date)
+                return parsed.year, parsed.month
+            except ValueError:
+                pass
+        return int(item["paid_year"]), int(item["paid_month"])
 
     @staticmethod
     def _normalize_optional_text(value: Any, max_length: int) -> str:

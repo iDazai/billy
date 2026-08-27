@@ -38,6 +38,8 @@ class BillImportCoordinator:
             "period_start_month": start.month if start else None,
             "period_end_year": end.year if end else None,
             "period_end_month": end.month if end else None,
+            "period_start_date": start.isoformat() if start else None,
+            "period_end_date": end.isoformat() if end else None,
             "paid": False,
             "payment_date": data.get("payment_date"),
             "due_date": data.get("due_date"),

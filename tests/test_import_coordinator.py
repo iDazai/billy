@@ -7,6 +7,15 @@ sys.path.insert(0, str(ROOT / "custom_components" / "bill_tracker"))
 from importers.coordinator import BillImportCoordinator  # noqa: E402
 
 
+class _Manager:
+    def __init__(self):
+        self.kwargs = None
+
+    async def async_add(self, **kwargs):
+        self.kwargs = kwargs
+        return kwargs
+
+
 def test_anchor_prefers_billing_period_over_due_date():
     anchor = BillImportCoordinator._anchor_date(
         {
@@ -26,3 +35,20 @@ def test_anchor_prefers_issue_date_when_period_is_missing():
         }
     )
     assert anchor.isoformat() == "2026-07-16"
+
+
+async def test_import_preserves_exact_billing_period_dates():
+    manager = _Manager()
+    coordinator = BillImportCoordinator(manager)
+    await coordinator.async_import(
+        {
+            "category_id": "electricity",
+            "data": {
+                "amount": 42.0,
+                "period_start": "2026-01-13",
+                "period_end": "2026-01-21",
+            },
+        }
+    )
+    assert manager.kwargs["period_start_date"] == "2026-01-13"
+    assert manager.kwargs["period_end_date"] == "2026-01-21"

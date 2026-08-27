@@ -157,8 +157,10 @@ def expense_to_export_row(item: dict[str, Any], category: dict[str, Any] | None 
         "paid": "true" if bool(item.get("paid", False)) else "false",
         "payment_date": str(item.get("payment_date") or ""),
         "due_date": str(item.get("due_date") or ""),
-        "period_start": month_key(int(item.get("period_start_year", 0)), int(item.get("period_start_month", 0))),
-        "period_end": month_key(int(item.get("period_end_year", 0)), int(item.get("period_end_month", 0))),
+        "period_start": str(item.get("period_start_date") or "")
+        or month_key(int(item.get("period_start_year", 0)), int(item.get("period_start_month", 0))),
+        "period_end": str(item.get("period_end_date") or "")
+        or month_key(int(item.get("period_end_year", 0)), int(item.get("period_end_month", 0))),
         "payer": str(item.get("payer", "")),
         "split": _split_text(item),
         "note": str(item.get("note", "")),

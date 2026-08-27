@@ -100,6 +100,10 @@ const TEXT = {
     dueDate: 'Due date',
     periodStart: 'Period start',
     periodEnd: 'Period end',
+    exactPeriodStart: 'Exact period start',
+    exactPeriodEnd: 'Exact period end',
+    shortPeriod: 'Short period · {days} days',
+    longPeriod: 'Long period · {days} days',
     consumption: 'Consumption',
     note: 'Notes',
     split: 'Split between users',
@@ -360,6 +364,10 @@ const TEXT = {
     dueDate: 'Scadenza',
     periodStart: 'Inizio competenza',
     periodEnd: 'Fine competenza',
+    exactPeriodStart: 'Inizio periodo esatto',
+    exactPeriodEnd: 'Fine periodo esatto',
+    shortPeriod: 'Periodo breve · {days} giorni',
+    longPeriod: 'Periodo lungo · {days} giorni',
     consumption: 'Consumo',
     note: 'Note',
     split: 'Divisione tra utenti',
@@ -1852,7 +1860,7 @@ class BillyBills extends HTMLElement {
         <label class="paid-toggle" title="${escapeHtml(this._t('paymentStatus'))}"><input type="checkbox" data-paid-id="${escapeHtml(row.id)}" ${row.paid ? 'checked' : ''}><span></span></label>
         <i class="category-color" style="background:${safeColor(category?.color || row.category_color)}"></i>
         <div class="bill-main"><strong>${escapeHtml(row.category || '')}</strong><small>${escapeHtml(details || '—')}</small><small>${escapeHtml([row.payer, splitText].filter(Boolean).join(' · '))}</small></div>
-        <div class="bill-month"><span>${escapeHtml(this._monthLabel(row))}</span><small>${escapeHtml(`${this._t('due')}: ${this._date(row.due_date)}`)}</small></div>
+        <div class="bill-month"><span>${escapeHtml(this._monthLabel(row))}</span><small>${escapeHtml(`${this._t('due')}: ${this._date(row.due_date)}`)}</small>${row.period_type === 'short' || row.period_type === 'long' ? `<small class="period-badge ${escapeHtml(row.period_type)}">${escapeHtml(this._t(row.period_type === 'short' ? 'shortPeriod' : 'longPeriod', { days: row.period_days || 0 }))}</small>` : ''}</div>
         <div class="bill-state">
           <span class="state ${row.paid ? 'paid' : 'unpaid'}">${escapeHtml(row.paid ? this._t('providerPaid') : this._t('providerUnpaid'))}</span>
           <div class="reimbursement-line">
@@ -2074,6 +2082,8 @@ class BillyBills extends HTMLElement {
         <label><span>${escapeHtml(this._t('contract'))}</span><input name="contract" value="${escapeHtml(row?.contract || selectedCategory?.default_contract || '')}"></label>
         <label><span>${escapeHtml(this._t('periodStart'))}</span><input name="period_start" id="form-period-start" type="month" required value="${escapeHtml(periodStart)}"></label>
         <label><span>${escapeHtml(this._t('periodEnd'))}</span><input name="period_end" id="form-period-end" type="month" required value="${escapeHtml(periodEnd)}"></label>
+        <label><span>${escapeHtml(this._t('exactPeriodStart'))}</span><input name="period_start_date" type="date" value="${escapeHtml(row?.period_start_date || '')}"></label>
+        <label><span>${escapeHtml(this._t('exactPeriodEnd'))}</span><input name="period_end_date" type="date" value="${escapeHtml(row?.period_end_date || '')}"></label>
         <label><span>${escapeHtml(this._t('dueDate'))}</span><input name="due_date" type="date" value="${escapeHtml(row?.due_date || '')}"></label>
         <label><span>${escapeHtml(this._t('paymentDate'))}</span><input name="payment_date" type="date" value="${escapeHtml(row?.payment_date || '')}"></label>
         <label><span>${escapeHtml(`${this._t('consumption')}${unit ? ` (${unit})` : ''}`)}</span><input name="consumption" type="number" min="0" step="any" value="${escapeHtml(row?.consumption ?? '')}" ${unit ? '' : 'disabled'}></label>
@@ -2186,6 +2196,8 @@ class BillyBills extends HTMLElement {
       period_start_month: start.month,
       period_end_year: end.year,
       period_end_month: end.month,
+      period_start_date: String(form.get('period_start_date') || ''),
+      period_end_date: String(form.get('period_end_date') || ''),
       paid: form.get('paid') === 'on',
       payment_date: String(form.get('payment_date') || ''),
       due_date: String(form.get('due_date') || ''),

@@ -336,6 +336,8 @@ class BillTrackerManager:
         period_start_month: int | None = None,
         period_end_year: int | None = None,
         period_end_month: int | None = None,
+        period_start_date: str | None = None,
+        period_end_date: str | None = None,
         payer_id: str | None = None,
         split: list[dict[str, Any]] | None = None,
         paid: bool = False,
@@ -355,6 +357,15 @@ class BillTrackerManager:
         normalized_split = self._resolve_expense_split(split, resolved_payer)
         normalized_payment_date = self._normalize_optional_iso_date(payment_date)
         normalized_due_date = self._normalize_optional_iso_date(due_date)
+        normalized_period_start_date = self._normalize_optional_iso_date(period_start_date)
+        normalized_period_end_date = self._normalize_optional_iso_date(period_end_date)
+        if normalized_period_start_date and normalized_period_end_date:
+            if normalized_period_start_date > normalized_period_end_date:
+                raise ValueError("Il periodo di competenza iniziale è successivo a quello finale")
+            start_date = date.fromisoformat(normalized_period_start_date)
+            end_date = date.fromisoformat(normalized_period_end_date)
+            sy, sm = start_date.year, start_date.month
+            ey, em = end_date.year, end_date.month
         normalized_consumption = self._normalize_optional_consumption(consumption)
         item = {
             "id": uuid4().hex,
@@ -366,6 +377,8 @@ class BillTrackerManager:
             "period_start_month": sm,
             "period_end_year": ey,
             "period_end_month": em,
+            "period_start_date": normalized_period_start_date,
+            "period_end_date": normalized_period_end_date,
             "payer_id": resolved_payer,
             "split": normalized_split,
             "reimbursement_manual_done": False,
@@ -399,6 +412,8 @@ class BillTrackerManager:
         period_start_month: int | None = None,
         period_end_year: int | None = None,
         period_end_month: int | None = None,
+        period_start_date: str | None = None,
+        period_end_date: str | None = None,
         payer_id: str | None = None,
         split: list[dict[str, Any]] | None = None,
         paid: bool | None = None,
@@ -423,6 +438,23 @@ class BillTrackerManager:
         normalized_due_date = (
             self._normalize_optional_iso_date(due_date) if due_date is not None else None
         )
+        normalized_period_start_date = (
+            self._normalize_optional_iso_date(period_start_date)
+            if period_start_date is not None
+            else None
+        )
+        normalized_period_end_date = (
+            self._normalize_optional_iso_date(period_end_date)
+            if period_end_date is not None
+            else None
+        )
+        if normalized_period_start_date and normalized_period_end_date:
+            if normalized_period_start_date > normalized_period_end_date:
+                raise ValueError("Il periodo di competenza iniziale è successivo a quello finale")
+            start_date = date.fromisoformat(normalized_period_start_date)
+            end_date = date.fromisoformat(normalized_period_end_date)
+            sy, sm = start_date.year, start_date.month
+            ey, em = end_date.year, end_date.month
         normalized_consumption = self._normalize_optional_consumption(consumption)
         for item in self.expenses:
             if item.get("id") != expense_id:
@@ -442,6 +474,16 @@ class BillTrackerManager:
                     "period_start_month": sm,
                     "period_end_year": ey,
                     "period_end_month": em,
+                    "period_start_date": (
+                        normalized_period_start_date
+                        if period_start_date is not None
+                        else item.get("period_start_date")
+                    ),
+                    "period_end_date": (
+                        normalized_period_end_date
+                        if period_end_date is not None
+                        else item.get("period_end_date")
+                    ),
                     "payer_id": resolved_payer,
                     "split": normalized_split,
                     "reimbursement_manual_done": (
@@ -802,8 +844,20 @@ class BillTrackerManager:
                 year, month = billing
                 self._validate_date(year, month)
 
-                period_start = month_tuple(row.get("period_start"))
-                period_end = month_tuple(row.get("period_end"))
+                raw_period_start = str(row.get("period_start") or "").strip()
+                raw_period_end = str(row.get("period_end") or "").strip()
+                period_start_date = (
+                    self._normalize_optional_iso_date(raw_period_start)
+                    if len(raw_period_start) == 10
+                    else None
+                )
+                period_end_date = (
+                    self._normalize_optional_iso_date(raw_period_end)
+                    if len(raw_period_end) == 10
+                    else None
+                )
+                period_start = month_tuple(raw_period_start[:7] if raw_period_start else None)
+                period_end = month_tuple(raw_period_end[:7] if raw_period_end else None)
                 sy, sm, ey, em = self._normalize_period(
                     year, month, int(category["interval_months"]),
                     period_start[0] if period_start else None,
@@ -859,6 +913,8 @@ class BillTrackerManager:
                     "period_start_month": sm,
                     "period_end_year": ey,
                     "period_end_month": em,
+                    "period_start_date": period_start_date,
+                    "period_end_date": period_end_date,
                     "payer_id": resolved_payer,
                     "split": normalized_split,
                     "paid": paid,
@@ -1399,6 +1455,25 @@ class BillTrackerManager:
             return []
         buckets: dict[tuple[int, int], dict[str, float]] = defaultdict(lambda: defaultdict(float))
         for item in self.expenses:
+            exact_start, exact_end = self._expense_period_dates(item)
+            if exact_start and exact_end:
+                total_days = (exact_end - exact_start).days + 1
+                if total_days <= 0:
+                    continue
+                cursor = exact_start
+                while cursor <= exact_end:
+                    month_end = date(
+                        cursor.year,
+                        cursor.month,
+                        monthrange(cursor.year, cursor.month)[1],
+                    )
+                    chunk_end = min(month_end, exact_end)
+                    days = (chunk_end - cursor).days + 1
+                    buckets[(cursor.year, cursor.month)][str(item["category_id"])] += (
+                        float(item["amount"]) * days / total_days
+                    )
+                    cursor = chunk_end + timedelta(days=1)
+                continue
             months = self._month_range(
                 int(item["period_start_year"]), int(item["period_start_month"]),
                 int(item["period_end_year"]), int(item["period_end_month"]),
@@ -2246,6 +2321,10 @@ class BillTrackerManager:
             participant = self.payer(str(part.get("payer_id", "")))
             split.append({**dict(part), "name": str(participant.get("name")) if participant else "Pagante rimosso"})
         reimbursement = self._expense_reimbursement_state(item)
+        period = self._billing_period_info(
+            item,
+            int(category.get("interval_months", 1)) if category else 1,
+        )
         return {
             **dict(item),
             "year": int(item["paid_year"]),
@@ -2263,6 +2342,10 @@ class BillTrackerManager:
             "reimbursement_manual_done": reimbursement["manual_done"],
             "reimbursement_has_settlement": reimbursement["has_recorded_settlement"],
             "reimbursement_can_toggle": reimbursement["can_toggle"],
+            "period_type": period["type"],
+            "period_days": period["days"],
+            "expected_period_days": period["expected_days"],
+            "period_ratio": period["ratio"],
         }
 
     def _public_settlement(self, item: dict[str, Any]) -> dict[str, Any]:
@@ -2302,7 +2385,21 @@ class BillTrackerManager:
         return result
 
     def _estimate_category_amount(self, history: list[dict[str, Any]]) -> float:
-        amounts = [float(x["amount"]) for x in history if isfinite(float(x["amount"]))]
+        amounts = []
+        for item in history:
+            amount = float(item["amount"])
+            if not isfinite(amount):
+                continue
+            category = self.category(str(item.get("category_id", "")))
+            interval = max(1, int(category.get("interval_months", 1))) if category else 1
+            period = self._billing_period_info(item, interval)
+            if (
+                period["type"] in {"short", "long"}
+                and period["days"]
+                and period["expected_days"]
+            ):
+                amount *= float(period["expected_days"]) / float(period["days"])
+            amounts.append(amount)
         if not amounts:
             return 0.0
         recent = amounts[-min(4, len(amounts)):]
@@ -2312,6 +2409,61 @@ class BillTrackerManager:
             correction = max(-base * 0.20, min(base * 0.20, slope * 0.35))
             base += correction
         return round(max(0.0, base), 2)
+
+    @staticmethod
+    def _expected_period_days(interval_months: int) -> int:
+        return max(1, round(30.4375 * max(1, int(interval_months))))
+
+    def _expense_period_dates(
+        self, item: dict[str, Any]
+    ) -> tuple[date | None, date | None]:
+        start_text = str(item.get("period_start_date") or "")
+        end_text = str(item.get("period_end_date") or "")
+        if not start_text or not end_text:
+            return None, None
+        try:
+            start = date.fromisoformat(start_text)
+            end = date.fromisoformat(end_text)
+        except ValueError:
+            return None, None
+        if start > end:
+            return None, None
+        return start, end
+
+    def _billing_period_info(
+        self, item: dict[str, Any], interval_months: int | None = None
+    ) -> dict[str, Any]:
+        start, end = self._expense_period_dates(item)
+        expected = self._expected_period_days(
+            interval_months
+            if interval_months is not None
+            else int(
+                (self.category(str(item.get("category_id", ""))) or {}).get(
+                    "interval_months", 1
+                )
+            )
+        )
+        if start is None or end is None:
+            return {
+                "type": "normal",
+                "days": None,
+                "expected_days": expected,
+                "ratio": None,
+            }
+        days = (end - start).days + 1
+        ratio = days / expected if expected else 1.0
+        if ratio < 0.8:
+            period_type = "short"
+        elif ratio > 1.2:
+            period_type = "long"
+        else:
+            period_type = "normal"
+        return {
+            "type": period_type,
+            "days": days,
+            "expected_days": expected,
+            "ratio": round(ratio, 4),
+        }
 
     def _resolve_category(self, category_id: str | None, category_name: str | None) -> dict[str, Any]:
         category = self.category(category_id or "") if category_id else None
@@ -2533,6 +2685,26 @@ class BillTrackerManager:
                 due_date = None
                 changed = True
             try:
+                period_start_date = self._normalize_optional_iso_date(item.get("period_start_date"))
+            except ValueError:
+                period_start_date = None
+                changed = True
+            try:
+                period_end_date = self._normalize_optional_iso_date(item.get("period_end_date"))
+            except ValueError:
+                period_end_date = None
+                changed = True
+            if period_start_date and period_end_date:
+                if period_start_date > period_end_date:
+                    period_start_date = None
+                    period_end_date = None
+                    changed = True
+                else:
+                    parsed_start = date.fromisoformat(period_start_date)
+                    parsed_end = date.fromisoformat(period_end_date)
+                    sy, sm = parsed_start.year, parsed_start.month
+                    ey, em = parsed_end.year, parsed_end.month
+            try:
                 consumption = self._normalize_optional_consumption(item.get("consumption"))
             except (ValueError, TypeError, OverflowError):
                 consumption = None
@@ -2543,6 +2715,8 @@ class BillTrackerManager:
                 "category_id": str(category["id"]), "amount": round(amount, 2),
                 "period_start_year": sy, "period_start_month": sm,
                 "period_end_year": ey, "period_end_month": em,
+                "period_start_date": period_start_date,
+                "period_end_date": period_end_date,
                 "payer_id": payer_id, "split": split,
                 "reimbursement_manual_done": bool(item.get("reimbursement_manual_done", False)),
                 "reimbursement_manual_at": (

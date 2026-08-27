@@ -525,6 +525,9 @@ class BillTrackerCard extends HTMLElement {
   }
 
   _periodText(item) {
+    if (item?.period_start_date && item?.period_end_date) {
+      return `${this._date(item.period_start_date)} → ${this._date(item.period_end_date)}`
+    }
     const start = this._monthValue(
       item.period_start_year,
       item.period_start_month,
@@ -536,6 +539,16 @@ class BillTrackerCard extends HTMLElement {
       item.period_start_year,
       item.period_start_month,
     )} → ${this._monthLabel(item.period_end_year, item.period_end_month)}`
+  }
+
+  _periodBadgeText(item) {
+    if (item?.period_type === 'short') {
+      return this._t('short_period', { days: Number(item.period_days || 0) })
+    }
+    if (item?.period_type === 'long') {
+      return this._t('long_period', { days: Number(item.period_days || 0) })
+    }
+    return ''
   }
 
   _monthLabel(year, month) {
@@ -863,6 +876,20 @@ class BillTrackerCard extends HTMLElement {
           )}<input id="period-start" type="month" required value="${this._escape(
             defaultStart,
           )}"></label>
+          <label>${this._escape(
+            this._t('exact_period_start'),
+          )}<input id="period-start-date" type="date" value="${
+            editing?.period_start_date
+              ? this._escape(editing.period_start_date)
+              : ''
+          }"></label>
+          <label>${this._escape(
+            this._t('exact_period_end'),
+          )}<input id="period-end-date" type="date" value="${
+            editing?.period_end_date
+              ? this._escape(editing.period_end_date)
+              : ''
+          }"></label>
           <label class="wide">${this._escape(
             this._t('note_optional'),
           )}<input id="note" type="text" maxlength="120" value="${
@@ -1295,7 +1322,7 @@ class BillTrackerCard extends HTMLElement {
                 x.paid_month,
               )}</strong><div class="date">${this._escape(
                 this._periodText(x),
-              )}</div></div>
+              )}</div>${this._periodBadgeText(x) ? `<div class="bill-dates">${this._escape(this._periodBadgeText(x))}</div>` : ''}</div>
               <div><strong>${this._escape(
                 this._expenseCategoryLabel(x),
               )}</strong><div class="payer-line">${
@@ -2193,6 +2220,10 @@ class BillTrackerCard extends HTMLElement {
     const paymentDate =
       this.shadowRoot.getElementById('payment-date')?.value || ''
     const dueDate = this.shadowRoot.getElementById('due-date')?.value || ''
+    const periodStartDate =
+      this.shadowRoot.getElementById('period-start-date')?.value || ''
+    const periodEndDate =
+      this.shadowRoot.getElementById('period-end-date')?.value || ''
     const provider =
       this.shadowRoot.getElementById('provider')?.value.trim() || ''
     const contract =
@@ -2237,6 +2268,8 @@ class BillTrackerCard extends HTMLElement {
       period_start_month: start.month,
       period_end_year: end.year,
       period_end_month: end.month,
+      period_start_date: periodStartDate,
+      period_end_date: periodEndDate,
       paid: paidFlag,
       payment_date: paymentDate,
       due_date: dueDate,

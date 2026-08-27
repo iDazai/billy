@@ -498,6 +498,30 @@ def test_recurring_expenses_have_persistent_configurable_colors():
     assert 'vol.Optional("color", default=""): str' in init
 
 
+def test_short_and_long_billing_periods_are_exposed_in_billy_ui():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    legacy = (FRONTEND / "bill-tracker-card-impl.js").read_text(encoding="utf-8")
+    manager = (
+        ROOT / "custom_components" / "bill_tracker" / "manager.py"
+    ).read_text(encoding="utf-8")
+    importer = (
+        ROOT / "custom_components" / "bill_tracker" / "importers" / "coordinator.py"
+    ).read_text(encoding="utf-8")
+    for token in (
+        "period_start_date",
+        "period_end_date",
+        "period_type",
+        "period_days",
+        "shortPeriod",
+        "longPeriod",
+    ):
+        assert token in panel or token in manager or token in importer
+    assert "short_period" in legacy
+    assert "long_period" in legacy
+    assert "_billing_period_info" in manager
+    assert 'period["type"] in {"short", "long"}' in manager
+
+
 def test_home_assistant_translation_files_are_complete_and_localized():
     translations = ROOT / "custom_components" / "bill_tracker" / "translations"
 

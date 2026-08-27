@@ -4,11 +4,26 @@
 
 # Billy
 
-## Billy 0.11.3
+## Billy 0.11.6
 
 Billy keeps the Lovelace `custom:bill-tracker-card`, while `/billy` is the full-size application.
 
 Billy is a Home Assistant bill manager focused on household expenses: provider bills, recurring costs, forecasts, payment tracking, shared expenses, reimbursements and automatic bill parsing from email.
+
+### What's new in 0.11.6
+
+- **Short and long billing periods** — Billy now preserves exact billing-period dates (`YYYY-MM-DD`) and automatically identifies unusually short or long bills, such as split invoices generated after a tariff or contract change.
+- **Smarter forecasts for split bills** — short/long bills are normalized using their actual number of covered days before they are used for future estimates, so two partial invoices are not mistaken for two complete billing cycles.
+- **Day-aware normalized history** — costs that span multiple calendar months are distributed according to the real number of covered days instead of being split evenly by month.
+- **Billing-period badges** — the Billy application and Lovelace card can highlight short/long periods and show the number of billed days.
+- **Exact parser billing dates** — automatic imports now keep the complete `period_start` and `period_end` dates extracted by community parsers instead of reducing them to month-only values.
+- **CSV/backup compatibility** — exact billing-period dates are preserved during export/import and in Billy backups, while existing month-only records remain supported.
+- **Multiple reimbursement providers** — each payer can configure PayPal.Me, Revolut, Venmo and Cash App and select a preferred payment method.
+- **Provider-aware payment buttons** — reimbursement actions automatically use the payer's preferred provider and show labels such as `Pay with Revolut`, `Pay with Venmo` or `Pay with Cash App` instead of assuming PayPal.
+- **Backward-compatible PayPal migration** — existing `paypal_me` payer settings are automatically migrated to the new multi-payment model.
+- **New Lovelace widget pack** — Billy now provides dedicated Summary, Spending, Breakdown, Upcoming, Recurring, Balances and Parser Status cards for custom Home Assistant dashboards.
+- **Improved localization** — Billy's sidebar, parser manager, widgets, payment settings and Home Assistant configuration strings are now fully localized in English, Italian, Spanish, French, German and Portuguese.
+- **Community parser workflow documentation** — the README now documents Catalog v2, country-specific parser catalogs, Experimental/Verified lifecycle, anonymous community feedback and how to connect Home Assistant IMAP sources.
 
 ### What Billy can do
 
@@ -16,7 +31,7 @@ Billy is a Home Assistant bill manager focused on household expenses: provider b
 - Track subscriptions, mortgages, installment plans and other recurring expenses independently from provider invoices.
 - Forecast future costs and normalize non-monthly bills into monthly-equivalent spending.
 - Split bills between multiple payers and track reimbursements separately from provider payment status.
-- Open PayPal.Me links with the exact reimbursement amount when configured.
+- Open the configured PayPal.Me, Revolut, Venmo or Cash App reimbursement link for each payer.
 - Install declarative parsers from the community `billy-parser` catalog.
 - Create and test local custom parsers directly from Billy.
 - Share a custom parser with the community as Experimental without uploading the original invoice, email or PDF.

@@ -53,8 +53,8 @@ export const BILLY_PANEL_EXTRA_TEXT = {
     confirmReimbursement: 'Confirmar reembolso',
     undoReimbursement: 'Deshacer',
     reimbursementsEven: 'No hay reembolsos pendientes.',
-    payPaypal: 'Pagar con PayPal',
-    paypalNotConfigured: 'PayPal.Me no configurado',
+    payWithMethod: 'Pagar con {method}',
+    paymentNotConfigured: 'No hay ningún método de pago configurado',
     billsTitle: 'Todas las facturas',
     billsSubtitle:
       'Historial completo con estado de pago al proveedor, edición y entrada manual.',
@@ -187,6 +187,13 @@ export const BILLY_PANEL_EXTRA_TEXT = {
     none: 'Ninguno',
     share: 'Cuota predeterminada',
     paypal: 'Usuario de PayPal.Me',
+    paymentMethods: 'Métodos de pago',
+    preferredPaymentMethod: 'Método de pago preferido',
+    revolut: 'Revtag de Revolut',
+    venmo: 'Usuario de Venmo',
+    cashapp: '$Cashtag de Cash App',
+    paymentMethodHelp:
+      'Añade uno o varios identificadores de pago y elige qué método debe mostrar Billy primero para los reembolsos.',
     noPayers: 'No hay pagadores configurados.',
     noCategories: 'No hay tipos de factura configurados.',
     imapHelp:
@@ -307,8 +314,8 @@ export const BILLY_PANEL_EXTRA_TEXT = {
     confirmReimbursement: 'Confirmer le remboursement',
     undoReimbursement: 'Annuler',
     reimbursementsEven: 'Aucun remboursement n’est actuellement dû.',
-    payPaypal: 'Payer avec PayPal',
-    paypalNotConfigured: 'PayPal.Me non configuré',
+    payWithMethod: 'Payer avec {method}',
+    paymentNotConfigured: 'Aucun moyen de paiement configuré',
     billsTitle: 'Toutes les factures',
     billsSubtitle:
       'Historique complet avec état de paiement au fournisseur, modification et saisie manuelle.',
@@ -441,6 +448,13 @@ export const BILLY_PANEL_EXTRA_TEXT = {
     none: 'Aucun',
     share: 'Part par défaut',
     paypal: 'Identifiant PayPal.Me',
+    paymentMethods: 'Moyens de paiement',
+    preferredPaymentMethod: 'Moyen de paiement préféré',
+    revolut: 'Revtag Revolut',
+    venmo: 'Nom d’utilisateur Venmo',
+    cashapp: '$Cashtag Cash App',
+    paymentMethodHelp:
+      'Ajoutez un ou plusieurs identifiants de paiement et choisissez le moyen que Billy doit afficher en priorité pour les remboursements.',
     noPayers: 'Aucun payeur configuré.',
     noCategories: 'Aucun type de facture configuré.',
     imapHelp:
@@ -561,8 +575,8 @@ export const BILLY_PANEL_EXTRA_TEXT = {
     confirmReimbursement: 'Erstattung bestätigen',
     undoReimbursement: 'Rückgängig',
     reimbursementsEven: 'Aktuell sind keine Erstattungen fällig.',
-    payPaypal: 'Mit PayPal zahlen',
-    paypalNotConfigured: 'PayPal.Me nicht konfiguriert',
+    payWithMethod: 'Mit {method} zahlen',
+    paymentNotConfigured: 'Keine Zahlungsmethode konfiguriert',
     billsTitle: 'Alle Rechnungen',
     billsSubtitle:
       'Vollständiger Verlauf mit Anbieterzahlungsstatus, Bearbeitung und manueller Erfassung.',
@@ -695,6 +709,13 @@ export const BILLY_PANEL_EXTRA_TEXT = {
     none: 'Keiner',
     share: 'Standardanteil',
     paypal: 'PayPal.Me-Benutzername',
+    paymentMethods: 'Zahlungsmethoden',
+    preferredPaymentMethod: 'Bevorzugte Zahlungsmethode',
+    revolut: 'Revolut-Revtag',
+    venmo: 'Venmo-Benutzername',
+    cashapp: 'Cash App $Cashtag',
+    paymentMethodHelp:
+      'Füge eine oder mehrere Zahlungskennungen hinzu und wähle, welche Methode Billy bei Erstattungen zuerst anzeigen soll.',
     noPayers: 'Keine Zahler konfiguriert.',
     noCategories: 'Keine Rechnungstypen konfiguriert.',
     imapHelp:
@@ -816,8 +837,8 @@ export const BILLY_PANEL_EXTRA_TEXT = {
     confirmReimbursement: 'Confirmar reembolso',
     undoReimbursement: 'Anular',
     reimbursementsEven: 'Não existem reembolsos pendentes.',
-    payPaypal: 'Pagar com PayPal',
-    paypalNotConfigured: 'PayPal.Me não configurado',
+    payWithMethod: 'Pagar com {method}',
+    paymentNotConfigured: 'Nenhum método de pagamento configurado',
     billsTitle: 'Todas as contas',
     billsSubtitle:
       'Histórico completo com estado do pagamento ao fornecedor, edição e introdução manual.',
@@ -950,6 +971,13 @@ export const BILLY_PANEL_EXTRA_TEXT = {
     none: 'Nenhum',
     share: 'Quota predefinida',
     paypal: 'Utilizador PayPal.Me',
+    paymentMethods: 'Métodos de pagamento',
+    preferredPaymentMethod: 'Método de pagamento preferido',
+    revolut: 'Revtag Revolut',
+    venmo: 'Utilizador Venmo',
+    cashapp: '$Cashtag Cash App',
+    paymentMethodHelp:
+      'Adicione um ou mais identificadores de pagamento e escolha qual método o Billy deve mostrar primeiro nos reembolsos.',
     noPayers: 'Nenhum pagador configurado.',
     noCategories: 'Nenhum tipo de conta configurado.',
     imapHelp:

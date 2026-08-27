@@ -108,17 +108,25 @@ class BillTrackerManager:
         name: str,
         share_percent: float = 50.0,
         paypal_me: str = "",
+        payment_methods: dict[str, str] | None = None,
+        preferred_payment_method: str = "",
         enabled: bool = True,
     ) -> dict[str, Any]:
         name = name.strip()
         self._validate_payer(name, share_percent)
         if self.payer_by_name(name):
             raise ValueError("Esiste già un pagante con questo nome")
+        methods = self._normalize_payment_methods(payment_methods, paypal_me)
+        preferred = self._normalize_preferred_payment_method(
+            preferred_payment_method, methods
+        )
         item = {
             "id": uuid4().hex,
             "name": name,
             "share_percent": round(float(share_percent), 2),
-            "paypal_me": self._normalize_paypal_me(paypal_me),
+            "payment_methods": methods,
+            "preferred_payment_method": preferred,
+            "paypal_me": methods.get("paypal", ""),
             "enabled": bool(enabled),
         }
         self.payers.append(item)
@@ -132,7 +140,9 @@ class BillTrackerManager:
         name: str,
         share_percent: float,
         paypal_me: str,
-        enabled: bool,
+        payment_methods: dict[str, str] | None = None,
+        preferred_payment_method: str = "",
+        enabled: bool = True,
     ) -> dict[str, Any] | None:
         name = name.strip()
         self._validate_payer(name, share_percent)
@@ -142,11 +152,17 @@ class BillTrackerManager:
         item = self.payer(payer_id)
         if item is None:
             return None
+        methods = self._normalize_payment_methods(payment_methods, paypal_me)
+        preferred = self._normalize_preferred_payment_method(
+            preferred_payment_method, methods
+        )
         item.update(
             {
                 "name": name,
                 "share_percent": round(float(share_percent), 2),
-                "paypal_me": self._normalize_paypal_me(paypal_me),
+                "payment_methods": methods,
+                "preferred_payment_method": preferred,
+                "paypal_me": methods.get("paypal", ""),
                 "enabled": bool(enabled),
             }
         )
@@ -751,6 +767,8 @@ class BillTrackerManager:
                 "id": uuid4().hex,
                 "name": name,
                 "share_percent": round(max(0.0, min(100.0, float(share))), 2),
+                "payment_methods": {},
+                "preferred_payment_method": "",
                 "paypal_me": "",
                 "enabled": True,
             }
@@ -1221,7 +1239,7 @@ class BillTrackerManager:
                     recurring_occurrence_ids.get((left, right), set())
                     | recurring_occurrence_ids.get((right, left), set())
                 )
-                paypal_me = str(target.get("paypal_me", ""))
+                payment = self._preferred_payment(target, value, self.currency)
                 result.append(
                     {
                         "from_payer_id": from_id,
@@ -1234,8 +1252,14 @@ class BillTrackerManager:
                         "recurring_occurrence_ids": recurring_linked,
                         "recurring_count": len(recurring_linked),
                         "item_count": len(linked) + len(recurring_linked),
-                        "paypal_me": paypal_me,
-                        "paypal_url": self._paypal_url(paypal_me, value, self.currency),
+                        "payment_method": payment["method"],
+                        "payment_handle": payment["handle"],
+                        "payment_url": payment["url"],
+                        "payment_methods": dict(target.get("payment_methods", {})),
+                        "paypal_me": str(target.get("paypal_me", "")),
+                        "paypal_url": (
+                            payment["url"] if payment["method"] == "paypal" else ""
+                        ),
                     }
                 )
         result.sort(key=lambda x: float(x["amount"]), reverse=True)
@@ -2373,9 +2397,17 @@ class BillTrackerManager:
                 "id": payer_id,
                 "name": name,
                 "share_percent": round(share, 2),
-                "paypal_me": self._normalize_paypal_me(str(raw.get("paypal_me", ""))),
+                "payment_methods": self._normalize_payment_methods(
+                    raw.get("payment_methods"), str(raw.get("paypal_me", ""))
+                ),
+                "preferred_payment_method": "",
+                "paypal_me": "",
                 "enabled": bool(raw.get("enabled", True)),
             }
+            item["preferred_payment_method"] = self._normalize_preferred_payment_method(
+                str(raw.get("preferred_payment_method", "")), item["payment_methods"]
+            )
+            item["paypal_me"] = item["payment_methods"].get("paypal", "")
             if item != raw:
                 changed = True
             normalized.append(item)
@@ -2795,6 +2827,78 @@ class BillTrackerManager:
         if "/" in text:
             text = text.rsplit("/", 1)[-1]
         return "".join(ch for ch in text if ch.isalnum() or ch in "._-")[:80]
+
+    @classmethod
+    def _normalize_payment_methods(
+        cls, methods: Any, legacy_paypal: str = ""
+    ) -> dict[str, str]:
+        raw = dict(methods) if isinstance(methods, dict) else {}
+        if legacy_paypal and not raw.get("paypal"):
+            raw["paypal"] = legacy_paypal
+        result: dict[str, str] = {}
+        for method in ("paypal", "revolut", "venmo", "cashapp"):
+            value = str(raw.get(method, "") or "").strip()
+            if not value:
+                continue
+            if method == "paypal":
+                normalized = cls._normalize_paypal_me(value)
+            else:
+                for prefix in ("https://", "http://"):
+                    if value.startswith(prefix):
+                        value = value.rstrip("/").rsplit("/", 1)[-1]
+                value = value.lstrip("@$ ")
+                normalized = "".join(
+                    ch for ch in value if ch.isalnum() or ch in "._-"
+                )[:80]
+            if normalized:
+                result[method] = normalized
+        return result
+
+    @staticmethod
+    def _normalize_preferred_payment_method(
+        method: str, methods: dict[str, str]
+    ) -> str:
+        requested = str(method or "").strip().lower()
+        if requested in methods:
+            return requested
+        for candidate in ("paypal", "revolut", "venmo", "cashapp"):
+            if candidate in methods:
+                return candidate
+        return ""
+
+    @classmethod
+    def _preferred_payment(
+        cls, payer: dict[str, Any], amount: float, currency: str
+    ) -> dict[str, str]:
+        methods = cls._normalize_payment_methods(
+            payer.get("payment_methods"), str(payer.get("paypal_me", ""))
+        )
+        method = cls._normalize_preferred_payment_method(
+            str(payer.get("preferred_payment_method", "")), methods
+        )
+        handle = methods.get(method, "")
+        return {
+            "method": method,
+            "handle": handle,
+            "url": cls._payment_url(method, handle, amount, currency),
+        }
+
+    @classmethod
+    def _payment_url(
+        cls, method: str, handle: str, amount: float, currency: str = "EUR"
+    ) -> str:
+        if not handle:
+            return ""
+        safe = quote(handle, safe="._-")
+        if method == "paypal":
+            return cls._paypal_url(handle, amount, currency)
+        if method == "revolut":
+            return f"https://revolut.me/{safe}"
+        if method == "venmo":
+            return f"https://venmo.com/u/{safe}"
+        if method == "cashapp":
+            return f"https://cash.app/${safe}"
+        return ""
 
     @staticmethod
     def _paypal_url(handle: str, amount: float, currency: str = "EUR") -> str:

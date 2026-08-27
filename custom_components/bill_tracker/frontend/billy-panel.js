@@ -1,7 +1,7 @@
-import './billy-parser-manager.js?v=0.11.3'
-import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.3'
+import './billy-parser-manager.js?v=0.11.4'
+import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.4'
 
-const BILLY_PANEL_VERSION = '0.11.3'
+const BILLY_PANEL_VERSION = '0.11.4'
 
 const TEXT = {
   en: {
@@ -58,8 +58,8 @@ const TEXT = {
     confirmReimbursement: 'Confirm reimbursement',
     undoReimbursement: 'Undo',
     reimbursementsEven: 'No reimbursements are currently due.',
-    payPaypal: 'Pay with PayPal',
-    paypalNotConfigured: 'PayPal.Me not configured',
+    payWithMethod: 'Pay with {method}',
+    paymentNotConfigured: 'No payment method configured',
     billsTitle: 'All bills',
     billsSubtitle:
       'Complete history with provider-payment status, editing and manual entry.',
@@ -192,6 +192,13 @@ const TEXT = {
     none: 'None',
     share: 'Default share',
     paypal: 'PayPal.Me username',
+    paymentMethods: 'Payment methods',
+    preferredPaymentMethod: 'Preferred payment method',
+    revolut: 'Revolut Revtag',
+    venmo: 'Venmo username',
+    cashapp: 'Cash App $Cashtag',
+    paymentMethodHelp:
+      'Add one or more payment identifiers and choose which method Billy should show first for reimbursements.',
     noPayers: 'No payers configured.',
     noCategories: 'No bill types configured.',
     imapHelp:
@@ -311,8 +318,8 @@ const TEXT = {
     confirmReimbursement: 'Conferma rimborso',
     undoReimbursement: 'Annulla',
     reimbursementsEven: 'Non ci sono rimborsi da regolare.',
-    payPaypal: 'Paga con PayPal',
-    paypalNotConfigured: 'PayPal.Me non configurato',
+    payWithMethod: 'Paga con {method}',
+    paymentNotConfigured: 'Nessun metodo di pagamento configurato',
     billsTitle: 'Tutte le bollette',
     billsSubtitle:
       'Storico completo con stato del pagamento al fornitore, modifica e inserimento manuale.',
@@ -445,6 +452,13 @@ const TEXT = {
     none: 'Nessuno',
     share: 'Quota predefinita',
     paypal: 'Username PayPal.Me',
+    paymentMethods: 'Metodi di pagamento',
+    preferredPaymentMethod: 'Metodo di pagamento preferito',
+    revolut: 'Revtag Revolut',
+    venmo: 'Username Venmo',
+    cashapp: '$Cashtag Cash App',
+    paymentMethodHelp:
+      'Aggiungi uno o più identificativi di pagamento e scegli quale metodo Billy deve mostrare per primo nei rimborsi.',
     noPayers: 'Nessun pagatore configurato.',
     noCategories: 'Nessuna tipologia configurata.',
     imapHelp:
@@ -534,6 +548,15 @@ function tFor(hass, key, vars = {}) {
     text = text.replaceAll(`{${name}}`, String(value))
   }
   return text
+}
+
+function paymentMethodName(hass, method) {
+  const key = String(method || '').toLowerCase()
+  if (key === 'paypal') return 'PayPal'
+  if (key === 'revolut') return 'Revolut'
+  if (key === 'venmo') return 'Venmo'
+  if (key === 'cashapp') return 'Cash App'
+  return tFor(hass, 'paymentNotConfigured')
 }
 
 function escapeHtml(value) {
@@ -1364,7 +1387,7 @@ class BillyDashboard extends HTMLElement {
           <div class="reimbursement-main"><strong>${escapeHtml(debt.from_name)} → ${escapeHtml(debt.to_name)}</strong><small>${escapeHtml(`${Number(debt.item_count ?? debt.expense_count ?? 0)} ${this._t('reimbursementItems')}`)}</small></div>
           <b>${escapeHtml(this._money(debt.amount))}</b>
           <div class="reimbursement-actions">
-            ${debt.paypal_url ? `<a class="paypal" href="${escapeHtml(debt.paypal_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(this._t('payPaypal'))}</a>` : `<button class="secondary small" disabled>${escapeHtml(this._t('paypalNotConfigured'))}</button>`}
+            ${debt.payment_url ? `<a class="paypal" href="${escapeHtml(debt.payment_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(this._t('payWithMethod', { method: paymentMethodName(this._hass, debt.payment_method) }))}</a>` : `<button class="secondary small" disabled>${escapeHtml(this._t('paymentNotConfigured'))}</button>`}
             <button class="primary small" data-reimburse="1" data-from="${escapeHtml(debt.from_payer_id)}" data-to="${escapeHtml(debt.to_payer_id)}" data-amount="${Number(debt.amount || 0)}">${escapeHtml(this._t('confirmReimbursement'))}</button>
           </div>
         </div>`,
@@ -3093,7 +3116,7 @@ class BillySettings extends HTMLElement {
                 .slice(0, 1)
                 .toUpperCase(),
             )}</div>
-            <div class="item-main"><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(`${Number(row.share_percent || 0).toLocaleString(localeOf(this._hass), { maximumFractionDigits: 2 })}%${row.paypal_me ? ` · PayPal.Me/${row.paypal_me}` : ''}`)}</small></div>
+            <div class="item-main"><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(`${Number(row.share_percent || 0).toLocaleString(localeOf(this._hass), { maximumFractionDigits: 2 })}%${row.preferred_payment_method ? ` · ${paymentMethodName(this._hass, row.preferred_payment_method)}` : ''}`)}</small></div>
             <span class="status ${row.enabled ? 'enabled' : ''}">${escapeHtml(row.enabled ? this._t('enabled') : this._t('disabled'))}</span>
             <div class="row-actions"><button data-edit-payer="${escapeHtml(row.id)}">${escapeHtml(this._t('edit'))}</button><button class="danger" data-delete-payer="${escapeHtml(row.id)}">${escapeHtml(this._t('delete'))}</button></div>
           </article>`,
@@ -3461,7 +3484,14 @@ class BillySettings extends HTMLElement {
       <div class="form-grid">
         <label class="span2"><span>${escapeHtml(this._t('name'))}</span><input name="name" required value="${escapeHtml(row?.name || '')}"></label>
         <label><span>${escapeHtml(this._t('share'))}</span><input name="share_percent" type="number" min="0" max="100" step="0.01" value="${escapeHtml(row?.share_percent ?? 50)}"></label>
-        <label><span>${escapeHtml(this._t('paypal'))}</span><input name="paypal_me" value="${escapeHtml(row?.paypal_me || '')}"></label>
+        <div class="span2"><strong>${escapeHtml(this._t('paymentMethods'))}</strong><p class="form-help">${escapeHtml(this._t('paymentMethodHelp'))}</p></div>
+        <label><span>${escapeHtml(this._t('paypal'))}</span><input name="paypal_me" value="${escapeHtml(row?.payment_methods?.paypal || row?.paypal_me || '')}"></label>
+        <label><span>${escapeHtml(this._t('revolut'))}</span><input name="revolut" value="${escapeHtml(row?.payment_methods?.revolut || '')}"></label>
+        <label><span>${escapeHtml(this._t('venmo'))}</span><input name="venmo" value="${escapeHtml(row?.payment_methods?.venmo || '')}"></label>
+        <label><span>${escapeHtml(this._t('cashapp'))}</span><input name="cashapp" value="${escapeHtml(row?.payment_methods?.cashapp || '')}"></label>
+        <label class="span2"><span>${escapeHtml(this._t('preferredPaymentMethod'))}</span><select name="preferred_payment_method">
+          ${['paypal', 'revolut', 'venmo', 'cashapp'].map((method) => `<option value="${method}" ${String(row?.preferred_payment_method || 'paypal') === method ? 'selected' : ''}>${escapeHtml(paymentMethodName(this._hass, method))}</option>`).join('')}
+        </select></label>
         <label class="check span2"><input name="enabled" type="checkbox" ${row?.enabled !== false ? 'checked' : ''}><span>${escapeHtml(this._t('enabled'))}</span></label>
       </div>
       <div class="modal-actions"><button type="button" class="secondary" id="modal-cancel">${escapeHtml(this._t('cancel'))}</button><button type="submit" class="primary">${escapeHtml(this._t('save'))}</button></div>
@@ -3489,6 +3519,15 @@ class BillySettings extends HTMLElement {
       name: String(values.get('name') || '').trim(),
       share_percent: Number(values.get('share_percent') || 0),
       paypal_me: String(values.get('paypal_me') || '').trim(),
+      payment_methods: {
+        paypal: String(values.get('paypal_me') || '').trim(),
+        revolut: String(values.get('revolut') || '').trim(),
+        venmo: String(values.get('venmo') || '').trim(),
+        cashapp: String(values.get('cashapp') || '').trim(),
+      },
+      preferred_payment_method: String(
+        values.get('preferred_payment_method') || '',
+      ),
       enabled: values.get('enabled') === 'on',
     }
     try {

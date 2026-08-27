@@ -38,8 +38,8 @@ def test_frontend_and_manifest_use_rewrite_version():
     bootstrap = (FRONTEND / "bill-tracker-card.js").read_text(encoding="utf-8")
     implementation = (FRONTEND / "bill-tracker-card-impl.js").read_text(encoding="utf-8")
     manifest = (ROOT / "custom_components" / "bill_tracker" / "manifest.json").read_text(encoding="utf-8")
-    assert "BILLY_FRONTEND_VERSION = '0.11.3'" in bootstrap
-    assert "BILL_TRACKER_VERSION = '0.11.3'" in implementation
+    assert "BILLY_FRONTEND_VERSION = '0.11.4'" in bootstrap
+    assert "BILL_TRACKER_VERSION = '0.11.4'" in implementation
     assert "./bill-tracker-i18n.js?v=0.11.3" in implementation
     assert '"version": "0.11.3"' in manifest
 
@@ -141,13 +141,36 @@ def test_billy_registers_dashboard_widget_pack():
         "recurring_history",
         "current_month_recurring",
         "catalog_status",
-        "paypal_url",
+        "payment_url",
     ):
         assert token in widgets
     assert "BILLY_WIDGETS_URL" in bootstrap
     assert "loadBillyWidgets()" in bootstrap
     assert 'BILLY_WIDGETS_URL = "/bill_tracker/billy-widgets.js"' in init
     assert "StaticPathConfig(BILLY_WIDGETS_URL, str(BILLY_WIDGETS_PATH), False)" in init
+
+
+def test_payer_settings_and_reimbursements_support_multiple_payment_methods():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    card = (FRONTEND / "bill-tracker-card-impl.js").read_text(encoding="utf-8")
+    widgets = (FRONTEND / "billy-widgets.js").read_text(encoding="utf-8")
+    init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
+    for token in (
+        'name="revolut"',
+        'name="venmo"',
+        'name="cashapp"',
+        'name="preferred_payment_method"',
+        "payment_methods:",
+        "preferred_payment_method:",
+        "payWithMethod",
+        "paymentNotConfigured",
+    ):
+        assert token in panel
+    assert "debt.payment_url" in panel
+    assert "debt.payment_url" in card
+    assert "debt.payment_url" in widgets
+    assert 'vol.Optional("payment_methods", default={}): dict' in init
+    assert 'vol.Optional("preferred_payment_method", default=""): str' in init
 
 
 def test_billy_panel_has_large_dashboard_and_native_settings():

@@ -128,6 +128,10 @@
           "name": "Nome",
           "share_percent": "Quota predefinida (%)",
           "paypal_me": "Nome de utilizador ou ligação PayPal.Me",
+          "revolut": "Revtag Revolut",
+          "venmo": "Utilizador Venmo",
+          "cashapp": "$Cashtag Cash App",
+          "preferred_payment_method": "Método de pagamento preferido",
           "enabled": "Utilizar em novas contas"
         }
       },
@@ -145,6 +149,10 @@
           "name": "Nome",
           "share_percent": "Quota predefinida (%)",
           "paypal_me": "Nome de utilizador ou ligação PayPal.Me",
+          "revolut": "Revtag Revolut",
+          "venmo": "Utilizador Venmo",
+          "cashapp": "$Cashtag Cash App",
+          "preferred_payment_method": "Método de pagamento preferido",
           "enabled": "Utilizar em novas contas"
         }
       },

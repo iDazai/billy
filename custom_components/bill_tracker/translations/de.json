@@ -128,6 +128,10 @@
           "name": "Name",
           "share_percent": "Standardanteil (%)",
           "paypal_me": "PayPal.Me-Benutzername oder -Link",
+          "revolut": "Revolut-Revtag",
+          "venmo": "Venmo-Benutzername",
+          "cashapp": "Cash App $Cashtag",
+          "preferred_payment_method": "Bevorzugte Zahlungsmethode",
           "enabled": "Für neue Rechnungen verwenden"
         }
       },
@@ -145,6 +149,10 @@
           "name": "Name",
           "share_percent": "Standardanteil (%)",
           "paypal_me": "PayPal.Me-Benutzername oder -Link",
+          "revolut": "Revolut-Revtag",
+          "venmo": "Venmo-Benutzername",
+          "cashapp": "Cash App $Cashtag",
+          "preferred_payment_method": "Bevorzugte Zahlungsmethode",
           "enabled": "Für neue Rechnungen verwenden"
         }
       },

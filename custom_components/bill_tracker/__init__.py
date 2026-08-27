@@ -593,6 +593,8 @@ _PAYER_COMMON = {
         vol.Coerce(float), vol.Range(min=0, max=100)
     ),
     vol.Optional("paypal_me", default=""): str,
+    vol.Optional("payment_methods", default={}): dict,
+    vol.Optional("preferred_payment_method", default=""): str,
     vol.Optional("enabled", default=True): bool,
 }
 
@@ -607,6 +609,8 @@ async def ws_payer_add(hass, connection, msg):
             name=msg["name"],
             share_percent=msg["share_percent"],
             paypal_me=msg["paypal_me"],
+            payment_methods=msg["payment_methods"],
+            preferred_payment_method=msg["preferred_payment_method"],
             enabled=msg["enabled"],
         )
     except (ValueError, RuntimeError) as err:
@@ -630,6 +634,8 @@ async def ws_payer_update(hass, connection, msg):
             name=msg["name"],
             share_percent=msg["share_percent"],
             paypal_me=msg["paypal_me"],
+            payment_methods=msg["payment_methods"],
+            preferred_payment_method=msg["preferred_payment_method"],
             enabled=msg["enabled"],
         )
     except (ValueError, RuntimeError) as err:

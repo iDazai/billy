@@ -1,4 +1,4 @@
-const BILLY_WIDGETS_VERSION = '0.11.3'
+const BILLY_WIDGETS_VERSION = '0.11.4'
 
 const WIDGET_TEXT = {
   en: {
@@ -39,6 +39,7 @@ const WIDGET_TEXT = {
     items: '{count} items',
     everyoneEven: 'Everyone is even.',
     outstandingBalances: 'Outstanding balances',
+    payWithMethod: 'Pay with {method}',
     installed: 'Installed',
     experimental: 'Experimental',
     updates: 'Updates',
@@ -83,6 +84,7 @@ const WIDGET_TEXT = {
     items: '{count} voci',
     everyoneEven: 'Tutti i saldi sono in pari.',
     outstandingBalances: 'Rimborsi da regolare',
+    payWithMethod: 'Paga con {method}',
     installed: 'Installati',
     experimental: 'Sperimentali',
     updates: 'Aggiornamenti',
@@ -127,6 +129,7 @@ const WIDGET_TEXT = {
     items: '{count} elementos',
     everyoneEven: 'Todos están al día.',
     outstandingBalances: 'Reembolsos pendientes',
+    payWithMethod: 'Pagar con {method}',
     installed: 'Instalados',
     experimental: 'Experimentales',
     updates: 'Actualizaciones',
@@ -171,6 +174,7 @@ const WIDGET_TEXT = {
     items: '{count} éléments',
     everyoneEven: 'Tous les comptes sont équilibrés.',
     outstandingBalances: 'Remboursements en attente',
+    payWithMethod: 'Payer avec {method}',
     installed: 'Installés',
     experimental: 'Expérimentaux',
     updates: 'Mises à jour',
@@ -215,6 +219,7 @@ const WIDGET_TEXT = {
     items: '{count} Positionen',
     everyoneEven: 'Alle Salden sind ausgeglichen.',
     outstandingBalances: 'Offene Erstattungen',
+    payWithMethod: 'Mit {method} zahlen',
     installed: 'Installiert',
     experimental: 'Experimentell',
     updates: 'Updates',
@@ -259,6 +264,7 @@ const WIDGET_TEXT = {
     items: '{count} itens',
     everyoneEven: 'Todos os saldos estão equilibrados.',
     outstandingBalances: 'Reembolsos pendentes',
+    payWithMethod: 'Pagar com {method}',
     installed: 'Instalados',
     experimental: 'Experimentais',
     updates: 'Atualizações',
@@ -1025,7 +1031,7 @@ class BillyRecurringCard extends BillyWidgetBase {
 
 class BillyBalancesCard extends BillyWidgetBase {
   static getStubConfig() {
-    return { title: '', limit: 6, show_paypal: true }
+    return { title: '', limit: 6, show_payment: true, show_paypal: true }
   }
 
   get extraStyles() {
@@ -1054,8 +1060,18 @@ class BillyBalancesCard extends BillyWidgetBase {
               debt.to_name ||
               payerMap.get(String(debt.to_payer_id)) ||
               this.t('payer')
-            const paypal = this._config.show_paypal !== false && debt.paypal_url
-            return `<div class="debt"><div class="route"><strong>${esc(from)}</strong> → ${esc(to)}<span class="meta">${esc(this.t('items', { count: Number(debt.item_count || debt.expense_count || 0) }))}</span></div><div class="right"><span class="price amount">${this.money(debt.amount)}</span>${paypal ? `<a class="paypal" href="${esc(debt.paypal_url)}" target="_blank" rel="noopener">PayPal</a>` : ''}</div></div>`
+            const showPayment =
+              this._config.show_payment !== false &&
+              this._config.show_paypal !== false
+            const method =
+              debt.payment_method === 'cashapp'
+                ? 'Cash App'
+                : debt.payment_method === 'revolut'
+                  ? 'Revolut'
+                  : debt.payment_method === 'venmo'
+                    ? 'Venmo'
+                    : 'PayPal'
+            return `<div class="debt"><div class="route"><strong>${esc(from)}</strong> → ${esc(to)}<span class="meta">${esc(this.t('items', { count: Number(debt.item_count || debt.expense_count || 0) }))}</span></div><div class="right"><span class="price amount">${this.money(debt.amount)}</span>${showPayment && debt.payment_url ? `<a class="paypal" href="${esc(debt.payment_url)}" target="_blank" rel="noopener">${esc(this.t('payWithMethod', { method }))}</a>` : ''}</div></div>`
           })
           .join('')}</div>`
       : `<div class="empty">${esc(this.t('everyoneEven'))}</div>`

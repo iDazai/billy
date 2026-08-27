@@ -473,6 +473,15 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                     name=user_input["name"],
                     share_percent=float(user_input["share_percent"]),
                     paypal_me=user_input.get("paypal_me", ""),
+                    payment_methods={
+                        "paypal": user_input.get("paypal_me", ""),
+                        "revolut": user_input.get("revolut", ""),
+                        "venmo": user_input.get("venmo", ""),
+                        "cashapp": user_input.get("cashapp", ""),
+                    },
+                    preferred_payment_method=user_input.get(
+                        "preferred_payment_method", ""
+                    ),
                     enabled=bool(user_input["enabled"]),
                 )
             except ValueError:
@@ -488,6 +497,10 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                         vol.Coerce(float), vol.Range(min=0, max=100)
                     ),
                     vol.Optional("paypal_me", default=""): str,
+                    vol.Optional("revolut", default=""): str,
+                    vol.Optional("venmo", default=""): str,
+                    vol.Optional("cashapp", default=""): str,
+                    vol.Optional("preferred_payment_method", default="paypal"): str,
                     vol.Required("enabled", default=True): bool,
                 }
             ),
@@ -539,6 +552,15 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                     name=user_input["name"],
                     share_percent=float(user_input["share_percent"]),
                     paypal_me=user_input.get("paypal_me", ""),
+                    payment_methods={
+                        "paypal": user_input.get("paypal_me", ""),
+                        "revolut": user_input.get("revolut", ""),
+                        "venmo": user_input.get("venmo", ""),
+                        "cashapp": user_input.get("cashapp", ""),
+                    },
+                    preferred_payment_method=user_input.get(
+                        "preferred_payment_method", ""
+                    ),
                     enabled=bool(user_input["enabled"]),
                 )
             except ValueError:
@@ -555,6 +577,22 @@ class BillTrackerOptionsFlow(config_entries.OptionsFlow):
                         "share_percent", default=float(item.get("share_percent", 50.0))
                     ): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
                     vol.Optional("paypal_me", default=str(item.get("paypal_me", ""))): str,
+                    vol.Optional(
+                        "revolut",
+                        default=str(item.get("payment_methods", {}).get("revolut", "")),
+                    ): str,
+                    vol.Optional(
+                        "venmo",
+                        default=str(item.get("payment_methods", {}).get("venmo", "")),
+                    ): str,
+                    vol.Optional(
+                        "cashapp",
+                        default=str(item.get("payment_methods", {}).get("cashapp", "")),
+                    ): str,
+                    vol.Optional(
+                        "preferred_payment_method",
+                        default=str(item.get("preferred_payment_method", "paypal")),
+                    ): str,
                     vol.Required("enabled", default=bool(item.get("enabled", True))): bool,
                 }
             ),

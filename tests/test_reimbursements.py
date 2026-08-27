@@ -33,8 +33,13 @@ class DummyManager:
         return next((row for row in self.payers if row["id"] == payer_id), None)
 
     @staticmethod
-    def _paypal_url(handle, amount, currency):
-        return f"https://paypal.me/{handle}/{amount:.2f}{currency}" if handle else ""
+    def _preferred_payment(payer, amount, currency):
+        handle = payer.get("paypal_me", "")
+        return {
+            "method": "paypal" if handle else "",
+            "handle": handle,
+            "url": f"https://paypal.me/{handle}/{amount:.2f}{currency}" if handle else "",
+        }
 
     def _sync_recurring_occurrences(self):
         return False
@@ -60,6 +65,8 @@ def test_reimbursements_are_independent_from_provider_bill_payment():
     assert debts[0]["from_payer_id"] == "b"
     assert debts[0]["to_payer_id"] == "a"
     assert debts[0]["amount"] == 50.0
+    assert debts[0]["payment_method"] == "paypal"
+    assert debts[0]["payment_url"] == "https://paypal.me/payerA/50.00EUR"
 
     manager.settlements = [
         {"from_payer_id": "b", "to_payer_id": "a", "amount": 50.0}
@@ -133,3 +140,19 @@ def test_manual_reimbursement_state_is_migrated_and_kept_separate_from_paid():
     assert '"reimbursement_manual_at"' in source
     assert 'if bool(item.get("reimbursement_manual_done", False)):' in source
     assert 'item["paid"]' not in source[source.index("    async def async_set_reimbursement_done("):source.index("    async def async_delete(")]
+
+
+def test_payers_support_multiple_payment_methods_with_legacy_paypal_migration():
+    source = MANAGER.read_text(encoding="utf-8")
+    for token in (
+        '"payment_methods": methods',
+        '"preferred_payment_method": preferred',
+        'raw["paypal"] = legacy_paypal',
+        'for method in ("paypal", "revolut", "venmo", "cashapp")',
+        'return f"https://revolut.me/{safe}"',
+        'return f"https://venmo.com/u/{safe}"',
+        'return f"https://cash.app/${safe}"',
+        '"payment_method": payment["method"]',
+        '"payment_url": payment["url"]',
+    ):
+        assert token in source

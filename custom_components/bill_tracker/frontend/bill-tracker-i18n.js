@@ -22,7 +22,9 @@ export const BILLY_TRANSLATIONS = {
     bill_plural: 'bills',
     expense_items: 'expense items',
     pay_with_paypal: 'Pay with PayPal',
+    pay_with_method: 'Pay with {method}',
     paypal_missing: 'PayPal.Me not configured',
+    payment_missing: 'No payment method configured',
     paypal_missing_hint: 'Add the creditor PayPal.Me in Settings',
     mark_settled: 'Confirm reimbursement',
     trend_forecast: 'Trend and forecast',
@@ -120,7 +122,8 @@ export const BILLY_TRANSLATIONS = {
     unit_not_configured: 'unit not configured',
     configure_unit: 'Configure the unit in the bill type',
     paid_checkbox: 'Bill paid',
-    paid_checkbox_help: 'Enable only when the payer has actually paid the provider bill.',
+    paid_checkbox_help:
+      'Enable only when the payer has actually paid the provider bill.',
     payment_date_optional: 'Payment date (optional)',
     due_date_optional: 'Due date (optional)',
     paid_by: 'Paid by',
@@ -197,7 +200,7 @@ export const BILLY_TRANSLATIONS = {
     month_range: 'Month range',
     all_years: 'All years',
     range_count: '{start}–{end} of {total}',
-    split_total: 'Total {total}%'
+    split_total: 'Total {total}%',
   },
   it: {
     card_title: 'Bollette di casa',
@@ -222,7 +225,9 @@ export const BILLY_TRANSLATIONS = {
     bill_plural: 'bollette',
     expense_items: 'voci di spesa',
     pay_with_paypal: 'Paga con PayPal',
+    pay_with_method: 'Paga con {method}',
     paypal_missing: 'PayPal.Me non configurato',
+    payment_missing: 'Nessun metodo di pagamento configurato',
     paypal_missing_hint:
       'Aggiungi il PayPal.Me del creditore nelle impostazioni',
     mark_settled: 'Conferma rimborso',
@@ -373,8 +378,7 @@ export const BILLY_TRANSLATIONS = {
     creditor: 'il creditore',
     settle_confirm:
       'Confermare il rimborso di {amount} da {from} a {to}? Lo stato di pagamento delle bollette al fornitore non verrà modificato.',
-    settlement_note:
-      'Rimborso registrato da Billy',
+    settlement_note: 'Rimborso registrato da Billy',
     undo_settlement_confirm:
       'Annullare questo rimborso? Lo stato di pagamento delle bollette al fornitore non verrà modificato.',
     editor_title: 'Titolo',
@@ -402,7 +406,7 @@ export const BILLY_TRANSLATIONS = {
     month_range: 'Intervallo mesi',
     all_years: 'Tutti gli anni',
     range_count: '{start}–{end} di {total}',
-    split_total: 'Totale {total}%'
+    split_total: 'Totale {total}%',
   },
   es: {
     card_title: 'Facturas del hogar',
@@ -427,7 +431,9 @@ export const BILLY_TRANSLATIONS = {
     bill_plural: 'facturas',
     expense_items: 'gastos',
     pay_with_paypal: 'Pagar con PayPal',
+    pay_with_method: 'Pagar con {method}',
     paypal_missing: 'PayPal.Me no configurado',
+    payment_missing: 'No hay ningún método de pago configurado',
     paypal_missing_hint: 'Añade el PayPal.Me del acreedor en Ajustes',
     mark_settled: 'Confirmar reembolso',
     trend_forecast: 'Evolución y previsión',
@@ -577,8 +583,7 @@ export const BILLY_TRANSLATIONS = {
     creditor: 'el acreedor',
     settle_confirm:
       '¿Confirmar el reembolso de {amount} de {from} a {to}? El estado de pago de las facturas al proveedor no cambiará.',
-    settlement_note:
-      'Reembolso registrado por Billy',
+    settlement_note: 'Reembolso registrado por Billy',
     undo_settlement_confirm:
       '¿Deshacer este reembolso? El estado de pago de las facturas al proveedor no cambiará.',
     editor_title: 'Título',
@@ -606,7 +611,7 @@ export const BILLY_TRANSLATIONS = {
     month_range: 'Rango de meses',
     all_years: 'Todos los años',
     range_count: '{start}–{end} de {total}',
-    split_total: 'Total {total}%'
+    split_total: 'Total {total}%',
   },
   fr: {
     card_title: 'Factures du foyer',
@@ -631,7 +636,9 @@ export const BILLY_TRANSLATIONS = {
     bill_plural: 'factures',
     expense_items: 'dépenses',
     pay_with_paypal: 'Payer avec PayPal',
+    pay_with_method: 'Payer avec {method}',
     paypal_missing: 'PayPal.Me non configuré',
+    payment_missing: 'Aucun moyen de paiement configuré',
     paypal_missing_hint: 'Ajoutez le PayPal.Me du créancier dans Paramètres',
     mark_settled: 'Confirmer le remboursement',
     trend_forecast: 'Évolution et prévision',
@@ -782,8 +789,7 @@ export const BILLY_TRANSLATIONS = {
     creditor: 'le créancier',
     settle_confirm:
       'Confirmer le remboursement de {amount} de {from} à {to} ? Le statut de paiement des factures au fournisseur ne changera pas.',
-    settlement_note:
-      'Remboursement enregistré par Billy',
+    settlement_note: 'Remboursement enregistré par Billy',
     undo_settlement_confirm:
       'Annuler ce remboursement ? Le statut de paiement des factures au fournisseur ne changera pas.',
     editor_title: 'Titre',
@@ -811,7 +817,7 @@ export const BILLY_TRANSLATIONS = {
     month_range: 'Plage de mois',
     all_years: 'Toutes les années',
     range_count: '{start}–{end} sur {total}',
-    split_total: 'Total {total} %'
+    split_total: 'Total {total} %',
   },
   de: {
     card_title: 'Haushaltsrechnungen',
@@ -836,7 +842,9 @@ export const BILLY_TRANSLATIONS = {
     bill_plural: 'Rechnungen',
     expense_items: 'Ausgaben',
     pay_with_paypal: 'Mit PayPal zahlen',
+    pay_with_method: 'Mit {method} zahlen',
     paypal_missing: 'PayPal.Me nicht konfiguriert',
+    payment_missing: 'Keine Zahlungsmethode konfiguriert',
     paypal_missing_hint: 'PayPal.Me des Gläubigers in Einstellungen hinzufügen',
     mark_settled: 'Erstattung bestätigen',
     trend_forecast: 'Verlauf und Prognose',
@@ -986,8 +994,7 @@ export const BILLY_TRANSLATIONS = {
     creditor: 'der Gläubiger',
     settle_confirm:
       'Die Erstattung von {amount} von {from} an {to} bestätigen? Der Zahlungsstatus der Anbieterrechnungen bleibt unverändert.',
-    settlement_note:
-      'Erstattung von Billy erfasst',
+    settlement_note: 'Erstattung von Billy erfasst',
     undo_settlement_confirm:
       'Diese Erstattung rückgängig machen? Der Zahlungsstatus der Anbieterrechnungen bleibt unverändert.',
     editor_title: 'Titel',
@@ -1015,7 +1022,7 @@ export const BILLY_TRANSLATIONS = {
     month_range: 'Monatsbereich',
     all_years: 'Alle Jahre',
     range_count: '{start}–{end} von {total}',
-    split_total: 'Gesamt {total} %'
+    split_total: 'Gesamt {total} %',
   },
   pt: {
     card_title: 'Contas da casa',
@@ -1040,7 +1047,9 @@ export const BILLY_TRANSLATIONS = {
     bill_plural: 'contas',
     expense_items: 'despesas',
     pay_with_paypal: 'Pagar com PayPal',
+    pay_with_method: 'Pagar com {method}',
     paypal_missing: 'PayPal.Me não configurado',
+    payment_missing: 'Nenhum método de pagamento configurado',
     paypal_missing_hint: 'Adicione o PayPal.Me do credor nas Definições',
     mark_settled: 'Confirmar reembolso',
     trend_forecast: 'Evolução e previsão',
@@ -1189,8 +1198,7 @@ export const BILLY_TRANSLATIONS = {
     creditor: 'o credor',
     settle_confirm:
       'Confirmar o reembolso de {amount} de {from} para {to}? O estado de pagamento das contas ao fornecedor não será alterado.',
-    settlement_note:
-      'Reembolso registado pelo Billy',
+    settlement_note: 'Reembolso registado pelo Billy',
     undo_settlement_confirm:
       'Anular este reembolso? O estado de pagamento das contas ao fornecedor não será alterado.',
     editor_title: 'Título',
@@ -1218,11 +1226,11 @@ export const BILLY_TRANSLATIONS = {
     month_range: 'Intervalo de meses',
     all_years: 'Todos os anos',
     range_count: '{start}–{end} de {total}',
-    split_total: 'Total {total}%'
-  }
+    split_total: 'Total {total}%',
+  },
 }
 
-export function billyLanguage (source) {
+export function billyLanguage(source) {
   const raw =
     typeof source === 'string'
       ? source
@@ -1239,7 +1247,7 @@ export function billyLanguage (source) {
     : 'en'
 }
 
-export function billyLocale (source) {
+export function billyLocale(source) {
   const language = billyLanguage(source)
   return (
     {
@@ -1248,12 +1256,12 @@ export function billyLocale (source) {
       es: 'es-ES',
       fr: 'fr-FR',
       de: 'de-DE',
-      pt: 'pt-PT'
+      pt: 'pt-PT',
     }[language] || 'en-US'
   )
 }
 
-export function billyT (source, key, vars = {}) {
+export function billyT(source, key, vars = {}) {
   const language = billyLanguage(source)
   let text =
     BILLY_TRANSLATIONS[language]?.[key] ?? BILLY_TRANSLATIONS.en?.[key] ?? key
@@ -1263,7 +1271,7 @@ export function billyT (source, key, vars = {}) {
   return text
 }
 
-export function billyCategoryLabel (source, category) {
+export function billyCategoryLabel(source, category) {
   if (!category) return ''
   const id = typeof category === 'string' ? category : String(category.id || '')
   const fallback =

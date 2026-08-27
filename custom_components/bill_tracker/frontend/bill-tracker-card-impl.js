@@ -2,13 +2,13 @@ import {
   billyCategoryLabel,
   billyLanguage,
   billyLocale,
-  billyT
-} from './bill-tracker-i18n.js?v=0.11.3'
+  billyT,
+} from './bill-tracker-i18n.js?v=0.11.4'
 
-const BILL_TRACKER_VERSION = '0.11.3'
+const BILL_TRACKER_VERSION = '0.11.4'
 
 class BillTrackerCard extends HTMLElement {
-  constructor () {
+  constructor() {
     super()
     this.attachShadow({ mode: 'open' })
     this._hass = null
@@ -43,20 +43,20 @@ class BillTrackerCard extends HTMLElement {
     this._unsubscribe = null
   }
 
-  static getStubConfig () {
+  static getStubConfig() {
     return {
       title: '',
       columns: 'full',
       history_months: 12,
-      forecast_months: 12
+      forecast_months: 12,
     }
   }
 
-  static getConfigElement () {
+  static getConfigElement() {
     return document.createElement('bill-tracker-card-editor')
   }
 
-  setConfig (config) {
+  setConfig(config) {
     const rawColumns = config.columns ?? 'full'
     const columns =
       rawColumns === 'full'
@@ -67,17 +67,17 @@ class BillTrackerCard extends HTMLElement {
       columns,
       history_months: Math.max(
         3,
-        Math.min(36, Number(config.history_months ?? 12))
+        Math.min(36, Number(config.history_months ?? 12)),
       ),
       forecast_months: Math.max(
         1,
-        Math.min(24, Number(config.forecast_months ?? 12))
-      )
+        Math.min(24, Number(config.forecast_months ?? 12)),
+      ),
     }
     this._render()
   }
 
-  set hass (hass) {
+  set hass(hass) {
     const first = !this._hass
     this._hass = hass
     if (first) {
@@ -86,47 +86,47 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  disconnectedCallback () {
+  disconnectedCallback() {
     if (this._unsubscribe) {
       this._unsubscribe()
       this._unsubscribe = null
     }
   }
 
-  getCardSize () {
+  getCardSize() {
     return 12
   }
 
-  getGridOptions () {
+  getGridOptions() {
     const configured = this._config.columns ?? 'full'
     return {
       columns:
         configured === 'full'
           ? 'full'
           : Math.max(1, Math.min(12, Number(configured || 12))),
-      min_columns: 6
+      min_columns: 6,
     }
   }
 
-  async _subscribeEvents () {
+  async _subscribeEvents() {
     if (!this._hass || this._unsubscribe) return
     try {
       this._unsubscribe = await this._hass.connection.subscribeEvents(
         () => this._load(),
-        'bill_tracker_updated'
+        'bill_tracker_updated',
       )
     } catch (_err) {
       // Local writes still trigger an explicit reload.
     }
   }
 
-  async _load () {
+  async _load() {
     if (!this._hass || this._loading) return
     this._loading = true
     try {
       this._data = await this._hass.callWS({
         type: 'bill_tracker/list',
-        forecast_months: this._config.forecast_months || 12
+        forecast_months: this._config.forecast_months || 12,
       })
       this._error = null
     } catch (err) {
@@ -137,46 +137,46 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  _language () {
+  _language() {
     return billyLanguage(this._hass)
   }
 
-  _locale () {
+  _locale() {
     return billyLocale(this._hass)
   }
 
-  _t (key, vars = {}) {
+  _t(key, vars = {}) {
     return billyT(this._hass, key, vars)
   }
 
-  _categoryLabel (category) {
+  _categoryLabel(category) {
     return billyCategoryLabel(this._hass, category)
   }
 
-  _expenseCategoryLabel (item) {
+  _expenseCategoryLabel(item) {
     const category = this._categoryById(item?.category_id)
     return category
       ? this._categoryLabel(category)
       : String(item?.category || '')
   }
 
-  _monthNames () {
+  _monthNames() {
     const formatter = new Intl.DateTimeFormat(this._locale(), { month: 'long' })
     return Array.from({ length: 12 }, (_, index) =>
-      formatter.format(new Date(2026, index, 1))
+      formatter.format(new Date(2026, index, 1)),
     )
   }
 
-  _monthShort () {
+  _monthShort() {
     const formatter = new Intl.DateTimeFormat(this._locale(), {
-      month: 'short'
+      month: 'short',
     })
     return Array.from({ length: 12 }, (_, index) =>
-      formatter.format(new Date(2026, index, 1)).replace(/\.$/, '')
+      formatter.format(new Date(2026, index, 1)).replace(/\.$/, ''),
     )
   }
 
-  _intervalLabel (months) {
+  _intervalLabel(months) {
     const count = Number(months)
     const key = `interval.${count}`
     const translated = this._t(key)
@@ -185,26 +185,12 @@ class BillTrackerCard extends HTMLElement {
       : translated
   }
 
-  _defaultDate () {
+  _defaultDate() {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() + 1 }
   }
 
-  _money (value) {
-    const currency =
-      this._data?.currency || this._hass?.config?.currency || 'EUR'
-    const locale = this._locale()
-    try {
-      return new Intl.NumberFormat(locale, {
-        style: 'currency',
-        currency
-      }).format(Number(value || 0))
-    } catch (_err) {
-      return `${Number(value || 0).toFixed(2)} ${currency}`
-    }
-  }
-
-  _compactMoney (value) {
+  _money(value) {
     const currency =
       this._data?.currency || this._hass?.config?.currency || 'EUR'
     const locale = this._locale()
@@ -212,23 +198,37 @@ class BillTrackerCard extends HTMLElement {
       return new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
-        maximumFractionDigits: 0
+      }).format(Number(value || 0))
+    } catch (_err) {
+      return `${Number(value || 0).toFixed(2)} ${currency}`
+    }
+  }
+
+  _compactMoney(value) {
+    const currency =
+      this._data?.currency || this._hass?.config?.currency || 'EUR'
+    const locale = this._locale()
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        maximumFractionDigits: 0,
       }).format(Number(value || 0))
     } catch (_err) {
       return `${Math.round(Number(value || 0))} ${currency}`
     }
   }
 
-  _unitPrice (value, unit) {
+  _unitPrice(value, unit) {
     const currency =
       this._data?.currency || this._hass?.config?.currency || 'EUR'
     const number = Number(value || 0)
     return `${number.toLocaleString(this._locale(), {
-      maximumFractionDigits: 6
+      maximumFractionDigits: 6,
     })} ${currency}/${unit}`
   }
 
-  _usageText (item) {
+  _usageText(item) {
     const parts = []
     const provider = String(item?.provider || '').trim()
     const contract = String(item?.contract || '').trim()
@@ -242,16 +242,16 @@ class BillTrackerCard extends HTMLElement {
       parts.push(
         this._t('consumption_value', {
           value: Number(item.consumption).toLocaleString(this._locale(), {
-            maximumFractionDigits: 4
+            maximumFractionDigits: 4,
           }),
-          unit: item.consumption_unit
-        })
+          unit: item.consumption_unit,
+        }),
       )
     }
     return parts.join(' · ')
   }
 
-  _formatDate (value) {
+  _formatDate(value) {
     const text = String(value || '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return ''
     const [year, month, day] = text.split('-').map(Number)
@@ -260,22 +260,22 @@ class BillTrackerCard extends HTMLElement {
     return new Intl.DateTimeFormat(this._locale(), {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
+      year: 'numeric',
     }).format(parsed)
   }
 
-  _expenseDatesText (item) {
+  _expenseDatesText(item) {
     const parts = []
     if (item?.due_date)
       parts.push(this._t('due_date', { date: this._formatDate(item.due_date) }))
     if (item?.payment_date)
       parts.push(
-        this._t('payment_date', { date: this._formatDate(item.payment_date) })
+        this._t('payment_date', { date: this._formatDate(item.payment_date) }),
       )
     return parts.join(' · ')
   }
 
-  _escape (value) {
+  _escape(value) {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
@@ -284,16 +284,16 @@ class BillTrackerCard extends HTMLElement {
       .replaceAll("'", '&#039;')
   }
 
-  _safeColor (value) {
+  _safeColor(value) {
     const text = String(value || '').trim()
     return /^#[0-9a-fA-F]{6}$/.test(text) ? text : '#A0A7B4'
   }
 
-  _monthValue (year, month) {
+  _monthValue(year, month) {
     return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`
   }
 
-  _parseMonth (value) {
+  _parseMonth(value) {
     const match = /^(\d{4})-(\d{2})$/.exec(String(value || ''))
     if (!match) return null
     const year = Number(match[1])
@@ -302,53 +302,56 @@ class BillTrackerCard extends HTMLElement {
     return { year, month }
   }
 
-  _addMonths (year, month, delta) {
+  _addMonths(year, month, delta) {
     const absolute = year * 12 + (month - 1) + delta
     return {
       year: Math.floor(absolute / 12),
-      month: (((absolute % 12) + 12) % 12) + 1
+      month: (((absolute % 12) + 12) % 12) + 1,
     }
   }
 
-  _activeCategories () {
+  _activeCategories() {
     return (this._data?.active_categories || [])
       .slice()
       .sort((a, b) =>
         this._categoryLabel(a).localeCompare(
           this._categoryLabel(b),
-          this._locale()
-        )
+          this._locale(),
+        ),
       )
   }
 
-  _activePayers () {
+  _activePayers() {
     return (this._data?.active_payers || [])
       .slice()
       .sort((a, b) =>
-        String(a.name || '').localeCompare(String(b.name || ''), this._locale())
+        String(a.name || '').localeCompare(
+          String(b.name || ''),
+          this._locale(),
+        ),
       )
   }
 
-  _categoryById (id) {
-    return (this._data?.categories || []).find(x => x.id === id) || null
+  _categoryById(id) {
+    return (this._data?.categories || []).find((x) => x.id === id) || null
   }
 
-  _payerById (id) {
-    return (this._data?.payers || []).find(x => x.id === id) || null
+  _payerById(id) {
+    return (this._data?.payers || []).find((x) => x.id === id) || null
   }
 
-  _categoryByName (name) {
-    return (this._data?.categories || []).find(x => x.name === name) || null
+  _categoryByName(name) {
+    return (this._data?.categories || []).find((x) => x.name === name) || null
   }
 
-  _splitMap (split) {
+  _splitMap(split) {
     const result = {}
     for (const part of split || [])
       result[part.payer_id] = Number(part.percentage || 0)
     return result
   }
 
-  _chart () {
+  _chart() {
     const normalized = this._chartMode === 'normalized'
     const actualSource = normalized
       ? this._data?.normalized_monthly
@@ -359,20 +362,21 @@ class BillTrackerCard extends HTMLElement {
     const actual = (actualSource || []).slice(-this._config.history_months)
     const forecast = (forecastSource || []).slice(
       0,
-      this._config.forecast_months
+      this._config.forecast_months,
     )
 
     if (!actual.length) {
       return `<div class="empty-chart">${this._escape(
-        this._t('empty_chart')
+        this._t('empty_chart'),
       )}</div>`
     }
 
     const rows = [
-      ...actual.map(x => ({ ...x, kind: 'actual' })),
-      ...forecast.map(x => ({ ...x, kind: 'forecast' }))
+      ...actual.map((x) => ({ ...x, kind: 'actual' })),
+      ...forecast.map((x) => ({ ...x, kind: 'forecast' })),
     ]
-    const maxValue = Math.max(1, ...rows.map(x => Number(x.total || 0))) * 1.15
+    const maxValue =
+      Math.max(1, ...rows.map((x) => Number(x.total || 0))) * 1.15
     const width = Math.max(860, rows.length * 52 + 80)
     const height = 300
     const left = 60
@@ -383,11 +387,11 @@ class BillTrackerCard extends HTMLElement {
     const plotH = height - top - bottom
     const step = plotW / Math.max(1, rows.length)
     const barW = Math.max(10, Math.min(34, step * 0.64))
-    const y = v => top + plotH - (Number(v || 0) / maxValue) * plotH
-    const x = i => left + step * i + step / 2
+    const y = (v) => top + plotH - (Number(v || 0) / maxValue) * plotH
+    const x = (i) => left + step * i + step / 2
 
     const grid = [0, 0.25, 0.5, 0.75, 1]
-      .map(ratio => {
+      .map((ratio) => {
         const gy = top + plotH * (1 - ratio)
         const val = maxValue * ratio
         return `<line x1="${left}" y1="${gy}" x2="${
@@ -396,7 +400,7 @@ class BillTrackerCard extends HTMLElement {
         <text x="${left - 8}" y="${
           gy + 4
         }" text-anchor="end" class="axis-value">${this._escape(
-          this._compactMoney(val)
+          this._compactMoney(val),
         )}</text>`
       })
       .join('')
@@ -408,7 +412,7 @@ class BillTrackerCard extends HTMLElement {
         let cursor = top + plotH
         const parts = []
         const entries = Object.entries(row.categories || {}).filter(
-          ([, value]) => Number(value) > 0
+          ([, value]) => Number(value) > 0,
         )
         for (const [name, rawValue] of entries) {
           const value = Number(rawValue || 0)
@@ -421,7 +425,7 @@ class BillTrackerCard extends HTMLElement {
           <title>${this._monthNames()[row.month - 1]} ${
             row.year
           } · ${this._escape(name)}: ${this._money(
-            value
+            value,
           )} (${percentage.toFixed(1)}%)</title>
         </rect>`)
         }
@@ -435,11 +439,11 @@ class BillTrackerCard extends HTMLElement {
       const lastActual = actual[actual.length - 1]
       forecastPoints.push([x(actual.length - 1), y(lastActual.total)])
       forecast.forEach((row, idx) =>
-        forecastPoints.push([x(forecastOffset + idx), y(row.total)])
+        forecastPoints.push([x(forecastOffset + idx), y(row.total)]),
       )
     }
     const forecastPath = forecastPoints.length
-      ? `M ${forecastPoints.map(p => `${p[0]} ${p[1]}`).join(' L ')}`
+      ? `M ${forecastPoints.map((p) => `${p[0]} ${p[1]}`).join(' L ')}`
       : ''
     const forecastDots = forecast
       .map((row, idx) => {
@@ -479,8 +483,8 @@ class BillTrackerCard extends HTMLElement {
 
     return `<div class="chart-scroll">
       <svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${this._escape(
-      this._t('chart_aria')
-    )}">
+        this._t('chart_aria'),
+      )}">
         ${grid}
         ${bars}
         ${divider}
@@ -495,7 +499,7 @@ class BillTrackerCard extends HTMLElement {
     </div>`
   }
 
-  _chartLegend () {
+  _chartLegend() {
     const normalized = this._chartMode === 'normalized'
     const source = normalized
       ? this._data?.normalized_monthly
@@ -506,87 +510,90 @@ class BillTrackerCard extends HTMLElement {
       for (const name of Object.keys(row.categories || {})) used.add(name)
     }
     const categoryLegend = [...used]
-      .map(name => {
+      .map((name) => {
         const category = this._categoryByName(name)
         return `<span><i class="legend-square" style="background:${this._safeColor(
-          category?.color
+          category?.color,
         )}"></i>${this._escape(
-          category ? this._categoryLabel(category) : name
+          category ? this._categoryLabel(category) : name,
         )}</span>`
       })
       .join('')
     return `${categoryLegend}<span><i class="legend-line"></i>${this._escape(
-      this._t('forecast_total')
+      this._t('forecast_total'),
     )}</span>`
   }
 
-  _periodText (item) {
+  _periodText(item) {
     const start = this._monthValue(
       item.period_start_year,
-      item.period_start_month
+      item.period_start_month,
     )
     const end = this._monthValue(item.period_end_year, item.period_end_month)
     if (start === end)
       return this._monthLabel(item.period_end_year, item.period_end_month)
     return `${this._monthLabel(
       item.period_start_year,
-      item.period_start_month
+      item.period_start_month,
     )} → ${this._monthLabel(item.period_end_year, item.period_end_month)}`
   }
 
-  _monthLabel (year, month) {
+  _monthLabel(year, month) {
     return `${this._monthShort()[Number(month) - 1]} ${year}`
   }
 
-  _splitText (item) {
-    const parts = (item.split || []).filter(x => Number(x.percentage) > 0)
+  _splitText(item) {
+    const parts = (item.split || []).filter((x) => Number(x.percentage) > 0)
     if (!parts.length) return this._t('not_split')
     return parts
       .map(
-        x =>
+        (x) =>
           `${x.name} ${Number(x.percentage).toFixed(
-            Number(x.percentage) % 1 ? 1 : 0
-          )}%`
+            Number(x.percentage) % 1 ? 1 : 0,
+          )}%`,
       )
       .join(' · ')
   }
 
-  _expenseFormPayers (editing) {
+  _expenseFormPayers(editing) {
     if (!editing) return this._activePayers()
     const ids = new Set(
-      [editing.payer_id, ...(editing.split || []).map(x => x.payer_id)].filter(
-        Boolean
-      )
+      [
+        editing.payer_id,
+        ...(editing.split || []).map((x) => x.payer_id),
+      ].filter(Boolean),
     )
-    return (this._data?.payers || []).filter(p => p.enabled || ids.has(p.id))
+    return (this._data?.payers || []).filter((p) => p.enabled || ids.has(p.id))
   }
 
-  _allBillsYears (expenses) {
+  _allBillsYears(expenses) {
     return [
       ...new Set(
-        (expenses || []).map(x => Number(x.paid_year)).filter(Number.isInteger)
-      )
+        (expenses || [])
+          .map((x) => Number(x.paid_year))
+          .filter(Number.isInteger),
+      ),
     ].sort((a, b) => b - a)
   }
 
-  _filterAllBills (expenses) {
+  _filterAllBills(expenses) {
     let rows = (expenses || []).slice()
     if (this._allBillsCategory !== 'all') {
-      rows = rows.filter(x => x.category_id === this._allBillsCategory)
+      rows = rows.filter((x) => x.category_id === this._allBillsCategory)
     }
     if (this._allBillsStatus === 'paid') {
-      rows = rows.filter(x => Boolean(x.paid))
+      rows = rows.filter((x) => Boolean(x.paid))
     } else if (this._allBillsStatus === 'unpaid') {
-      rows = rows.filter(x => !Boolean(x.paid))
+      rows = rows.filter((x) => !Boolean(x.paid))
     }
     if (this._allBillsTimeMode === 'year' && this._allBillsYear !== 'all') {
       const year = Number(this._allBillsYear)
-      rows = rows.filter(x => Number(x.paid_year) === year)
+      rows = rows.filter((x) => Number(x.paid_year) === year)
     } else if (this._allBillsTimeMode === 'range') {
       let from = this._allBillsFrom || ''
       let to = this._allBillsTo || ''
       if (from && to && from > to) [from, to] = [to, from]
-      rows = rows.filter(x => {
+      rows = rows.filter((x) => {
         const key = this._monthValue(x.paid_year, x.paid_month)
         return (!from || key >= from) && (!to || key <= to)
       })
@@ -594,69 +601,79 @@ class BillTrackerCard extends HTMLElement {
     return rows
   }
 
-  _closeAllBillsModal () {
+  _closeAllBillsModal() {
     this._allBillsOpen = false
     this._render()
   }
 
-  _renderDebts () {
+  _renderDebts() {
     const payers = this._data?.payers || []
     if (payers.length < 2) {
       return `<div class="settle-empty">${this._escape(
-        this._t('configure_two_payers')
+        this._t('configure_two_payers'),
       )}</div>`
     }
     const debts = this._data?.debts || []
     if (!debts.length) {
       return `<div class="settle-empty ok">✓ ${this._escape(
-        this._t('no_balance')
+        this._t('no_balance'),
       )}</div>`
     }
     return `<div class="debt-list">${debts
       .map(
-        debt => `
+        (debt) => `
       <div class="debt-row">
         <div><strong>${this._escape(debt.from_name)} → ${this._escape(
-          debt.to_name
+          debt.to_name,
         )}</strong><span>${this._escape(
           this._t('balance_to_settle', {
             count: Number(debt.item_count ?? debt.expense_count ?? 0),
-            bills: Number(debt.recurring_count || 0) > 0
-              ? this._t('expense_items')
-              : this._t(
-                  Number(debt.expense_count || 0) === 1
-                    ? 'bill_singular'
-                    : 'bill_plural'
-                )
-          })
+            bills:
+              Number(debt.recurring_count || 0) > 0
+                ? this._t('expense_items')
+                : this._t(
+                    Number(debt.expense_count || 0) === 1
+                      ? 'bill_singular'
+                      : 'bill_plural',
+                  ),
+          }),
         )}</span></div>
         <b>${this._money(debt.amount)}</b>
         <div class="debt-actions">
           ${
-            debt.paypal_url
+            debt.payment_url
               ? `<a class="paypal" href="${this._escape(
-                  debt.paypal_url
+                  debt.payment_url,
                 )}" target="_blank" rel="noopener noreferrer">${this._escape(
-                  this._t('pay_with_paypal')
+                  this._t('pay_with_method', {
+                    method:
+                      debt.payment_method === 'cashapp'
+                        ? 'Cash App'
+                        : debt.payment_method === 'revolut'
+                          ? 'Revolut'
+                          : debt.payment_method === 'venmo'
+                            ? 'Venmo'
+                            : 'PayPal',
+                  }),
                 )}</a>`
-              : `<button class="secondary small" type="button" disabled title="${this._escape(
-                  this._t('paypal_missing_hint')
-                )}">${this._escape(this._t('paypal_missing'))}</button>`
+              : `<button class="secondary small" type="button" disabled>${this._escape(
+                  this._t('payment_missing'),
+                )}</button>`
           }
           <button class="primary small settle" type="button" data-from="${this._escape(
-            debt.from_payer_id
+            debt.from_payer_id,
           )}" data-to="${this._escape(debt.to_payer_id)}" data-amount="${Number(
-          debt.amount
-        )}" data-count="${Number(debt.item_count ?? debt.expense_count ?? 0)}">${this._escape(
-          this._t('mark_settled')
-        )}</button>
+            debt.amount,
+          )}" data-count="${Number(debt.item_count ?? debt.expense_count ?? 0)}">${this._escape(
+            this._t('mark_settled'),
+          )}</button>
         </div>
-      </div>`
+      </div>`,
       )
       .join('')}</div>`
   }
 
-  _render () {
+  _render() {
     if (!this.shadowRoot) return
     if (!this._data) {
       this.shadowRoot.innerHTML = `<ha-card><div style="padding:20px">${
@@ -683,7 +700,7 @@ class BillTrackerCard extends HTMLElement {
     const startAuto = this._addMonths(
       paidParsed.year,
       paidParsed.month,
-      -(interval - 1)
+      -(interval - 1),
     )
     const defaultStart = editing
       ? this._monthValue(editing.period_start_year, editing.period_start_month)
@@ -698,26 +715,26 @@ class BillTrackerCard extends HTMLElement {
       activePayers[0]?.id ||
       ''
     const splitMap = this._splitMap(
-      editing?.split?.length ? editing.split : this._data.default_split || []
+      editing?.split?.length ? editing.split : this._data.default_split || [],
     )
     const allExpenses = this._data.expenses || []
     const currentMonthExpenses = allExpenses.filter(
-      x =>
-        Number(x.paid_year) === now.year && Number(x.paid_month) === now.month
+      (x) =>
+        Number(x.paid_year) === now.year && Number(x.paid_month) === now.month,
     )
     const allBillCategories = (this._data.categories || [])
       .slice()
       .sort((a, b) =>
         this._categoryLabel(a).localeCompare(
           this._categoryLabel(b),
-          this._locale()
-        )
+          this._locale(),
+        ),
       )
     const allBillYears = this._allBillsYears(allExpenses)
     const filteredAllExpenses = this._filterAllBills(allExpenses)
     const totalAllBillPages = Math.max(
       1,
-      Math.ceil(filteredAllExpenses.length / this._allBillsPageSize)
+      Math.ceil(filteredAllExpenses.length / this._allBillsPageSize),
     )
     if (this._allBillsPage > totalAllBillPages)
       this._allBillsPage = totalAllBillPages
@@ -725,7 +742,7 @@ class BillTrackerCard extends HTMLElement {
     const allBillsStart = (this._allBillsPage - 1) * this._allBillsPageSize
     const pagedAllExpenses = filteredAllExpenses.slice(
       allBillsStart,
-      allBillsStart + this._allBillsPageSize
+      allBillsStart + this._allBillsPageSize,
     )
     const settlements = (this._data.settlements || []).slice(0, 5)
     const upcoming = (this._data.upcoming || []).slice(0, 8)
@@ -733,7 +750,7 @@ class BillTrackerCard extends HTMLElement {
     const currency =
       this._data.currency || this._hass?.config?.currency || 'EUR'
     const selectedConsumptionUnit = String(
-      selectedCategory?.consumption_unit || ''
+      selectedCategory?.consumption_unit || '',
     )
 
     const expenseFormHtml = `<form id="expense-form">
@@ -741,93 +758,95 @@ class BillTrackerCard extends HTMLElement {
             <select id="category" required>
               ${activeCategories
                 .map(
-                  c =>
+                  (c) =>
                     `<option value="${this._escape(c.id)}" ${
                       c.id === selectedCategoryId ? 'selected' : ''
                     }>${this._escape(this._categoryLabel(c))} · ${this._escape(
-                      this._intervalLabel(c.interval_months)
-                    )}</option>`
+                      this._intervalLabel(c.interval_months),
+                    )}</option>`,
                 )
                 .join('')}
               ${
                 editing && selectedCategory && !selectedCategory.enabled
                   ? `<option value="${this._escape(
-                      selectedCategory.id
+                      selectedCategory.id,
                     )}" selected>${this._escape(
-                      this._categoryLabel(selectedCategory)
+                      this._categoryLabel(selectedCategory),
                     )} · ${this._escape(this._t('disabled_type'))}</option>`
                   : ''
               }
             </select>
           </label>
           <label>${this._escape(
-            this._t('payment_month')
+            this._t('payment_month'),
           )}<input id="paid-month" type="month" required value="${this._escape(
-      selectedPaid
-    )}"></label>
+            selectedPaid,
+          )}"></label>
           <label>${this._escape(
-            this._t('amount', { currency })
+            this._t('amount', { currency }),
           )}<input id="amount" type="number" min="0" step="0.01" inputmode="decimal" required value="${
-      editing ? this._escape(editing.amount) : ''
-    }" placeholder="0,00"></label>
+            editing ? this._escape(editing.amount) : ''
+          }" placeholder="0,00"></label>
           <label>${this._escape(
-            this._t('provider_optional')
+            this._t('provider_optional'),
           )}<input id="provider" type="text" maxlength="100" value="${
-      editing
-        ? this._escape(editing.provider || '')
-        : this._escape(selectedCategory?.default_provider || '')
-    }" placeholder="${this._escape(this._t('provider_placeholder'))}"></label>
+            editing
+              ? this._escape(editing.provider || '')
+              : this._escape(selectedCategory?.default_provider || '')
+          }" placeholder="${this._escape(this._t('provider_placeholder'))}"></label>
           <label>${this._escape(
-            this._t('contract_optional')
+            this._t('contract_optional'),
           )}<input id="contract" type="text" maxlength="100" value="${
-      editing
-        ? this._escape(editing.contract || '')
-        : this._escape(selectedCategory?.default_contract || '')
-    }" placeholder="${this._escape(this._t('contract_placeholder'))}"></label>
+            editing
+              ? this._escape(editing.contract || '')
+              : this._escape(selectedCategory?.default_contract || '')
+          }" placeholder="${this._escape(this._t('contract_placeholder'))}"></label>
           <label id="consumption-label">${this._escape(
-            this._t('consumption')
+            this._t('consumption'),
           )}${
-      selectedConsumptionUnit
-        ? ` (${this._escape(selectedConsumptionUnit)})`
-        : ` (${this._escape(this._t('unit_not_configured'))})`
-    }<input id="consumption" type="number" min="0" step="any" inputmode="decimal" ${
-      selectedConsumptionUnit ? '' : 'disabled'
-    } value="${
-      editing?.consumption !== null && editing?.consumption !== undefined
-        ? this._escape(editing.consumption)
-        : ''
-    }" placeholder="${
-      selectedConsumptionUnit ? '0' : this._escape(this._t('configure_unit'))
-    }"></label>
+            selectedConsumptionUnit
+              ? ` (${this._escape(selectedConsumptionUnit)})`
+              : ` (${this._escape(this._t('unit_not_configured'))})`
+          }<input id="consumption" type="number" min="0" step="any" inputmode="decimal" ${
+            selectedConsumptionUnit ? '' : 'disabled'
+          } value="${
+            editing?.consumption !== null && editing?.consumption !== undefined
+              ? this._escape(editing.consumption)
+              : ''
+          }" placeholder="${
+            selectedConsumptionUnit
+              ? '0'
+              : this._escape(this._t('configure_unit'))
+          }"></label>
           <label class="paid-check"><input id="paid-status" type="checkbox" ${
             editing?.paid ? 'checked' : ''
           }><div><strong>${this._escape(
-      this._t('paid_checkbox')
-    )}</strong> <span>${this._escape(
-      this._t('paid_checkbox_help')
-    )}</span></div></label>
+            this._t('paid_checkbox'),
+          )}</strong> <span>${this._escape(
+            this._t('paid_checkbox_help'),
+          )}</span></div></label>
           <label>${this._escape(
-            this._t('payment_date_optional')
+            this._t('payment_date_optional'),
           )}<input id="payment-date" type="date" value="${
-      editing?.payment_date ? this._escape(editing.payment_date) : ''
-    }"></label>
+            editing?.payment_date ? this._escape(editing.payment_date) : ''
+          }"></label>
           <label>${this._escape(
-            this._t('due_date_optional')
+            this._t('due_date_optional'),
           )}<input id="due-date" type="date" value="${
-      editing?.due_date ? this._escape(editing.due_date) : ''
-    }"></label>
+            editing?.due_date ? this._escape(editing.due_date) : ''
+          }"></label>
           ${
             formPayers.length
               ? `<label>${this._escape(this._t('paid_by'))}
             <select id="payer" required>
               ${formPayers
                 .map(
-                  p =>
+                  (p) =>
                     `<option value="${this._escape(p.id)}" ${
                       p.id === defaultPayerId ? 'selected' : ''
                     }>${this._escape(p.name)}${
                       p.enabled ? '' : ` · ${this._escape(this._t('disabled'))}`
-                    }</option>`
+                    }</option>`,
                 )
                 .join('')}
             </select>
@@ -835,51 +854,51 @@ class BillTrackerCard extends HTMLElement {
               : ''
           }
           <label>${this._escape(
-            this._t('competence_end')
+            this._t('competence_end'),
           )}<input id="period-end" type="month" required value="${this._escape(
-      defaultEnd
-    )}"></label>
+            defaultEnd,
+          )}"></label>
           <label>${this._escape(
-            this._t('competence_start')
+            this._t('competence_start'),
           )}<input id="period-start" type="month" required value="${this._escape(
-      defaultStart
-    )}"></label>
+            defaultStart,
+          )}"></label>
           <label class="wide">${this._escape(
-            this._t('note_optional')
+            this._t('note_optional'),
           )}<input id="note" type="text" maxlength="120" value="${
-      editing ? this._escape(editing.note || '') : ''
-    }" placeholder="${this._escape(this._t('note_placeholder'))}"></label>
+            editing ? this._escape(editing.note || '') : ''
+          }" placeholder="${this._escape(this._t('note_placeholder'))}"></label>
           ${
             formPayers.length
               ? `<div class="split-box">
             <div class="split-head"><strong>${this._escape(
-              this._t('expense_split')
+              this._t('expense_split'),
             )}</strong><span id="split-total" class="split-total"></span></div>
             <div class="split-grid">
               ${formPayers
                 .map(
-                  p =>
+                  (p) =>
                     `<label>${this._escape(
-                      p.name
+                      p.name,
                     )} (%)<input class="split-input" data-payer="${this._escape(
-                      p.id
+                      p.id,
                     )}" type="number" min="0" max="100" step="0.01" value="${Number(
-                      splitMap[p.id] || 0
-                    )}"></label>`
+                      splitMap[p.id] || 0,
+                    )}"></label>`,
                 )
                 .join('')}
             </div>
           </div>`
               : `<div class="form-help">${this._escape(
-                  this._t('no_payers')
+                  this._t('no_payers'),
                 )}</div>`
           }
           <div class="form-help">${this._escape(this._t('form_help'))}</div>
           <div class="buttons"><button class="secondary" id="cancel" type="button">${this._escape(
-            this._t('cancel')
+            this._t('cancel'),
           )}</button><button class="primary" type="submit">${this._escape(
-      this._t(editing ? 'save_changes' : 'add')
-    )}</button></div>
+            this._t(editing ? 'save_changes' : 'add'),
+          )}</button></div>
         </form>`
 
     this.shadowRoot.innerHTML = `
@@ -893,7 +912,7 @@ class BillTrackerCard extends HTMLElement {
         button:disabled { opacity:.55; cursor:not-allowed; }
         .primary { background:var(--primary-color); color:var(--text-primary-color,white); }
         .secondary { background:transparent; border:1px solid var(--divider-color); color:var(--primary-text-color); }
-        .paypal { background:#0070ba; color:white; }
+        .paypal { background:var(--primary-color); color:var(--text-primary-color,#fff); }
         .small { min-height:36px; font-size:12px; padding:0 11px; }
         .stats { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-bottom:14px; }
         .stat { border:1px solid var(--divider-color); border-radius:12px; padding:11px; min-width:0; }
@@ -1025,14 +1044,14 @@ class BillTrackerCard extends HTMLElement {
       <ha-card>
         <div class="head">
           <div class="title">${this._escape(
-            this._config.title || this._t('card_title')
+            this._config.title || this._t('card_title'),
           )}</div>
           <div class="head-actions">
             <button class="secondary" id="open-transfer" type="button">⇅ ${this._escape(
-              this._t('import_export')
+              this._t('import_export'),
             )}</button>
             <button class="secondary" id="settings" type="button">⚙ ${this._escape(
-              this._t('settings')
+              this._t('settings'),
             )}</button>
             <button class="primary" id="open-form" type="button" ${
               activeCategories.length ? '' : 'disabled'
@@ -1041,33 +1060,33 @@ class BillTrackerCard extends HTMLElement {
         </div>
         <div class="stats">
           <div class="stat"><span>${this._escape(
-            this._t('paid_this_month')
+            this._t('paid_this_month'),
           )}</span><strong>${this._money(summary.current_month)}</strong></div>
           <div class="stat"><span>${this._escape(
-            this._t('average_6_months')
+            this._t('average_6_months'),
           )}</span><strong>${this._money(
-      summary.average_6_months
-    )}</strong></div>
+            summary.average_6_months,
+          )}</strong></div>
           <div class="stat"><span>${this._escape(
-            this._t('next_month_estimate')
+            this._t('next_month_estimate'),
           )}</span><strong>${this._money(
-      summary.next_month_estimate
-    )}</strong></div>
+            summary.next_month_estimate,
+          )}</strong></div>
           <div class="stat"><span>${this._escape(
-            this._t('normalized_monthly_cost')
+            this._t('normalized_monthly_cost'),
           )}</span><strong>${this._money(
-      summary.normalized_current_month
-    )}</strong></div>
+            summary.normalized_current_month,
+          )}</strong></div>
           <div class="stat"><span>${this._escape(
-            this._t('bills_to_pay')
+            this._t('bills_to_pay'),
           )}</span><strong>${this._money(
-      summary.unpaid_total ?? summary.outstanding_total
-    )}</strong></div>
+            summary.unpaid_total ?? summary.outstanding_total,
+          )}</strong></div>
         </div>
         ${
           !activeCategories.length
             ? `<div class="warning">${this._escape(
-                this._t('no_active_types')
+                this._t('no_active_types'),
               )}</div>`
             : ''
         }
@@ -1077,23 +1096,23 @@ class BillTrackerCard extends HTMLElement {
           <div class="edit-modal-shell" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
             <div class="edit-modal-head">
               <div><strong id="edit-modal-title">${this._escape(
-                this._t('edit_bill')
+                this._t('edit_bill'),
               )}</strong><span>${this._escape(
-                this._expenseCategoryLabel(editing)
+                this._expenseCategoryLabel(editing),
               )} · ${this._monthLabel(
                 editing.paid_year,
-                editing.paid_month
+                editing.paid_month,
               )}</span></div>
               <button class="secondary edit-modal-close" id="modal-close" type="button" aria-label="${this._escape(
-                this._t('close_edit')
+                this._t('close_edit'),
               )}">×</button>
             </div>
             ${expenseFormHtml}
           </div>
         </div>`
             : this._formOpen
-            ? expenseFormHtml
-            : ''
+              ? expenseFormHtml
+              : ''
         }
         ${
           this._error
@@ -1102,25 +1121,27 @@ class BillTrackerCard extends HTMLElement {
         }
 
         <div class="section"><div class="section-title">${this._escape(
-          this._t('reimbursements')
+          this._t('reimbursements'),
         )}</div><div class="settle-box">${this._renderDebts()}</div></div>
 
         <div class="chart-panel">
           <div class="chart-head">
             <div class="chart-copy"><strong>${this._escape(
-              this._t('trend_forecast')
+              this._t('trend_forecast'),
             )}</strong><span>${this._escape(
-      this._t(
-        this._chartMode === 'cashflow' ? 'cashflow_help' : 'normalized_help'
-      )
-    )}</span></div>
+              this._t(
+                this._chartMode === 'cashflow'
+                  ? 'cashflow_help'
+                  : 'normalized_help',
+              ),
+            )}</span></div>
             <div class="mode"><button type="button" data-mode="cashflow" class="${
               this._chartMode === 'cashflow' ? 'active' : ''
             }">${this._escape(
-      this._t('payments')
-    )}</button><button type="button" data-mode="normalized" class="${
-      this._chartMode === 'normalized' ? 'active' : ''
-    }">${this._escape(this._t('monthly_cost'))}</button></div>
+              this._t('payments'),
+            )}</button><button type="button" data-mode="normalized" class="${
+              this._chartMode === 'normalized' ? 'active' : ''
+            }">${this._escape(this._t('monthly_cost'))}</button></div>
           </div>
           <div class="legend">${this._chartLegend()}</div>
           ${this._chart()}
@@ -1128,12 +1149,12 @@ class BillTrackerCard extends HTMLElement {
 
         <div class="section">
           <div class="section-title">${this._escape(
-            this._t('savings_title')
+            this._t('savings_title'),
           )}</div>
           ${
             contractSavings.length
               ? `<div class="savings-grid">${contractSavings
-                  .map(x => {
+                  .map((x) => {
                     const saving = Number(x.estimated_savings || 0)
                     const oldLabel =
                       [x.old_provider, x.old_contract]
@@ -1145,53 +1166,47 @@ class BillTrackerCard extends HTMLElement {
                         .join(' · ') || this._t('current_contract')
                     return `<div class="savings-card">
               <div class="savings-card-head"><div><strong>${this._escape(
-                this._expenseCategoryLabel(x)
+                this._expenseCategoryLabel(x),
               )}</strong><span>${this._escape(x.unit)} · ${this._escape(
-                      this._t('bills_with_consumption', {
-                        old: Number(x.old_bill_count || 0),
-                        new: Number(x.new_bill_count || 0)
-                      })
-                    )}</span></div><div class="savings-value ${
-                      saving >= 0 ? 'positive' : 'negative'
-                    }">${saving >= 0 ? '+' : ''}${this._money(
-                      saving
-                    )}</div></div>
+                this._t('bills_with_consumption', {
+                  old: Number(x.old_bill_count || 0),
+                  new: Number(x.new_bill_count || 0),
+                }),
+              )}</span></div><div class="savings-value ${
+                saving >= 0 ? 'positive' : 'negative'
+              }">${saving >= 0 ? '+' : ''}${this._money(saving)}</div></div>
               <div class="savings-comparison"><div><span>${this._escape(
-                      this._t('savings_before')
-                    )}</span><b>${this._escape(
-                oldLabel
-              )}</b><span>${this._escape(
-                      this._unitPrice(x.old_unit_price, x.unit)
-                    )}</span></div><span>→</span><div><span>${this._escape(
-                      this._t('savings_after')
-                    )}</span><b>${this._escape(
-                      newLabel
-                    )}</b><span>${this._escape(
-                      this._unitPrice(x.new_unit_price, x.unit)
-                    )}</span></div></div>
+                this._t('savings_before'),
+              )}</span><b>${this._escape(oldLabel)}</b><span>${this._escape(
+                this._unitPrice(x.old_unit_price, x.unit),
+              )}</span></div><span>→</span><div><span>${this._escape(
+                this._t('savings_after'),
+              )}</span><b>${this._escape(newLabel)}</b><span>${this._escape(
+                this._unitPrice(x.new_unit_price, x.unit),
+              )}</span></div></div>
               <div class="savings-meta">${this._escape(
                 this._t('equivalent_saving', {
                   kind: this._t(saving >= 0 ? 'saving' : 'increase'),
                   percent: Math.abs(
-                    Number(x.estimated_savings_percent || 0)
+                    Number(x.estimated_savings_percent || 0),
                   ).toFixed(1),
                   old_amount: this._money(x.old_avg_amount),
                   new_amount: this._money(x.new_avg_amount),
                   old_consumption: Number(
-                    x.old_avg_consumption || 0
+                    x.old_avg_consumption || 0,
                   ).toLocaleString(this._locale(), {
-                    maximumFractionDigits: 4
+                    maximumFractionDigits: 4,
                   }),
                   new_consumption: Number(
-                    x.new_avg_consumption || 0
+                    x.new_avg_consumption || 0,
                   ).toLocaleString(this._locale(), {
-                    maximumFractionDigits: 4
+                    maximumFractionDigits: 4,
                   }),
                   unit: x.unit,
                   change: `${
                     Number(x.consumption_change_percent || 0) >= 0 ? '+' : ''
-                  }${Number(x.consumption_change_percent || 0).toFixed(1)}`
-                })
+                  }${Number(x.consumption_change_percent || 0).toFixed(1)}`,
+                }),
               )}</div>
             </div>`
                   })
@@ -1200,22 +1215,22 @@ class BillTrackerCard extends HTMLElement {
           }
         </div>
         <div class="section"><div class="section-title">${this._escape(
-          this._t('upcoming_title')
+          this._t('upcoming_title'),
         )}</div>
           ${
             upcoming.length
               ? `<div class="upcoming-grid">${upcoming
                   .map(
-                    x =>
+                    (x) =>
                       `<div class="upcoming-item"><span>${
                         this._monthNames()[Number(x.month) - 1]
                       } ${x.year}</span><strong><b>${this._escape(
-                        this._expenseCategoryLabel(x)
-                      )}</b><b>${this._money(x.amount)}</b></strong></div>`
+                        this._expenseCategoryLabel(x),
+                      )}</b><b>${this._money(x.amount)}</b></strong></div>`,
                   )
                   .join('')}</div>`
               : `<div class="msg">${this._escape(
-                  this._t('upcoming_empty')
+                  this._t('upcoming_empty'),
                 )}</div>`
           }
         </div>
@@ -1223,23 +1238,23 @@ class BillTrackerCard extends HTMLElement {
         ${
           settlements.length
             ? `<div class="section"><div class="section-title">${this._escape(
-                this._t('recent_settlements')
+                this._t('recent_settlements'),
               )}</div>${settlements
                 .map(
-                  x =>
+                  (x) =>
                     `<div class="settlement"><div><strong>${this._escape(
-                      x.from_name
+                      x.from_name,
                     )} → ${this._escape(x.to_name)}</strong><span>${new Date(
-                      x.created_at
+                      x.created_at,
                     ).toLocaleString(this._locale())}${
                       x.note ? ` · ${this._escape(x.note)}` : ''
                     }</span></div><b>${this._money(
-                      x.amount
+                      x.amount,
                     )}</b><button class="icon delete-settlement" type="button" data-id="${this._escape(
-                      x.id
+                      x.id,
                     )}" title="${this._escape(
-                      this._t('cancel_settlement')
-                    )}">×</button></div>`
+                      this._t('cancel_settlement'),
+                    )}">×</button></div>`,
                 )
                 .join('')}</div>`
             : ''
@@ -1251,19 +1266,19 @@ class BillTrackerCard extends HTMLElement {
               this._t('current_month_bills', {
                 month: this._monthNames()[now.month - 1],
                 year: now.year,
-                count: currentMonthExpenses.length
-              })
+                count: currentMonthExpenses.length,
+              }),
             )}</div>
             <div class="head-actions">
               <button class="secondary small" id="toggle-current-bills" type="button">${this._escape(
                 this._currentMonthBillsOpen
                   ? this._t('hide')
                   : this._t('show_count', {
-                      count: currentMonthExpenses.length
-                    })
+                      count: currentMonthExpenses.length,
+                    }),
               )}</button>
               <button class="secondary small" id="open-all-bills" type="button">${this._escape(
-                this._t('all_bills_count', { count: allExpenses.length })
+                this._t('all_bills_count', { count: allExpenses.length }),
               )}</button>
             </div>
           </div>
@@ -1274,59 +1289,53 @@ class BillTrackerCard extends HTMLElement {
               currentMonthExpenses.length
                 ? currentMonthExpenses
                     .map(
-                      x => `<div class="row">
+                      (x) => `<div class="row">
               <div><strong>${this._monthLabel(
                 x.paid_year,
-                x.paid_month
+                x.paid_month,
               )}</strong><div class="date">${this._escape(
-                        this._periodText(x)
-                      )}</div></div>
+                this._periodText(x),
+              )}</div></div>
               <div><strong>${this._escape(
-                this._expenseCategoryLabel(x)
+                this._expenseCategoryLabel(x),
               )}</strong><div class="payer-line">${
-                        x.payer
-                          ? this._escape(
-                              this._t('payer_prefix', { name: x.payer })
-                            )
-                          : ''
-                      }${this._escape(this._splitText(x))}</div>${
-                        this._usageText(x)
-                          ? `<div class="usage-line">${this._escape(
-                              this._usageText(x)
-                            )}</div>`
-                          : ''
-                      }${
-                        this._expenseDatesText(x)
-                          ? `<div class="bill-dates">${this._escape(
-                              this._expenseDatesText(x)
-                            )}</div>`
-                          : ''
-                      }${
-                        x.note
-                          ? `<div class="note">${this._escape(x.note)}</div>`
-                          : ''
-                      }</div>
+                x.payer
+                  ? this._escape(this._t('payer_prefix', { name: x.payer }))
+                  : ''
+              }${this._escape(this._splitText(x))}</div>${
+                this._usageText(x)
+                  ? `<div class="usage-line">${this._escape(
+                      this._usageText(x),
+                    )}</div>`
+                  : ''
+              }${
+                this._expenseDatesText(x)
+                  ? `<div class="bill-dates">${this._escape(
+                      this._expenseDatesText(x),
+                    )}</div>`
+                  : ''
+              }${
+                x.note ? `<div class="note">${this._escape(x.note)}</div>` : ''
+              }</div>
               <div class="amount"><span class="paid-status ${
                 x.paid ? 'yes' : 'no'
               }" title="${this._escape(
-                        this._t(x.paid ? 'bill_paid' : 'bill_unpaid')
-                      )}" aria-label="${this._escape(
-                        this._t(x.paid ? 'bill_paid' : 'bill_unpaid')
-                      )}">✓</span> ${this._money(x.amount)}</div>
+                this._t(x.paid ? 'bill_paid' : 'bill_unpaid'),
+              )}" aria-label="${this._escape(
+                this._t(x.paid ? 'bill_paid' : 'bill_unpaid'),
+              )}">✓</span> ${this._money(x.amount)}</div>
               <div class="actions"><button class="icon edit" type="button" data-id="${this._escape(
-                x.id
+                x.id,
               )}" title="${this._escape(
-                        this._t('edit')
-                      )}">✎</button><button class="icon delete" type="button" data-id="${this._escape(
-                        x.id
-                      )}" title="${this._escape(
-                        this._t('delete')
-                      )}">×</button></div>
-            </div>`
+                this._t('edit'),
+              )}">✎</button><button class="icon delete" type="button" data-id="${this._escape(
+                x.id,
+              )}" title="${this._escape(this._t('delete'))}">×</button></div>
+            </div>`,
                     )
                     .join('')
                 : `<div class="msg">${this._escape(
-                    this._t('no_current_bills')
+                    this._t('no_current_bills'),
                   )}</div>`
             }
           </div>`
@@ -1339,15 +1348,15 @@ class BillTrackerCard extends HTMLElement {
           <div class="all-bills-shell" role="dialog" aria-modal="true" aria-labelledby="all-bills-title">
             <div class="all-bills-head">
               <div><strong id="all-bills-title">${this._escape(
-                this._t('all_bills')
+                this._t('all_bills'),
               )}</strong><span>${this._escape(
                 this._t('results_of', {
                   filtered: filteredAllExpenses.length,
-                  total: allExpenses.length
-                })
+                  total: allExpenses.length,
+                }),
               )}</span></div>
               <button class="secondary edit-modal-close" id="all-bills-close" type="button" aria-label="${this._escape(
-                this._t('close_bill_list')
+                this._t('close_bill_list'),
               )}">×</button>
             </div>
             <div class="all-bills-body">
@@ -1359,10 +1368,10 @@ class BillTrackerCard extends HTMLElement {
                     }>${this._escape(this._t('all_types'))}</option>
                     ${allBillCategories
                       .map(
-                        c =>
+                        (c) =>
                           `<option value="${this._escape(c.id)}" ${
                             c.id === this._allBillsCategory ? 'selected' : ''
-                          }>${this._escape(this._categoryLabel(c))}</option>`
+                          }>${this._escape(this._categoryLabel(c))}</option>`,
                       )
                       .join('')}
                   </select>
@@ -1402,12 +1411,12 @@ class BillTrackerCard extends HTMLElement {
                     }>${this._escape(this._t('all_years'))}</option>
                     ${allBillYears
                       .map(
-                        year =>
+                        (year) =>
                           `<option value="${year}" ${
                             String(year) === String(this._allBillsYear)
                               ? 'selected'
                               : ''
-                          }>${year}</option>`
+                          }>${year}</option>`,
                       )
                       .join('')}
                   </select>
@@ -1417,13 +1426,13 @@ class BillTrackerCard extends HTMLElement {
                 ${
                   this._allBillsTimeMode === 'range'
                     ? `<label>${this._escape(
-                        this._t('from')
+                        this._t('from'),
                       )}<input id="all-bills-from" type="month" value="${this._escape(
-                        this._allBillsFrom
+                        this._allBillsFrom,
                       )}"></label><label>${this._escape(
-                        this._t('to')
+                        this._t('to'),
                       )}<input id="all-bills-to" type="month" value="${this._escape(
-                        this._allBillsTo
+                        this._allBillsTo,
                       )}"></label>`
                     : ''
                 }
@@ -1431,12 +1440,12 @@ class BillTrackerCard extends HTMLElement {
                   <select id="all-bills-page-size">
                     ${[10, 20, 50]
                       .map(
-                        size =>
+                        (size) =>
                           `<option value="${size}" ${
                             Number(this._allBillsPageSize) === size
                               ? 'selected'
                               : ''
-                          }>${size}</option>`
+                          }>${size}</option>`,
                       )
                       .join('')}
                   </select>
@@ -1449,10 +1458,10 @@ class BillTrackerCard extends HTMLElement {
                         start: allBillsStart + 1,
                         end: Math.min(
                           allBillsStart + this._allBillsPageSize,
-                          filteredAllExpenses.length
+                          filteredAllExpenses.length,
                         ),
-                        total: filteredAllExpenses.length
-                      })
+                        total: filteredAllExpenses.length,
+                      }),
                     )
                   : this._escape(this._t('no_bills'))
               }</div>
@@ -1461,65 +1470,61 @@ class BillTrackerCard extends HTMLElement {
                   pagedAllExpenses.length
                     ? pagedAllExpenses
                         .map(
-                          x => `<div class="all-row">
+                          (x) => `<div class="all-row">
                   <label class="paid-toggle" title="${this._escape(
-                    this._t(x.paid ? 'mark_unpaid' : 'mark_paid')
+                    this._t(x.paid ? 'mark_unpaid' : 'mark_paid'),
                   )}">
                     <input class="bill-paid-toggle" type="checkbox" data-id="${this._escape(
-                      x.id
+                      x.id,
                     )}" ${x.paid ? 'checked' : ''} aria-label="${this._escape(
-                            this._t(x.paid ? 'bill_paid' : 'bill_unpaid')
-                          )}">
+                      this._t(x.paid ? 'bill_paid' : 'bill_unpaid'),
+                    )}">
                     <span class="paid-toggle-mark">✓</span>
                   </label>
                   <div class="all-date"><strong>${this._monthLabel(
                     x.paid_year,
-                    x.paid_month
+                    x.paid_month,
                   )}</strong><div class="date">${this._escape(
-                            this._periodText(x)
-                          )}</div></div>
+                    this._periodText(x),
+                  )}</div></div>
                   <div class="all-main"><strong>${this._escape(
-                    this._expenseCategoryLabel(x)
+                    this._expenseCategoryLabel(x),
                   )}</strong><div class="payer-line">${
-                            x.payer
-                              ? this._escape(
-                                  this._t('payer_prefix', { name: x.payer })
-                                )
-                              : ''
-                          }${this._escape(this._splitText(x))}</div>${
-                            this._usageText(x)
-                              ? `<div class="usage-line">${this._escape(
-                                  this._usageText(x)
-                                )}</div>`
-                              : ''
-                          }${
-                            this._expenseDatesText(x)
-                              ? `<div class="bill-dates">${this._escape(
-                                  this._expenseDatesText(x)
-                                )}</div>`
-                              : ''
-                          }${
-                            x.note
-                              ? `<div class="note">${this._escape(
-                                  x.note
-                                )}</div>`
-                              : ''
-                          }</div>
+                    x.payer
+                      ? this._escape(this._t('payer_prefix', { name: x.payer }))
+                      : ''
+                  }${this._escape(this._splitText(x))}</div>${
+                    this._usageText(x)
+                      ? `<div class="usage-line">${this._escape(
+                          this._usageText(x),
+                        )}</div>`
+                      : ''
+                  }${
+                    this._expenseDatesText(x)
+                      ? `<div class="bill-dates">${this._escape(
+                          this._expenseDatesText(x),
+                        )}</div>`
+                      : ''
+                  }${
+                    x.note
+                      ? `<div class="note">${this._escape(x.note)}</div>`
+                      : ''
+                  }</div>
                   <div class="amount">${this._money(x.amount)}</div>
                   <div class="actions"><button class="icon edit" type="button" data-id="${this._escape(
-                    x.id
+                    x.id,
                   )}" title="${this._escape(
-                            this._t('edit')
-                          )}">✎</button><button class="icon delete" type="button" data-id="${this._escape(
-                            x.id
-                          )}" title="${this._escape(
-                            this._t('delete')
-                          )}">×</button></div>
-                </div>`
+                    this._t('edit'),
+                  )}">✎</button><button class="icon delete" type="button" data-id="${this._escape(
+                    x.id,
+                  )}" title="${this._escape(
+                    this._t('delete'),
+                  )}">×</button></div>
+                </div>`,
                         )
                         .join('')
                     : `<div class="msg">${this._escape(
-                        this._t('no_filtered_bills')
+                        this._t('no_filtered_bills'),
                       )}</div>`
                 }
               </div>
@@ -1528,20 +1533,20 @@ class BillTrackerCard extends HTMLElement {
               <span class="all-bills-count">${this._escape(
                 this._t('page_of', {
                   page: this._allBillsPage,
-                  pages: totalAllBillPages
-                })
+                  pages: totalAllBillPages,
+                }),
               )}</span>
               <div class="pagination">
                 <button class="secondary small all-bills-page" type="button" data-page="${
                   this._allBillsPage - 1
                 }" ${
-                this._allBillsPage <= 1 ? 'disabled' : ''
-              }>← ${this._escape(this._t('previous'))}</button>
+                  this._allBillsPage <= 1 ? 'disabled' : ''
+                }>← ${this._escape(this._t('previous'))}</button>
                 <button class="secondary small all-bills-page" type="button" data-page="${
                   this._allBillsPage + 1
                 }" ${
-                this._allBillsPage >= totalAllBillPages ? 'disabled' : ''
-              }>${this._escape(this._t('next'))} →</button>
+                  this._allBillsPage >= totalAllBillPages ? 'disabled' : ''
+                }>${this._escape(this._t('next'))} →</button>
               </div>
             </div>
           </div>
@@ -1554,12 +1559,12 @@ class BillTrackerCard extends HTMLElement {
           <div class="transfer-shell" role="dialog" aria-modal="true" aria-labelledby="transfer-title">
             <div class="transfer-head">
               <div><strong id="transfer-title">${this._escape(
-                this._t('import_export_title')
+                this._t('import_export_title'),
               )}</strong><span>${this._escape(
-                this._t('import_export_help')
+                this._t('import_export_help'),
               )}</span></div>
               <button class="secondary edit-modal-close" id="transfer-close" type="button" aria-label="${this._escape(
-                this._t('close_import_export')
+                this._t('close_import_export'),
               )}">×</button>
             </div>
             <div class="transfer-body">
@@ -1567,7 +1572,7 @@ class BillTrackerCard extends HTMLElement {
                 <h3>${this._escape(this._t('import_csv'))}</h3>
                 <p>${this._escape(this._t('import_csv_help'))}</p>
                 <label>${this._escape(
-                  this._t('csv_file')
+                  this._t('csv_file'),
                 )}<input id="import-csv-file" type="file" accept=".csv,text/csv"></label>
                 <div class="transfer-file" id="import-file-label">${
                   this._importFileName
@@ -1575,10 +1580,10 @@ class BillTrackerCard extends HTMLElement {
                     : this._escape(this._t('no_file'))
                 }</div>
                 <label class="transfer-check"><input id="import-create-categories" type="checkbox" checked> ${this._escape(
-                  this._t('create_missing_types')
+                  this._t('create_missing_types'),
                 )}</label>
                 <label class="transfer-check"><input id="import-create-payers" type="checkbox" checked> ${this._escape(
-                  this._t('create_missing_payers')
+                  this._t('create_missing_payers'),
                 )}</label>
                 <div class="transfer-actions">
                   <button class="secondary small" id="download-template" type="button" ${
@@ -1587,8 +1592,8 @@ class BillTrackerCard extends HTMLElement {
                   <button class="primary small" id="import-csv" type="button" ${
                     !this._importCsvText || this._transferBusy ? 'disabled' : ''
                   }>${this._escape(
-                this._t(this._transferBusy ? 'wait' : 'import')
-              )}</button>
+                    this._t(this._transferBusy ? 'wait' : 'import'),
+                  )}</button>
                 </div>
               </section>
               <section class="transfer-panel">
@@ -1596,7 +1601,7 @@ class BillTrackerCard extends HTMLElement {
                 <p>${this._escape(this._t('export_help'))}</p>
                 <div class="transfer-fields">
                   <label>${this._escape(
-                    this._t('format')
+                    this._t('format'),
                   )}<select id="export-format">
                     <option value="csv" ${
                       this._exportFormat === 'csv' ? 'selected' : ''
@@ -1609,7 +1614,7 @@ class BillTrackerCard extends HTMLElement {
                     }>${this._escape(this._t('pdf_report'))}</option>
                   </select></label>
                   <label>${this._escape(
-                    this._t('status')
+                    this._t('status'),
                   )}<select id="export-status">
                     <option value="all" ${
                       this._exportStatus === 'all' ? 'selected' : ''
@@ -1622,34 +1627,34 @@ class BillTrackerCard extends HTMLElement {
                     }>${this._escape(this._t('paid'))}</option>
                   </select></label>
                   <label>${this._escape(
-                    this._t('from')
+                    this._t('from'),
                   )}<input id="export-from" type="month" value="${this._escape(
-                this._exportFrom
-              )}"></label>
+                    this._exportFrom,
+                  )}"></label>
                   <label>${this._escape(
-                    this._t('to')
+                    this._t('to'),
                   )}<input id="export-to" type="month" value="${this._escape(
-                this._exportTo
-              )}"></label>
+                    this._exportTo,
+                  )}"></label>
                   <label class="full">${this._escape(
-                    this._t('type')
+                    this._t('type'),
                   )}<select id="export-category">
                     <option value="all" ${
                       this._exportCategory === 'all' ? 'selected' : ''
                     }>${this._escape(this._t('all_types'))}</option>
                     ${allBillCategories
                       .map(
-                        c =>
+                        (c) =>
                           `<option value="${this._escape(c.id)}" ${
                             c.id === this._exportCategory ? 'selected' : ''
-                          }>${this._escape(this._categoryLabel(c))}</option>`
+                          }>${this._escape(this._categoryLabel(c))}</option>`,
                       )
                       .join('')}
                   </select></label>
                   ${
                     this._exportFormat === 'pdf'
                       ? `<label class="full">${this._escape(
-                          this._t('report_trend')
+                          this._t('report_trend'),
                         )}<select id="export-trend">
                     <option value="both" ${
                       this._exportTrend === 'both' ? 'selected' : ''
@@ -1667,14 +1672,14 @@ class BillTrackerCard extends HTMLElement {
                 <div class="transfer-actions"><button class="primary" id="export-data" type="button" ${
                   this._transferBusy ? 'disabled' : ''
                 }>${this._escape(
-                this._t(this._transferBusy ? 'generating' : 'export')
-              )}</button></div>
+                  this._t(this._transferBusy ? 'generating' : 'export'),
+                )}</button></div>
               </section>
             </div>
             ${
               this._transferMessage
                 ? `<div class="transfer-message">${this._escape(
-                    this._transferMessage
+                    this._transferMessage,
                   )}</div>`
                 : ''
             }
@@ -1702,17 +1707,19 @@ class BillTrackerCard extends HTMLElement {
       ?.addEventListener('click', () => this._closeTransfer())
     this.shadowRoot
       .getElementById('transfer-modal')
-      ?.addEventListener('click', event => {
+      ?.addEventListener('click', (event) => {
         if (event.target?.id === 'transfer-modal') this._closeTransfer()
       })
     this.shadowRoot
       .getElementById('transfer-modal')
-      ?.addEventListener('keydown', event => {
+      ?.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') this._closeTransfer()
       })
     this.shadowRoot
       .getElementById('import-csv-file')
-      ?.addEventListener('change', event => this._readImportFile(event.target))
+      ?.addEventListener('change', (event) =>
+        this._readImportFile(event.target),
+      )
     this.shadowRoot
       .getElementById('download-template')
       ?.addEventListener('click', () => this._downloadTemplate())
@@ -1724,38 +1731,38 @@ class BillTrackerCard extends HTMLElement {
       ?.addEventListener('click', () => this._exportData())
     this.shadowRoot
       .getElementById('export-format')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._exportFormat = event.target.value || 'csv'
         this._render()
       })
     this.shadowRoot
       .getElementById('export-status')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._exportStatus = event.target.value || 'all'
       })
     this.shadowRoot
       .getElementById('export-category')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._exportCategory = event.target.value || 'all'
       })
     this.shadowRoot
       .getElementById('export-from')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._exportFrom = event.target.value || ''
       })
     this.shadowRoot
       .getElementById('export-to')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._exportTo = event.target.value || ''
       })
     this.shadowRoot
       .getElementById('export-trend')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._exportTrend = event.target.value || 'both'
       })
     this.shadowRoot
       .getElementById('expense-form')
-      ?.addEventListener('submit', e => this._submit(e))
+      ?.addEventListener('submit', (e) => this._submit(e))
     this.shadowRoot.getElementById('cancel')?.addEventListener('click', () => {
       this._editing = null
       this._formOpen = false
@@ -1766,12 +1773,12 @@ class BillTrackerCard extends HTMLElement {
       ?.addEventListener('click', () => this._closeEditModal())
     this.shadowRoot
       .getElementById('edit-modal')
-      ?.addEventListener('click', event => {
+      ?.addEventListener('click', (event) => {
         if (event.target?.id === 'edit-modal') this._closeEditModal()
       })
     this.shadowRoot
       .getElementById('edit-modal')
-      ?.addEventListener('keydown', event => {
+      ?.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') this._closeEditModal()
       })
     this.shadowRoot
@@ -1782,16 +1789,16 @@ class BillTrackerCard extends HTMLElement {
       ?.addEventListener('change', () => this._autoPeriod())
     this.shadowRoot
       .querySelectorAll('.split-input')
-      .forEach(input =>
-        input.addEventListener('input', () => this._updateSplitTotal())
+      .forEach((input) =>
+        input.addEventListener('input', () => this._updateSplitTotal()),
       )
     this._updateSplitTotal()
-    this.shadowRoot.querySelectorAll('.mode button').forEach(btn =>
+    this.shadowRoot.querySelectorAll('.mode button').forEach((btn) =>
       btn.addEventListener('click', () => {
         this._chartMode =
           btn.dataset.mode === 'normalized' ? 'normalized' : 'cashflow'
         this._render()
-      })
+      }),
     )
     this.shadowRoot
       .getElementById('toggle-current-bills')
@@ -1816,26 +1823,26 @@ class BillTrackerCard extends HTMLElement {
       ?.addEventListener('click', () => this._closeAllBillsModal())
     this.shadowRoot
       .getElementById('all-bills-modal')
-      ?.addEventListener('click', event => {
+      ?.addEventListener('click', (event) => {
         if (event.target?.id === 'all-bills-modal') this._closeAllBillsModal()
       })
     this.shadowRoot
       .getElementById('all-bills-modal')
-      ?.addEventListener('keydown', event => {
+      ?.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && !this._editing) this._closeAllBillsModal()
       })
     this.shadowRoot
       .getElementById('all-bills-category')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._allBillsCategory = event.target.value || 'all'
         this._allBillsPage = 1
         this._render()
       })
     this.shadowRoot
       .getElementById('all-bills-status')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._allBillsStatus = ['all', 'unpaid', 'paid'].includes(
-          event.target.value
+          event.target.value,
         )
           ? event.target.value
           : 'all'
@@ -1844,77 +1851,77 @@ class BillTrackerCard extends HTMLElement {
       })
     this.shadowRoot
       .getElementById('all-bills-time-mode')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._allBillsTimeMode = event.target.value || 'all'
         this._allBillsPage = 1
         this._render()
       })
     this.shadowRoot
       .getElementById('all-bills-year')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._allBillsYear = event.target.value || 'all'
         this._allBillsPage = 1
         this._render()
       })
     this.shadowRoot
       .getElementById('all-bills-from')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._allBillsFrom = event.target.value || ''
         this._allBillsPage = 1
         this._render()
       })
     this.shadowRoot
       .getElementById('all-bills-to')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._allBillsTo = event.target.value || ''
         this._allBillsPage = 1
         this._render()
       })
     this.shadowRoot
       .getElementById('all-bills-page-size')
-      ?.addEventListener('change', event => {
+      ?.addEventListener('change', (event) => {
         this._allBillsPageSize = [10, 20, 50].includes(
-          Number(event.target.value)
+          Number(event.target.value),
         )
           ? Number(event.target.value)
           : 10
         this._allBillsPage = 1
         this._render()
       })
-    this.shadowRoot.querySelectorAll('.all-bills-page').forEach(btn =>
+    this.shadowRoot.querySelectorAll('.all-bills-page').forEach((btn) =>
       btn.addEventListener('click', () => {
         this._allBillsPage = Math.max(1, Number(btn.dataset.page || 1))
         this._render()
-      })
+      }),
     )
     this.shadowRoot
       .querySelectorAll('.bill-paid-toggle')
-      .forEach(input =>
-        input.addEventListener('change', () => this._togglePaid(input))
+      .forEach((input) =>
+        input.addEventListener('change', () => this._togglePaid(input)),
       )
     this.shadowRoot
       .querySelectorAll('.edit')
-      .forEach(btn =>
-        btn.addEventListener('click', () => this._startEdit(btn.dataset.id))
+      .forEach((btn) =>
+        btn.addEventListener('click', () => this._startEdit(btn.dataset.id)),
       )
     this.shadowRoot
       .querySelectorAll('.delete')
-      .forEach(btn =>
-        btn.addEventListener('click', () => this._delete(btn.dataset.id))
+      .forEach((btn) =>
+        btn.addEventListener('click', () => this._delete(btn.dataset.id)),
       )
     this.shadowRoot
       .querySelectorAll('.settle')
-      .forEach(btn => btn.addEventListener('click', () => this._settle(btn)))
+      .forEach((btn) => btn.addEventListener('click', () => this._settle(btn)))
     this.shadowRoot
       .querySelectorAll('.delete-settlement')
-      .forEach(btn =>
+      .forEach((btn) =>
         btn.addEventListener('click', () =>
-          this._deleteSettlement(btn.dataset.id)
-        )
+          this._deleteSettlement(btn.dataset.id),
+        ),
       )
   }
 
-  _openTransfer () {
+  _openTransfer() {
     const expenses = this._data?.expenses || []
     if (!this._exportFrom && expenses.length) {
       const oldest = expenses.reduce((best, item) => {
@@ -1925,10 +1932,13 @@ class BillTrackerCard extends HTMLElement {
     }
     if (!this._exportTo) {
       const now = this._defaultDate()
-      const latest = expenses.reduce((best, item) => {
-        const value = this._monthValue(item.paid_year, item.paid_month)
-        return !best || value > best ? value : best
-      }, this._monthValue(now.year, now.month))
+      const latest = expenses.reduce(
+        (best, item) => {
+          const value = this._monthValue(item.paid_year, item.paid_month)
+          return !best || value > best ? value : best
+        },
+        this._monthValue(now.year, now.month),
+      )
       this._exportTo = latest
     }
     this._transferMessage = ''
@@ -1936,14 +1946,14 @@ class BillTrackerCard extends HTMLElement {
     this._render()
   }
 
-  _closeTransfer () {
+  _closeTransfer() {
     if (this._transferBusy) return
     this._transferOpen = false
     this._transferMessage = ''
     this._render()
   }
 
-  async _readImportFile (input) {
+  async _readImportFile(input) {
     const file = input?.files?.[0]
     if (!file) {
       this._importCsvText = ''
@@ -1969,13 +1979,13 @@ class BillTrackerCard extends HTMLElement {
     this._render()
   }
 
-  _downloadPayload (result) {
+  _downloadPayload(result) {
     if (!result?.content_base64) throw new Error(this._t('empty_export'))
     const binary = atob(result.content_base64)
     const bytes = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
     const blob = new Blob([bytes], {
-      type: result.mime_type || 'application/octet-stream'
+      type: result.mime_type || 'application/octet-stream',
     })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
@@ -1987,20 +1997,20 @@ class BillTrackerCard extends HTMLElement {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  async _downloadTemplate () {
+  async _downloadTemplate() {
     if (!this._hass || this._transferBusy) return
     this._transferBusy = true
     this._transferMessage = ''
     this._render()
     try {
       const result = await this._hass.callWS({
-        type: 'bill_tracker/export_template'
+        type: 'bill_tracker/export_template',
       })
       this._downloadPayload(result)
       this._transferMessage = this._t('template_downloaded')
     } catch (err) {
       this._transferMessage = this._t('template_error', {
-        error: String(err?.message || err)
+        error: String(err?.message || err),
       })
     } finally {
       this._transferBusy = false
@@ -2008,13 +2018,13 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  async _importCsv () {
+  async _importCsv() {
     if (!this._hass || !this._importCsvText || this._transferBusy) return
     const createCategories = Boolean(
-      this.shadowRoot.getElementById('import-create-categories')?.checked
+      this.shadowRoot.getElementById('import-create-categories')?.checked,
     )
     const createPayers = Boolean(
-      this.shadowRoot.getElementById('import-create-payers')?.checked
+      this.shadowRoot.getElementById('import-create-payers')?.checked,
     )
     this._transferBusy = true
     this._transferMessage = this._t('importing')
@@ -2024,19 +2034,19 @@ class BillTrackerCard extends HTMLElement {
         type: 'bill_tracker/import_csv',
         content: this._importCsvText,
         create_missing_categories: createCategories,
-        create_missing_payers: createPayers
+        create_missing_payers: createPayers,
       })
       const parts = [
         this._t('imported', { count: Number(result.imported || 0) }),
         this._t('skipped', { count: Number(result.skipped || 0) }),
         this._t('new_types', { count: Number(result.created_categories || 0) }),
-        this._t('new_payers', { count: Number(result.created_payers || 0) })
+        this._t('new_payers', { count: Number(result.created_payers || 0) }),
       ]
       if (Number(result.error_count || 0))
         parts.push(
           `${this._t('errors', { count: Number(result.error_count || 0) })}\n${(
             result.errors || []
-          ).join('\n')}`
+          ).join('\n')}`,
         )
       this._transferMessage = parts.join(' · ')
       this._importCsvText = ''
@@ -2045,7 +2055,7 @@ class BillTrackerCard extends HTMLElement {
       this._transferOpen = true
     } catch (err) {
       this._transferMessage = this._t('import_failed', {
-        error: String(err?.message || err)
+        error: String(err?.message || err),
       })
     } finally {
       this._transferBusy = false
@@ -2053,7 +2063,7 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  async _exportData () {
+  async _exportData() {
     if (!this._hass || this._transferBusy) return
     const fromMonth =
       this.shadowRoot.getElementById('export-from')?.value ||
@@ -2080,15 +2090,15 @@ class BillTrackerCard extends HTMLElement {
         status: this._exportStatus,
         category_id: this._exportCategory,
         trend: this._exportTrend,
-        language: this._language()
+        language: this._language(),
       })
       this._downloadPayload(result)
       this._transferMessage = this._t('export_created', {
-        filename: result.filename
+        filename: result.filename,
       })
     } catch (err) {
       this._transferMessage = this._t('export_failed', {
-        error: String(err?.message || err)
+        error: String(err?.message || err),
       })
     } finally {
       this._transferBusy = false
@@ -2096,27 +2106,27 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  _updateSplitTotal () {
+  _updateSplitTotal() {
     const label = this.shadowRoot.getElementById('split-total')
     if (!label) return
     const total = [...this.shadowRoot.querySelectorAll('.split-input')].reduce(
       (sum, input) => sum + (Number(input.value) || 0),
-      0
+      0,
     )
     label.textContent = this._t('split_total', { total: total.toFixed(2) })
     label.classList.toggle('bad', Math.abs(total - 100) > 0.05)
   }
 
-  _applyCategoryDefaults () {
+  _applyCategoryDefaults() {
     this._autoPeriod()
     const category = this._categoryById(
-      this.shadowRoot.getElementById('category')?.value
+      this.shadowRoot.getElementById('category')?.value,
     )
     const payer = this.shadowRoot.getElementById('payer')
     if (
       payer &&
       category?.default_payer_id &&
-      [...payer.options].some(x => x.value === category.default_payer_id)
+      [...payer.options].some((x) => x.value === category.default_payer_id)
     ) {
       payer.value = category.default_payer_id
     }
@@ -2141,10 +2151,10 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  _autoPeriod () {
+  _autoPeriod() {
     const categoryId = this.shadowRoot.getElementById('category')?.value
     const paid = this._parseMonth(
-      this.shadowRoot.getElementById('paid-month')?.value
+      this.shadowRoot.getElementById('paid-month')?.value,
     )
     const category = this._categoryById(categoryId)
     if (!paid || !category) return
@@ -2156,29 +2166,29 @@ class BillTrackerCard extends HTMLElement {
     if (startInput) startInput.value = this._monthValue(start.year, start.month)
   }
 
-  _openSettings () {
+  _openSettings() {
     history.pushState(null, '', '/config/integrations/integration/bill_tracker')
     window.dispatchEvent(new Event('location-changed'))
   }
 
-  async _submit (event) {
+  async _submit(event) {
     event.preventDefault()
     if (!this._hass) return
     const categoryId = this.shadowRoot.getElementById('category')?.value
     const paid = this._parseMonth(
-      this.shadowRoot.getElementById('paid-month')?.value
+      this.shadowRoot.getElementById('paid-month')?.value,
     )
     const start = this._parseMonth(
-      this.shadowRoot.getElementById('period-start')?.value
+      this.shadowRoot.getElementById('period-start')?.value,
     )
     const end = this._parseMonth(
-      this.shadowRoot.getElementById('period-end')?.value
+      this.shadowRoot.getElementById('period-end')?.value,
     )
     const amount = Number(this.shadowRoot.getElementById('amount')?.value)
     const note = this.shadowRoot.getElementById('note')?.value.trim() || ''
     const payerId = this.shadowRoot.getElementById('payer')?.value || undefined
     const paidFlag = Boolean(
-      this.shadowRoot.getElementById('paid-status')?.checked
+      this.shadowRoot.getElementById('paid-status')?.checked,
     )
     const paymentDate =
       this.shadowRoot.getElementById('payment-date')?.value || ''
@@ -2192,11 +2202,11 @@ class BillTrackerCard extends HTMLElement {
     const consumption =
       String(consumptionRaw).trim() === '' ? undefined : Number(consumptionRaw)
     const split = [...this.shadowRoot.querySelectorAll('.split-input')]
-      .map(input => ({
+      .map((input) => ({
         payer_id: input.dataset.payer,
-        percentage: Number(input.value || 0)
+        percentage: Number(input.value || 0),
       }))
-      .filter(x => x.payer_id && x.percentage > 0)
+      .filter((x) => x.payer_id && x.percentage > 0)
     if (
       !categoryId ||
       !paid ||
@@ -2231,7 +2241,7 @@ class BillTrackerCard extends HTMLElement {
       payment_date: paymentDate,
       due_date: dueDate,
       provider,
-      contract
+      contract,
     }
     if (consumption !== undefined) {
       if (!Number.isFinite(consumption) || consumption < 0) {
@@ -2248,7 +2258,7 @@ class BillTrackerCard extends HTMLElement {
         await this._hass.callWS({
           type: 'bill_tracker/update',
           expense_id: this._editing.id,
-          ...payload
+          ...payload,
         })
       } else {
         await this._hass.callWS({ type: 'bill_tracker/add', ...payload })
@@ -2263,7 +2273,7 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  async _togglePaid (input) {
+  async _togglePaid(input) {
     if (!this._hass || !input) return
     const id = input.dataset.id
     const paid = Boolean(input.checked)
@@ -2272,7 +2282,7 @@ class BillTrackerCard extends HTMLElement {
       await this._hass.callWS({
         type: 'bill_tracker/set_paid',
         expense_id: id,
-        paid
+        paid,
       })
       this._error = null
       await this._load()
@@ -2284,8 +2294,9 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  _startEdit (id) {
-    this._editing = (this._data?.expenses || []).find(x => x.id === id) || null
+  _startEdit(id) {
+    this._editing =
+      (this._data?.expenses || []).find((x) => x.id === id) || null
     this._formOpen = false
     this._render()
     const modal = this.shadowRoot?.getElementById('edit-modal')
@@ -2295,14 +2306,14 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  _closeEditModal () {
+  _closeEditModal() {
     this._editing = null
     this._formOpen = false
     this._error = null
     this._render()
   }
 
-  async _delete (id) {
+  async _delete(id) {
     if (!this._hass || !confirm(this._t('delete_bill_confirm'))) return
     try {
       await this._hass.callWS({ type: 'bill_tracker/delete', expense_id: id })
@@ -2313,7 +2324,7 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  async _settle (button) {
+  async _settle(button) {
     if (!this._hass) return
     const amount = Number(button.dataset.amount || 0)
     const from = button.dataset.from
@@ -2327,8 +2338,8 @@ class BillTrackerCard extends HTMLElement {
           amount: this._money(amount),
           from: fromName,
           to: toName,
-          count: count || ''
-        })
+          count: count || '',
+        }),
       )
     )
       return
@@ -2338,7 +2349,7 @@ class BillTrackerCard extends HTMLElement {
         from_payer_id: from,
         to_payer_id: to,
         amount,
-        note: this._t('settlement_note')
+        note: this._t('settlement_note'),
       })
       await this._load()
     } catch (err) {
@@ -2347,12 +2358,12 @@ class BillTrackerCard extends HTMLElement {
     }
   }
 
-  async _deleteSettlement (id) {
+  async _deleteSettlement(id) {
     if (!this._hass || !confirm(this._t('undo_settlement_confirm'))) return
     try {
       await this._hass.callWS({
         type: 'bill_tracker/settlement/delete',
-        settlement_id: id
+        settlement_id: id,
       })
       await this._load()
     } catch (err) {
@@ -2363,28 +2374,28 @@ class BillTrackerCard extends HTMLElement {
 }
 
 class BillTrackerCardEditor extends HTMLElement {
-  constructor () {
+  constructor() {
     super()
     this.attachShadow({ mode: 'open' })
     this._config = BillTrackerCard.getStubConfig()
     this._hass = null
   }
 
-  setConfig (config) {
+  setConfig(config) {
     this._config = { ...BillTrackerCard.getStubConfig(), ...config }
     this._render()
   }
 
-  set hass (hass) {
+  set hass(hass) {
     this._hass = hass
     this._render()
   }
 
-  _t (key, vars = {}) {
+  _t(key, vars = {}) {
     return billyT(this._hass, key, vars)
   }
 
-  _render () {
+  _render() {
     if (!this.shadowRoot) return
     const columns = this._config.columns ?? 'full'
     this.shadowRoot.innerHTML = `
@@ -2398,48 +2409,48 @@ class BillTrackerCardEditor extends HTMLElement {
       </style>
       <div class="editor">
         <label><span>${this._escape(
-          this._t('editor_title')
+          this._t('editor_title'),
         )}</span><input data-key="title" type="text" value="${this._escape(
-      this._config.title || ''
-    )}"></label>
+          this._config.title || '',
+        )}"></label>
         <div class="grid">
           <label><span>${this._escape(
-            this._t('editor_width')
+            this._t('editor_width'),
           )}</span><select data-key="columns">
             <option value="full" ${
               columns === 'full' ? 'selected' : ''
             }>${this._escape(this._t('editor_full'))}</option>
             ${[4, 6, 8, 10, 12]
               .map(
-                n =>
+                (n) =>
                   `<option value="${n}" ${
                     Number(columns) === n ? 'selected' : ''
                   }>${this._escape(
-                    this._t('editor_columns', { count: n })
-                  )}</option>`
+                    this._t('editor_columns', { count: n }),
+                  )}</option>`,
               )
               .join('')}
           </select></label>
           <label><span>${this._escape(
-            this._t('editor_history')
+            this._t('editor_history'),
           )}</span><input data-key="history_months" type="number" min="3" max="36" step="1" value="${Number(
-      this._config.history_months || 12
-    )}"></label>
+            this._config.history_months || 12,
+          )}"></label>
           <label><span>${this._escape(
-            this._t('editor_forecast')
+            this._t('editor_forecast'),
           )}</span><input data-key="forecast_months" type="number" min="1" max="24" step="1" value="${Number(
-      this._config.forecast_months || 12
-    )}"></label>
+            this._config.forecast_months || 12,
+          )}"></label>
         </div>
       </div>`
     this.shadowRoot
       .querySelectorAll('input,select')
-      .forEach(input =>
-        input.addEventListener('change', () => this._changed(input))
+      .forEach((input) =>
+        input.addEventListener('change', () => this._changed(input)),
       )
   }
 
-  _changed (input) {
+  _changed(input) {
     const key = input.dataset.key
     if (!key) return
     let value = input.value
@@ -2457,7 +2468,7 @@ class BillTrackerCardEditor extends HTMLElement {
     this.dispatchEvent(event)
   }
 
-  _escape (value) {
+  _escape(value) {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
@@ -2472,6 +2483,5 @@ if (!customElements.get('bill-tracker-card-editor-impl'))
   customElements.define('bill-tracker-card-editor-impl', BillTrackerCardEditor)
 
 console.info(
-  `Billy / Bill Tracker implementation v${BILL_TRACKER_VERSION} loaded`
+  `Billy / Bill Tracker implementation v${BILL_TRACKER_VERSION} loaded`,
 )
-

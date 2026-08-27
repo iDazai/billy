@@ -501,6 +501,20 @@ def test_cashflow_uses_payment_date_instead_of_billing_reference_month():
     assert "item[\"payment_date\"] = None" in manager
 
 
+def test_overview_subscribes_after_first_hass_assignment_and_refreshes_on_bill_updates():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    dashboard_start = panel.index("class BillyDashboard")
+    dashboard_end = panel.index("class BillyBills", dashboard_start)
+    dashboard = panel[dashboard_start:dashboard_end]
+
+    assert "if (firstAssignment || connectionChanged) this._subscribe()" in dashboard
+    assert "'bill_tracker_updated'" in dashboard
+    assert "() => this._load()" in dashboard
+    assert "this._unsubscribeBills?.()" in dashboard
+    assert "this._unsubscribeImports?.()" in dashboard
+    assert "this._unsubscribe?.()" not in dashboard
+
+
 def test_overview_does_not_hide_recurring_kinds_or_inactive_rules():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     overview_start = panel.index("_recurringOverview()")

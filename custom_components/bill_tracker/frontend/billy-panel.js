@@ -630,10 +630,12 @@ class BillyDashboard extends HTMLElement {
     this._loadChartPreferences()
     if (!this.isConnected) return
     if (connectionChanged) {
-      this._unsubscribe?.()
-      this._unsubscribe = null
-      this._subscribe()
+      this._unsubscribeBills?.()
+      this._unsubscribeImports?.()
+      this._unsubscribeBills = null
+      this._unsubscribeImports = null
     }
+    if (firstAssignment || connectionChanged) this._subscribe()
     if (firstAssignment || connectionChanged || !this._data) this._load()
   }
 

@@ -1,7 +1,7 @@
-import './billy-parser-manager.js?v=0.11.4'
-import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.4'
+import './billy-parser-manager.js?v=0.11.6'
+import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.6'
 
-const BILLY_PANEL_VERSION = '0.11.4'
+const BILLY_PANEL_VERSION = '0.11.6'
 
 const TEXT = {
   en: {
@@ -614,6 +614,7 @@ class BillyDashboard extends HTMLElement {
     this._chartDisabled = new Set()
     this._chartFilterOpen = false
     this._chartView = 'stacked'
+    this._chartPreferencesLoadedFor = null
   }
 
   set hass(value) {
@@ -622,6 +623,7 @@ class BillyDashboard extends HTMLElement {
       previousConnection && previousConnection !== value?.connection
     const firstAssignment = !this._hass
     this._hass = value
+    this._loadChartPreferences()
     if (!this.isConnected) return
     if (connectionChanged) {
       this._unsubscribe?.()
@@ -680,6 +682,7 @@ class BillyDashboard extends HTMLElement {
       ])
       this._data = data
       this._parserData = parserData
+      this._sanitizeChartPreferences()
       this._error = null
     } catch (error) {
       this._error = String(error?.message || error)
@@ -800,6 +803,59 @@ class BillyDashboard extends HTMLElement {
       return this._t('chartYearHelp', { year: this._chartYear })
     }
     return this._t('chartRollingHelp', { months: this._chartMonths })
+  }
+
+  _chartPreferencesKey() {
+    const userId = String(this._hass?.user?.id || 'local')
+    return `billy.chart.preferences.v1:${userId}`
+  }
+
+  _loadChartPreferences() {
+    if (!this._hass) return
+    const key = this._chartPreferencesKey()
+    if (this._chartPreferencesLoadedFor === key) return
+    this._chartPreferencesLoadedFor = key
+    try {
+      const raw = globalThis.localStorage?.getItem(key)
+      if (!raw) return
+      const saved = JSON.parse(raw)
+      const months = Number(saved?.months)
+      if ([3, 6, 12, 18, 24, 36].includes(months)) this._chartMonths = months
+      const year = String(saved?.year ?? 'all')
+      this._chartYear = year === 'all' || /^\d{4}$/.test(year) ? year : 'all'
+      this._chartView = ['stacked', 'separate'].includes(saved?.view)
+        ? saved.view
+        : 'stacked'
+      this._chartDisabled = new Set(
+        Array.isArray(saved?.disabled)
+          ? saved.disabled.map((item) => String(item)).filter(Boolean)
+          : [],
+      )
+    } catch (_error) {
+      // Storage can be unavailable in private/restricted browser contexts.
+    }
+  }
+
+  _saveChartPreferences() {
+    try {
+      globalThis.localStorage?.setItem(
+        this._chartPreferencesKey(),
+        JSON.stringify({
+          months: this._chartMonths,
+          year: this._chartYear,
+          view: this._chartView,
+          disabled: [...this._chartDisabled],
+        }),
+      )
+    } catch (_error) {
+      // Chart controls still work normally when persistence is unavailable.
+    }
+  }
+
+  _sanitizeChartPreferences() {
+    if (this._chartYear === 'all') return
+    const years = new Set(this._chartYears().map((year) => String(year)))
+    if (!years.has(String(this._chartYear))) this._chartYear = 'all'
   }
 
   _chartItemEnabled(key) {
@@ -1600,6 +1656,7 @@ class BillyDashboard extends HTMLElement {
         if (!key) return
         if (event.currentTarget.checked) this._chartDisabled.delete(key)
         else this._chartDisabled.add(key)
+        this._saveChartPreferences()
         this._chartFilterOpen = true
         this._render()
       })
@@ -1613,6 +1670,7 @@ class BillyDashboard extends HTMLElement {
       .querySelector('[data-chart-enable-all]')
       ?.addEventListener('click', () => {
         this._chartDisabled.clear()
+        this._saveChartPreferences()
         this._chartFilterOpen = true
         this._render()
       })
@@ -1621,6 +1679,7 @@ class BillyDashboard extends HTMLElement {
       ?.addEventListener('click', () => {
         for (const key of this._availableChartFilterKeys())
           this._chartDisabled.add(key)
+        this._saveChartPreferences()
         this._chartFilterOpen = true
         this._render()
       })
@@ -1628,6 +1687,7 @@ class BillyDashboard extends HTMLElement {
       .getElementById('chart-months')
       ?.addEventListener('change', (event) => {
         this._chartMonths = Number(event.currentTarget.value || 12)
+        this._saveChartPreferences()
         this._chartFilterOpen = false
         this._render()
       })
@@ -1635,6 +1695,7 @@ class BillyDashboard extends HTMLElement {
       .getElementById('chart-year')
       ?.addEventListener('change', (event) => {
         this._chartYear = event.currentTarget.value
+        this._saveChartPreferences()
         this._chartFilterOpen = false
         this._render()
       })
@@ -1642,6 +1703,7 @@ class BillyDashboard extends HTMLElement {
       .getElementById('chart-view')
       ?.addEventListener('change', (event) => {
         this._chartView = event.currentTarget.value
+        this._saveChartPreferences()
         this._render()
       })
   }

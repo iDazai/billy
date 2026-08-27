@@ -1,6 +1,6 @@
-import { BILLY_PARSER_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.4'
+import { BILLY_PARSER_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.6'
 
-const BILLY_PARSER_MANAGER_VERSION = '0.11.4'
+const BILLY_PARSER_MANAGER_VERSION = '0.11.6'
 
 const TEXT = {
   en: {

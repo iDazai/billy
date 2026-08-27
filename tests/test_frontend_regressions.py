@@ -38,10 +38,10 @@ def test_frontend_and_manifest_use_rewrite_version():
     bootstrap = (FRONTEND / "bill-tracker-card.js").read_text(encoding="utf-8")
     implementation = (FRONTEND / "bill-tracker-card-impl.js").read_text(encoding="utf-8")
     manifest = (ROOT / "custom_components" / "bill_tracker" / "manifest.json").read_text(encoding="utf-8")
-    assert "BILLY_FRONTEND_VERSION = '0.11.4'" in bootstrap
-    assert "BILL_TRACKER_VERSION = '0.11.4'" in implementation
-    assert "./bill-tracker-i18n.js?v=0.11.3" in implementation
-    assert '"version": "0.11.3"' in manifest
+    assert "BILLY_FRONTEND_VERSION = '0.11.6'" in bootstrap
+    assert "BILL_TRACKER_VERSION = '0.11.6'" in implementation
+    assert "./bill-tracker-i18n.js?v=0.11.6" in implementation
+    assert '"version": "0.11.6"' in manifest
 
 
 def test_automatic_parsing_does_not_replace_lovelace_ui():
@@ -89,7 +89,7 @@ def test_billy_sidebar_panel_keeps_card_and_parser_manager():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
     for token in (
-        "billy-parser-manager.js?v=0.11.3",
+        "billy-parser-manager.js?v=0.11.6",
         '<billy-dashboard id="dashboard">',
         '<billy-bills id="bills-panel">',
         '<billy-recurring id="recurring-panel">',
@@ -204,6 +204,20 @@ def test_billy_panel_has_large_dashboard_and_native_settings():
         "https://github.com/robin994/billy-parser",
         "https://www.linkedin.com/in/roberto-tortora-379928109/",
         "https://paypal.me/rtortora94",
+    ):
+        assert token in panel
+
+
+def test_overview_chart_preferences_are_persisted_per_home_assistant_user():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    for token in (
+        "billy.chart.preferences.v1:${userId}",
+        "this._loadChartPreferences()",
+        "this._saveChartPreferences()",
+        "globalThis.localStorage?.getItem(key)",
+        "globalThis.localStorage?.setItem(",
+        "disabled: [...this._chartDisabled]",
+        "this._sanitizeChartPreferences()",
     ):
         assert token in panel
 
@@ -332,8 +346,8 @@ def test_new_billy_frontends_support_all_shipped_languages():
 
     assert "BILLY_PANEL_EXTRA_TEXT" in panel
     assert "BILLY_PARSER_EXTRA_TEXT" in parser
-    assert "billy-extra-i18n.js?v=0.11.3" in panel
-    assert "billy-extra-i18n.js?v=0.11.3" in parser
+    assert "billy-extra-i18n.js?v=0.11.6" in panel
+    assert "billy-extra-i18n.js?v=0.11.6" in parser
     assert "['en', 'it', 'es', 'fr', 'de', 'pt']" in panel
     assert "['en', 'it', 'es', 'fr', 'de', 'pt']" in parser
     for language in ("es", "fr", "de", "pt"):

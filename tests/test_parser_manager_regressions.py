@@ -115,6 +115,17 @@ def test_error_source_fingerprint_is_retryable():
     assert "Failed attempts must be retryable" in source
 
 
+def test_candidate_uuid_generator_is_imported():
+    tree = ast.parse(MANAGER.read_text(encoding="utf-8"))
+    imports = {
+        alias.name
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == "uuid"
+        for alias in node.names
+    }
+    assert "uuid4" in imports
+
+
 def test_fetched_parts_preserve_original_metadata():
     source = MANAGER.read_text(encoding="utf-8")
     assert "merged: dict[str, MailPart] = {part.part: part for part in envelope.parts}" in source

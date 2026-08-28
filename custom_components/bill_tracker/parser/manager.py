@@ -6,6 +6,7 @@ import logging
 import re
 from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 import yaml
 from homeassistant.config_entries import ConfigEntry

@@ -26,6 +26,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     DOMAIN,
+    FRONTEND_CACHE_VERSION,
     FRONTEND_VERSION,
     RECURRING_INTERVALS,
     RECURRING_KINDS,
@@ -53,7 +54,7 @@ PARSER_MANAGER_URL = "/bill_tracker/billy-parser-manager.js"
 BILLY_PANEL_URL = "/bill_tracker/billy-panel.js"
 EXTRA_I18N_URL = "/bill_tracker/billy-extra-i18n.js"
 BILLY_WIDGETS_URL = "/bill_tracker/billy-widgets.js"
-BILLY_PANEL_MODULE_URL = f"{BILLY_PANEL_URL}?v={FRONTEND_VERSION}"
+BILLY_PANEL_MODULE_URL = f"{BILLY_PANEL_URL}?v={FRONTEND_CACHE_VERSION}"
 BILLY_PANEL_ROUTE = "billy"
 FRONTEND_MODULE_URL = FRONTEND_URL
 

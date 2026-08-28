@@ -39,6 +39,7 @@ def register_parser_websockets(hass: HomeAssistant) -> None:
         ws_parser_imports,
         ws_parser_import_approve,
         ws_parser_import_reject,
+        ws_parser_import_retry,
     ):
         websocket_api.async_register_command(hass, command)
     domain_data[_REGISTERED_KEY] = True
@@ -54,6 +55,7 @@ async def ws_parser_list(hass, connection, msg):
             "installed": manager.installed_snapshot(),
             "sources": manager.sources_snapshot(),
             "imports": manager.imports_snapshot(limit=50),
+            "diagnostic": manager.ingestion_diagnostic(),
         }
     except RuntimeError as err:
         connection.send_error(msg["id"], "not_configured", str(err))
@@ -80,6 +82,8 @@ async def ws_parser_refresh(hass, connection, msg):
         vol.Optional("expected_parser_id"): str,
         vol.Optional("enabled", default=True): bool,
         vol.Optional("auto_import", default=False): bool,
+        vol.Optional("default_payer_id"): str,
+        vol.Optional("default_split"): list,
     }
 )
 @websocket_api.async_response
@@ -90,6 +94,8 @@ async def ws_parser_install(hass, connection, msg):
             category_id=msg["category_id"],
             enabled=msg["enabled"],
             auto_import=msg["auto_import"],
+            default_payer_id=msg.get("default_payer_id"),
+            default_split=msg.get("default_split"),
         )
     except Exception as err:  # noqa: BLE001
         connection.send_error(msg["id"], "install_error", str(err))
@@ -117,6 +123,8 @@ async def ws_parser_uninstall(hass, connection, msg):
         vol.Required("category_id"): str,
         vol.Required("enabled"): bool,
         vol.Required("auto_import"): bool,
+        vol.Optional("default_payer_id"): str,
+        vol.Optional("default_split"): list,
     }
 )
 @websocket_api.async_response
@@ -127,6 +135,8 @@ async def ws_parser_configure(hass, connection, msg):
             category_id=msg["category_id"],
             enabled=msg["enabled"],
             auto_import=msg["auto_import"],
+            default_payer_id=msg.get("default_payer_id"),
+            default_split=msg.get("default_split"),
         )
     except Exception as err:  # noqa: BLE001
         connection.send_error(msg["id"], "configure_error", str(err))
@@ -141,6 +151,8 @@ async def ws_parser_configure(hass, connection, msg):
         vol.Required("category_id"): str,
         vol.Optional("enabled", default=True): bool,
         vol.Optional("auto_import", default=False): bool,
+        vol.Optional("default_payer_id"): str,
+        vol.Optional("default_split"): list,
     }
 )
 @websocket_api.async_response
@@ -152,6 +164,8 @@ async def ws_parser_custom_save(hass, connection, msg):
             expected_parser_id=msg.get("expected_parser_id"),
             enabled=msg["enabled"],
             auto_import=msg["auto_import"],
+            default_payer_id=msg.get("default_payer_id"),
+            default_split=msg.get("default_split"),
         )
     except Exception as err:  # noqa: BLE001
         connection.send_error(msg["id"], "custom_parser_error", str(err))
@@ -274,6 +288,19 @@ async def ws_parser_import_approve(hass, connection, msg):
 async def ws_parser_import_reject(hass, connection, msg):
     try:
         result = await _manager(hass).async_reject(msg["import_id"])
+    except Exception as err:  # noqa: BLE001
+        connection.send_error(msg["id"], "import_error", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "bill_tracker/parser/import/retry", vol.Required("import_id"): str}
+)
+@websocket_api.async_response
+async def ws_parser_import_retry(hass, connection, msg):
+    try:
+        result = await _manager(hass).async_retry(msg["import_id"])
     except Exception as err:  # noqa: BLE001
         connection.send_error(msg["id"], "import_error", str(err))
         return

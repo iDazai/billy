@@ -15,7 +15,7 @@ from homeassistant.helpers.event import async_track_time_change
 
 from ..extractors import PdfExtractionError, extract_pdf_text
 from ..importers import BillImportCoordinator
-from ..sources import ImapSource
+from ..sources import ImapSource, ImapSourceError
 from .catalog import CatalogError, ParserCatalogClient
 from .engine import ParserEngine, ParserError
 from .models import BillCandidate, DocumentBundle, MailEnvelope, MailPart
@@ -47,6 +47,8 @@ class ParserManager:
         self.imap = ImapSource(hass)
         self.importer = BillImportCoordinator(bill_manager)
         self.parsers: dict[str, dict[str, Any]] = {}
+        self._runtime_failed_fingerprints: set[str] = set()
+        self._last_ingestion: dict[str, Any] | None = None
         self._unsubscribe = None
         self._unsubscribe_catalog_refresh = None
 
@@ -91,12 +93,28 @@ class ParserManager:
         except Exception as err:  # noqa: BLE001 - keep the last good catalog on network failures
             _LOGGER.warning("Billy daily parser catalog refresh failed: %s", err)
 
-    async def async_process_imap_event(self, event_data: dict[str, Any]) -> dict[str, Any] | None:
+    async def async_process_imap_event(
+        self,
+        event_data: dict[str, Any],
+        *,
+        retry_import_id: str | None = None,
+    ) -> dict[str, Any] | None:
         envelope = self.imap.envelope(event_data)
         if not envelope.entry_id or not envelope.uid:
+            self._set_ingestion_diagnostic(
+                envelope,
+                "ignored",
+                "IMAP event is missing entry_id or uid",
+            )
             return None
         enabled_entries = set(self.storage.data.get("source_entry_ids", []))
         if not enabled_entries or envelope.entry_id not in enabled_entries:
+            detail = (
+                f"IMAP source '{envelope.entry_id}' is not enabled in Billy; "
+                f"selected sources: {', '.join(sorted(enabled_entries)) or 'none'}"
+            )
+            self._set_ingestion_diagnostic(envelope, "ignored", detail)
+            _LOGGER.warning("Billy ignored IMAP UID %s: %s", envelope.uid, detail)
             return None
 
         prefiltered: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
@@ -107,30 +125,137 @@ class ParserManager:
             if self.engine.prefilter(parser, envelope):
                 prefiltered.append((parser_id, parser, config))
         if not prefiltered:
+            enabled_parser_ids = sorted(
+                parser_id
+                for parser_id in self.parsers
+                if (
+                    self.storage.data.get("installed", {}).get(parser_id)
+                    or self.storage.data.get("custom", {}).get(parser_id)
+                    or {}
+                ).get("enabled", True)
+            )
+            detail = (
+                "No enabled Billy parser matched the email prefilter; "
+                f"enabled parsers: {', '.join(enabled_parser_ids) or 'none'}"
+            )
+            self._set_ingestion_diagnostic(envelope, "ignored", detail)
             return None
 
         prefetch_key = self._prefetch_fingerprint(envelope)
-        if self._has_source_fingerprint(prefetch_key):
+        if not retry_import_id and prefetch_key in self._runtime_failed_fingerprints:
+            self._set_ingestion_diagnostic(
+                envelope,
+                "ignored",
+                "This IMAP message already failed during the current Billy runtime; use Retry or reload the integration",
+            )
             return None
+        if not retry_import_id:
+            existing_source = self._source_fingerprint_row(prefetch_key)
+            if existing_source is not None:
+                status = str(existing_source.get("status") or "unknown")
+                existing_id = str(existing_source.get("id") or "")
+                parser_id = str(existing_source.get("parser_id") or "")
+                data = existing_source.get("data") or {}
+                expense_id = str(existing_source.get("expense_id") or "")
+                stale = (
+                    status == "pending" and (not parser_id or not data)
+                ) or (status == "imported" and not expense_id)
+                if stale:
+                    _LOGGER.warning(
+                        "Billy removed stale import %s (%s) for IMAP UID %s and will retry it",
+                        existing_id or "unknown",
+                        status,
+                        envelope.uid,
+                    )
+                    self._remove_import(existing_id)
+                else:
+                    detail = (
+                        f"This IMAP message is already stored as {status}; "
+                        f"import_id={existing_id or 'unknown'}"
+                    )
+                    if parser_id:
+                        detail += f"; parser={parser_id}"
+                    if expense_id:
+                        detail += f"; expense_id={expense_id}"
+                    self._set_ingestion_diagnostic(
+                        envelope,
+                        "duplicate",
+                        detail,
+                        parser_id=parser_id or None,
+                    )
+                    return None
 
         try:
-            fetched = await self.imap.async_fetch(envelope)
-            envelope = self._merge_fetched_envelope(envelope, fetched)
-            email_text = str(fetched.get("text") or "")
+            fetch_error: str | None = None
+            email_text = ""
+            try:
+                fetched = await self.imap.async_fetch(envelope)
+                envelope = self._merge_fetched_envelope(envelope, fetched)
+                email_text = str(fetched.get("text") or "")
+            except ImapSourceError as err:
+                fetch_error = str(err)
+                _LOGGER.debug(
+                    "Billy could not fetch full IMAP message UID %s; continuing with event metadata: %s",
+                    envelope.uid,
+                    err,
+                )
             base_documents = DocumentBundle(email=email_text)
 
             matches: list[tuple[int, int, str, dict[str, Any], dict[str, Any]]] = []
+            scored: list[tuple[int, int, str, dict[str, Any], dict[str, Any]]] = []
             for parser_id, parser, config in prefiltered:
                 matched, score, threshold = self.engine.detect(parser, envelope, base_documents)
+                scored.append((score, threshold, parser_id, parser, config))
                 if matched:
                     matches.append((score, threshold, parser_id, parser, config))
             if not matches:
+                score, threshold, parser_id, _parser, config = max(
+                    scored,
+                    key=lambda item: (item[0] / max(1, item[1]), item[0]),
+                )
+                detail = (
+                    f"Parser '{parser_id}' matched the email prefilter but detection scored "
+                    f"{score}/{threshold}"
+                )
+                if fetch_error:
+                    detail += f"; full IMAP fetch failed: {fetch_error}"
+                _LOGGER.warning("Billy automatic parsing skipped IMAP UID %s: %s", envelope.uid, detail)
+                self._set_ingestion_diagnostic(
+                    envelope,
+                    "error",
+                    detail,
+                    parser_id=parser_id,
+                )
+                await self._record_error(
+                    envelope,
+                    prefetch_key,
+                    detail,
+                    import_id=retry_import_id,
+                    parser_id=parser_id,
+                    category_id=str(config.get("category_id") or ""),
+                )
                 return None
             matches.sort(key=lambda item: (item[0] / max(1, item[1]), item[0]), reverse=True)
             score, threshold, parser_id, parser, config = matches[0]
             documents, attachment_hashes = await self._documents_for(parser, envelope, email_text)
             matched, score, threshold = self.engine.detect(parser, envelope, documents)
             if not matched:
+                detail = f"Parser '{parser_id}' detection dropped below threshold after document loading ({score}/{threshold})"
+                _LOGGER.warning("Billy automatic parsing skipped IMAP UID %s: %s", envelope.uid, detail)
+                self._set_ingestion_diagnostic(
+                    envelope,
+                    "error",
+                    detail,
+                    parser_id=parser_id,
+                )
+                await self._record_error(
+                    envelope,
+                    prefetch_key,
+                    detail,
+                    import_id=retry_import_id,
+                    parser_id=parser_id,
+                    category_id=str(config.get("category_id") or ""),
+                )
                 return None
             parsed = self.engine.parse(parser, envelope, documents)
             verification = self.engine.verification(parser, documents)
@@ -147,8 +272,26 @@ class ParserManager:
                 attachment_hashes=attachment_hashes,
             )
             if self._is_duplicate_candidate(candidate):
+                self._remove_source_errors(prefetch_key)
+                self._runtime_failed_fingerprints.discard(prefetch_key)
+                self._set_ingestion_diagnostic(
+                    envelope,
+                    "duplicate",
+                    f"Parser '{parser_id}' produced a bill already known to Billy",
+                    parser_id=parser_id,
+                )
                 return None
+            if retry_import_id:
+                self._remove_import(retry_import_id)
+            self._remove_source_errors(prefetch_key)
+            self._runtime_failed_fingerprints.discard(prefetch_key)
             await self._record_candidate(candidate)
+            self._set_ingestion_diagnostic(
+                envelope,
+                "pending",
+                f"Parser '{parser_id}' created import candidate {candidate.id}",
+                parser_id=parser_id,
+            )
             expected_checks = len(parser.get("verification", []) or [])
             verification_complete = (
                 expected_checks == 0
@@ -163,14 +306,36 @@ class ParserManager:
                 and candidate.confidence >= 90
             ):
                 await self.async_approve(candidate.id)
+                self._set_ingestion_diagnostic(
+                    envelope,
+                    "imported",
+                    f"Parser '{parser_id}' automatically imported candidate {candidate.id}",
+                    parser_id=parser_id,
+                )
             return self.get_import(candidate.id)
         except (ParserError, ParserValidationError, PdfExtractionError, ValueError, RuntimeError) as err:
             _LOGGER.warning("Billy automatic parsing failed for IMAP UID %s: %s", envelope.uid, err)
-            await self._record_error(envelope, prefetch_key, str(err))
+            self._set_ingestion_diagnostic(envelope, "error", str(err))
+            await self._record_error(
+                envelope,
+                prefetch_key,
+                str(err),
+                import_id=retry_import_id,
+            )
             return None
         except Exception as err:  # noqa: BLE001 - source events must never break HA
             _LOGGER.exception("Unexpected Billy parser error")
-            await self._record_error(envelope, prefetch_key, f"Unexpected error: {err}")
+            self._set_ingestion_diagnostic(
+                envelope,
+                "error",
+                f"Unexpected error: {err}",
+            )
+            await self._record_error(
+                envelope,
+                prefetch_key,
+                f"Unexpected error: {err}",
+                import_id=retry_import_id,
+            )
             return None
 
     def catalog_country(self) -> str:
@@ -402,8 +567,11 @@ class ParserManager:
         expected_parser_id: str | None = None,
         enabled: bool = True,
         auto_import: bool = False,
+        default_payer_id: str | None = None,
+        default_split: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         self._ensure_category(category_id)
+        payer_id, split = self._normalize_payment_defaults(default_payer_id, default_split)
         if parser_id in self.storage.data.get("custom", {}):
             raise CatalogError(
                 "A custom parser with this ID already exists; remove it before installing the official parser"
@@ -429,6 +597,8 @@ class ParserManager:
             "enabled": bool(enabled),
             "category_id": category_id,
             "auto_import": bool(auto_import),
+            "default_payer_id": payer_id,
+            "default_split": split,
             "catalog_status": str(item.get("catalog_status") or "experimental"),
             "replacement": item.get("replacement"),
             "source": "official",
@@ -455,6 +625,8 @@ class ParserManager:
         category_id: str,
         enabled: bool,
         auto_import: bool,
+        default_payer_id: str | None = None,
+        default_split: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         self._ensure_category(category_id)
         state = self.storage.data.get("installed", {}).get(parser_id)
@@ -462,11 +634,18 @@ class ParserManager:
             state = self.storage.data.get("custom", {}).get(parser_id)
         if state is None:
             raise ValueError("Parser is not installed")
+        if default_payer_id is None and default_split is None:
+            payer_id = state.get("default_payer_id")
+            split = list(state.get("default_split") or [])
+        else:
+            payer_id, split = self._normalize_payment_defaults(default_payer_id, default_split)
         state.update(
             {
                 "category_id": category_id,
                 "enabled": bool(enabled),
                 "auto_import": bool(auto_import),
+                "default_payer_id": payer_id,
+                "default_split": split,
             }
         )
         await self.storage.async_save()
@@ -479,6 +658,8 @@ class ParserManager:
         category_id: str,
         enabled: bool = True,
         auto_import: bool = False,
+        default_payer_id: str | None = None,
+        default_split: list[dict[str, Any]] | None = None,
         expected_parser_id: str | None = None,
     ) -> dict[str, Any]:
         self._ensure_category(category_id)
@@ -490,6 +671,12 @@ class ParserManager:
             raise ValueError(
                 "An official parser with this ID is installed; uninstall it before saving the custom parser"
             )
+        existing = self.storage.data.get("custom", {}).get(parser_id, {})
+        if default_payer_id is None and default_split is None:
+            payer_id = existing.get("default_payer_id")
+            split = list(existing.get("default_split") or [])
+        else:
+            payer_id, split = self._normalize_payment_defaults(default_payer_id, default_split)
         path = await self.storage.async_write_custom(parser_id, content)
         self.storage.data["custom"][parser_id] = {
             "id": parser_id,
@@ -498,6 +685,8 @@ class ParserManager:
             "enabled": bool(enabled),
             "category_id": category_id,
             "auto_import": bool(auto_import),
+            "default_payer_id": payer_id,
+            "default_split": split,
             "catalog_status": "custom",
             "source": "custom",
             "saved_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -540,6 +729,9 @@ class ParserManager:
             }
             for entry in self.hass.config_entries.async_entries("imap")
         ]
+
+    def ingestion_diagnostic(self) -> dict[str, Any] | None:
+        return dict(self._last_ingestion) if self._last_ingestion else None
 
     def installed_snapshot(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -584,10 +776,17 @@ class ParserManager:
             raise ValueError("Import candidate not found")
         if row.get("status") == "imported":
             return dict(row)
-        if row.get("status") not in {"pending", "error"}:
+        if row.get("status") != "pending":
             raise ValueError("Import candidate cannot be approved")
         try:
-            expense = await self.importer.async_import(row)
+            candidate = dict(row)
+            config = self.storage.data.get("installed", {}).get(str(row.get("parser_id") or ""))
+            if config is None:
+                config = self.storage.data.get("custom", {}).get(str(row.get("parser_id") or ""))
+            if config:
+                candidate["default_payer_id"] = config.get("default_payer_id")
+                candidate["default_split"] = list(config.get("default_split") or [])
+            expense = await self.importer.async_import(candidate)
         except Exception as err:
             row["status"] = "error"
             row["error"] = str(err)
@@ -602,6 +801,20 @@ class ParserManager:
         self._notify_import_updated()
         return dict(row)
 
+    def _normalize_payment_defaults(
+        self,
+        payer_id: str | None,
+        split: list[dict[str, Any]] | None,
+    ) -> tuple[str | None, list[dict[str, Any]]]:
+        normalized_payer = self.bill_manager._validate_optional_payer(payer_id)
+        if normalized_payer is None:
+            return None, []
+        if split is None:
+            split = self.bill_manager.default_split()
+        if not split:
+            split = [{"payer_id": normalized_payer, "percentage": 100.0}]
+        return normalized_payer, self.bill_manager._normalize_split(split)
+
     async def async_reject(self, import_id: str) -> dict[str, Any]:
         row = next((row for row in self.storage.data.get("imports", []) if row.get("id") == import_id), None)
         if row is None:
@@ -613,6 +826,55 @@ class ParserManager:
         await self.storage.async_save()
         self._notify_import_updated()
         return dict(row)
+
+    async def async_retry(self, import_id: str) -> dict[str, Any]:
+        row = next(
+            (
+                row
+                for row in self.storage.data.get("imports", [])
+                if row.get("id") == import_id
+            ),
+            None,
+        )
+        if row is None:
+            raise ValueError("Import candidate not found")
+        if row.get("status") not in {"error", "rejected"}:
+            raise ValueError("Only failed or rejected imports can be retried")
+        source = dict(row.get("source") or {})
+        if not source.get("entry_id") or not source.get("uid"):
+            raise ValueError("Import does not contain enough IMAP source data")
+        source_fingerprint = str(source.get("source_fingerprint") or "")
+        if source_fingerprint:
+            self._runtime_failed_fingerprints.discard(source_fingerprint)
+        result = await self.async_process_imap_event(
+            {
+                "entry_id": source.get("entry_id"),
+                "uid": source.get("uid"),
+                "sender": source.get("sender"),
+                "subject": source.get("subject"),
+                "date": source.get("date"),
+                "folder": source.get("folder"),
+                "initial": False,
+            },
+            retry_import_id=import_id,
+        )
+        if result is not None:
+            return result
+        current = next(
+            (
+                item
+                for item in self.storage.data.get("imports", [])
+                if item.get("id") == import_id
+            ),
+            None,
+        )
+        if current is not None:
+            current["error"] = current.get("error") or "Retry did not produce an import candidate"
+            current["retried_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+            await self.storage.async_save()
+            self._notify_import_updated()
+            return dict(current)
+        raise ValueError("Retry did not produce an import candidate")
 
     async def async_test(
         self,
@@ -680,15 +942,26 @@ class ParserManager:
                         f"available parts: {available}"
                     )
                 continue
-            content = await self.imap.async_fetch_part(envelope, part)
-            hashes.append(hashlib.sha256(content).hexdigest())
-            extractor = document.get("extractor")
-            if extractor == "pdf_text":
-                text = await self.hass.async_add_executor_job(extract_pdf_text, content)
-            elif extractor == "text":
-                text = content.decode("utf-8", errors="replace")
-            else:
-                raise ParserError(f"Unsupported extractor '{extractor}'")
+            try:
+                content = await self.imap.async_fetch_part(envelope, part)
+                hashes.append(hashlib.sha256(content).hexdigest())
+                extractor = document.get("extractor")
+                if extractor == "pdf_text":
+                    text = await self.hass.async_add_executor_job(extract_pdf_text, content)
+                elif extractor == "text":
+                    text = content.decode("utf-8", errors="replace")
+                else:
+                    raise ParserError(f"Unsupported extractor '{extractor}'")
+            except (ImapSourceError, PdfExtractionError) as err:
+                if document.get("required", False):
+                    raise
+                _LOGGER.warning(
+                    "Billy skipped optional attachment '%s' for IMAP UID %s: %s",
+                    document_id,
+                    envelope.uid,
+                    err,
+                )
+                continue
             bundle.documents[document_id] = text
         return bundle, hashes
 
@@ -808,12 +1081,37 @@ class ParserManager:
         await self.storage.async_save()
         self._notify_import_updated()
 
-    async def _record_error(self, envelope: MailEnvelope, source_fingerprint: str, error: str) -> None:
-        row = {
+    async def _record_error(
+        self,
+        envelope: MailEnvelope,
+        source_fingerprint: str,
+        error: str,
+        *,
+        import_id: str | None = None,
+        parser_id: str | None = None,
+        category_id: str | None = None,
+    ) -> None:
+        row = next(
+            (
+                item
+                for item in self.storage.data.get("imports", [])
+                if (import_id and item.get("id") == import_id)
+                or (
+                    not import_id
+                    and item.get("status") == "error"
+                    and item.get("source", {}).get("source_fingerprint")
+                    == source_fingerprint
+                )
+            ),
+            None,
+        )
+        stored_parser_id = parser_id or (str(row.get("parser_id") or "") if row else "")
+        stored_category_id = category_id or (str(row.get("category_id") or "") if row else "")
+        payload = {
             "id": uuid4().hex,
-            "parser_id": "",
+            "parser_id": stored_parser_id,
             "parser_version": 0,
-            "category_id": "",
+            "category_id": stored_category_id,
             "data": {},
             "confidence": 0,
             "matched_score": 0,
@@ -826,6 +1124,7 @@ class ParserManager:
                 "sender": envelope.sender,
                 "subject": envelope.subject,
                 "date": envelope.date,
+                "folder": envelope.folder,
                 "source_fingerprint": source_fingerprint,
             },
             "fingerprint": source_fingerprint,
@@ -835,19 +1134,51 @@ class ParserManager:
             "error": error[:500],
         }
         imports = self.storage.data.setdefault("imports", [])
-        imports.insert(0, row)
+        if row is not None:
+            payload["id"] = str(row.get("id") or import_id)
+            payload["created_at"] = str(row.get("created_at") or payload["created_at"])
+            payload["retried_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+            row.clear()
+            row.update(payload)
+        else:
+            imports.insert(0, payload)
         del imports[MAX_IMPORT_HISTORY:]
+        self._runtime_failed_fingerprints.add(source_fingerprint)
         await self.storage.async_save()
         self._notify_import_updated()
 
-    def _has_source_fingerprint(self, fingerprint: str) -> bool:
-        # Failed attempts must be retryable after a parser/catalog fix. Pending,
-        # imported and explicitly rejected candidates remain deduplicated.
-        return any(
-            row.get("status") != "error"
-            and row.get("source", {}).get("source_fingerprint") == fingerprint
-            for row in self.storage.data.get("imports", [])
+    def _remove_import(self, import_id: str) -> None:
+        imports = self.storage.data.setdefault("imports", [])
+        imports[:] = [row for row in imports if row.get("id") != import_id]
+
+    def _remove_source_errors(self, source_fingerprint: str) -> None:
+        imports = self.storage.data.setdefault("imports", [])
+        imports[:] = [
+            row
+            for row in imports
+            if not (
+                row.get("status") == "error"
+                and row.get("source", {}).get("source_fingerprint")
+                == source_fingerprint
+            )
+        ]
+
+    def _source_fingerprint_row(self, fingerprint: str) -> dict[str, Any] | None:
+        # Persisted errors are deliberately excluded so a new integration/HA
+        # runtime can retry them after code or parser fixes. A runtime-local set
+        # suppresses repeated imap_content events after the first failure.
+        return next(
+            (
+                row
+                for row in self.storage.data.get("imports", [])
+                if row.get("status") != "error"
+                and row.get("source", {}).get("source_fingerprint") == fingerprint
+            ),
+            None,
         )
+
+    def _has_source_fingerprint(self, fingerprint: str) -> bool:
+        return self._source_fingerprint_row(fingerprint) is not None
 
     def _is_duplicate_candidate(self, candidate: BillCandidate) -> bool:
         semantic = candidate.source.get("semantic_fingerprint")
@@ -894,3 +1225,22 @@ class ParserManager:
 
     def _notify_import_updated(self) -> None:
         self.hass.bus.async_fire(EVENT_IMPORT_UPDATED)
+
+    def _set_ingestion_diagnostic(
+        self,
+        envelope: MailEnvelope,
+        outcome: str,
+        detail: str,
+        *,
+        parser_id: str | None = None,
+    ) -> None:
+        self._last_ingestion = {
+            "uid": envelope.uid,
+            "entry_id": envelope.entry_id,
+            "sender": envelope.sender,
+            "subject": envelope.subject,
+            "outcome": outcome,
+            "detail": detail,
+            "parser_id": parser_id or "",
+            "at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        }

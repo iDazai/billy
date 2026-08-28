@@ -1,6 +1,7 @@
 """Privacy-first adapter around Home Assistant's IMAP integration."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 from typing import Any
@@ -50,16 +51,24 @@ class ImapSource:
     async def async_fetch(self, envelope: MailEnvelope) -> dict[str, Any]:
         if not envelope.entry_id or not envelope.uid:
             raise ImapSourceError("IMAP event is missing entry_id or uid")
-        try:
-            response = await self.hass.services.async_call(
-                "imap",
-                "fetch",
-                {"entry": envelope.entry_id, "uid": envelope.uid},
-                blocking=True,
-                return_response=True,
-            )
-        except Exception as err:
-            raise ImapSourceError("Unable to fetch IMAP message") from err
+        response = None
+        last_error = None
+        for attempt in range(2):
+            try:
+                response = await self.hass.services.async_call(
+                    "imap",
+                    "fetch",
+                    {"entry": envelope.entry_id, "uid": envelope.uid},
+                    blocking=True,
+                    return_response=True,
+                )
+                break
+            except Exception as err:  # noqa: BLE001 - HA IMAP can fail transiently
+                last_error = err
+                if attempt == 0:
+                    await asyncio.sleep(0.25)
+        if response is None and last_error is not None:
+            raise ImapSourceError("Unable to fetch IMAP message") from last_error
         if not isinstance(response, dict):
             raise ImapSourceError("IMAP fetch returned an invalid response")
         response = dict(response)
@@ -67,16 +76,24 @@ class ImapSource:
         return response
 
     async def async_fetch_part(self, envelope: MailEnvelope, part: MailPart) -> bytes:
-        try:
-            response = await self.hass.services.async_call(
-                "imap",
-                "fetch_part",
-                {"entry": envelope.entry_id, "uid": envelope.uid, "part": part.part},
-                blocking=True,
-                return_response=True,
-            )
-        except Exception as err:
-            raise ImapSourceError(f"Unable to fetch IMAP part {part.part}") from err
+        response = None
+        last_error = None
+        for attempt in range(2):
+            try:
+                response = await self.hass.services.async_call(
+                    "imap",
+                    "fetch_part",
+                    {"entry": envelope.entry_id, "uid": envelope.uid, "part": part.part},
+                    blocking=True,
+                    return_response=True,
+                )
+                break
+            except Exception as err:  # noqa: BLE001 - HA IMAP can fail transiently
+                last_error = err
+                if attempt == 0:
+                    await asyncio.sleep(0.25)
+        if response is None and last_error is not None:
+            raise ImapSourceError(f"Unable to fetch IMAP part {part.part}") from last_error
         if not isinstance(response, dict):
             raise ImapSourceError("IMAP fetch_part returned an invalid response")
         data = response.get("part_data")

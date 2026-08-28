@@ -1,7 +1,7 @@
-import './billy-parser-manager.js?v=0.11.6'
-import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.6'
+import './billy-parser-manager.js?v=0.11.9-r3'
+import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.9-r3'
 
-const BILLY_PANEL_VERSION = '0.11.6'
+const BILLY_PANEL_VERSION = '0.11.9'
 
 const TEXT = {
   en: {
@@ -65,6 +65,17 @@ const TEXT = {
     billsTitle: 'All bills',
     billsSubtitle:
       'Complete history with provider-payment status, editing and manual entry.',
+    pendingReviewTitle: 'Bills waiting for approval',
+    pendingReviewHelp:
+      'Review bills detected by parsers before adding them to Billy.',
+    acceptImport: 'Accept',
+    rejectImport: 'Reject',
+    retryImport: 'Retry',
+    failedImport: 'Import failed',
+    unknownError: 'Unknown error',
+    confidence: 'Confidence',
+    invoiceNumber: 'Invoice',
+    unknownProvider: 'Unknown provider',
     addBill: 'Add bill',
     exportData: 'Export',
     exportBillsTitle: 'Export bills',
@@ -176,6 +187,13 @@ const TEXT = {
     billTypes: 'Bill types',
     payers: 'Payers',
     sources: 'Email sources',
+    rejectedImports: 'Rejected bills',
+    rejectedImportsHelp:
+      'Review parser bills you previously rejected. Restoring one runs the current parser again and returns it to the review queue if successful.',
+    noRejectedImports: 'No rejected bills.',
+    restoreRejected: 'Restore',
+    rejectedAt: 'Rejected',
+    restoreRejectedSuccess: 'Rejected bill restored to the review queue.',
     transfer: 'Import / Export',
     system: 'System',
     developer: 'Developer & support',
@@ -331,6 +349,17 @@ const TEXT = {
     billsTitle: 'Tutte le bollette',
     billsSubtitle:
       'Storico completo con stato del pagamento al fornitore, modifica e inserimento manuale.',
+    pendingReviewTitle: 'Bollette da approvare',
+    pendingReviewHelp:
+      'Controlla le bollette rilevate dai parser prima di aggiungerle a Billy.',
+    acceptImport: 'Accetta',
+    rejectImport: 'Rifiuta',
+    retryImport: 'Riprova',
+    failedImport: 'Import fallito',
+    unknownError: 'Errore sconosciuto',
+    confidence: 'Affidabilità',
+    invoiceNumber: 'Fattura',
+    unknownProvider: 'Fornitore sconosciuto',
     addBill: 'Aggiungi bolletta',
     exportData: 'Esporta',
     exportBillsTitle: 'Esporta bollette',
@@ -442,6 +471,13 @@ const TEXT = {
     billTypes: 'Tipologie bolletta',
     payers: 'Pagatori',
     sources: 'Sorgenti email',
+    rejectedImports: 'Bollette rifiutate',
+    rejectedImportsHelp:
+      'Controlla le bollette dei parser rifiutate in precedenza. Ripristinandone una Billy esegue di nuovo il parser attuale e, se valida, la riporta nella coda di approvazione.',
+    noRejectedImports: 'Nessuna bolletta rifiutata.',
+    restoreRejected: 'Ripristina',
+    rejectedAt: 'Rifiutata',
+    restoreRejectedSuccess: 'Bolletta ripristinata nella coda di approvazione.',
     transfer: 'Import / Export',
     system: 'Sistema',
     developer: 'Sviluppatore e supporto',
@@ -1723,6 +1759,8 @@ class BillyBills extends HTMLElement {
     this._pageSize = 25
     this._editing = null
     this._unsubscribe = null
+    this._unsubscribeImports = null
+    this._imports = []
   }
 
   set hass(value) {
@@ -1734,9 +1772,12 @@ class BillyBills extends HTMLElement {
     if (!this.isConnected) return
     if (connectionChanged) {
       this._unsubscribe?.()
+      this._unsubscribeImports?.()
       this._unsubscribe = null
+      this._unsubscribeImports = null
       this._subscribe()
     }
+    if (firstAssignment) this._subscribe()
     if (firstAssignment || connectionChanged || !this._data) this._load()
   }
 
@@ -1751,7 +1792,9 @@ class BillyBills extends HTMLElement {
 
   disconnectedCallback() {
     this._unsubscribe?.()
+    this._unsubscribeImports?.()
     this._unsubscribe = null
+    this._unsubscribeImports = null
   }
 
   _t(key) {
@@ -1759,13 +1802,23 @@ class BillyBills extends HTMLElement {
   }
 
   async _subscribe() {
-    if (!this._hass || this._unsubscribe) return
-    try {
-      this._unsubscribe = await this._hass.connection.subscribeEvents(
-        () => this._load(false),
-        'bill_tracker_updated',
-      )
-    } catch (_error) {}
+    if (!this._hass) return
+    if (!this._unsubscribe) {
+      try {
+        this._unsubscribe = await this._hass.connection.subscribeEvents(
+          () => this._load(false),
+          'bill_tracker_updated',
+        )
+      } catch (_error) {}
+    }
+    if (!this._unsubscribeImports) {
+      try {
+        this._unsubscribeImports = await this._hass.connection.subscribeEvents(
+          () => this._load(false),
+          'bill_tracker_import_updated',
+        )
+      } catch (_error) {}
+    }
   }
 
   async _load(showLoading = true) {
@@ -1773,10 +1826,17 @@ class BillyBills extends HTMLElement {
     if (showLoading) this._loading = true
     if (showLoading) this._render()
     try {
-      this._data = await this._hass.callWS({
-        type: 'bill_tracker/list',
-        forecast_months: 1,
-      })
+      const [data, imports] = await Promise.all([
+        this._hass.callWS({
+          type: 'bill_tracker/list',
+          forecast_months: 1,
+        }),
+        this._hass
+          .callWS({ type: 'bill_tracker/parser/imports', limit: 100 })
+          .catch(() => []),
+      ])
+      this._data = data
+      this._imports = Array.isArray(imports) ? imports : imports?.imports || []
       this._error = null
     } catch (error) {
       this._error = String(error?.message || error)
@@ -1796,6 +1856,68 @@ class BillyBills extends HTMLElement {
       }).format(Number(value || 0))
     } catch (_error) {
       return `${Number(value || 0).toFixed(2)} ${currency}`
+    }
+  }
+
+  _pendingImportsHtml() {
+    const rows = (this._imports || []).filter((row) =>
+      ['pending', 'error'].includes(row.status),
+    )
+    if (!rows.length) return ''
+    return `<section class="review-card"><div class="review-head"><div><h2>${escapeHtml(this._t('pendingReviewTitle'))}</h2><p>${escapeHtml(this._t('pendingReviewHelp'))}</p></div><span class="review-count">${rows.length}</span></div><div class="review-list">${rows
+      .map((row) => {
+        const data = row.data || {}
+        const source = row.source || {}
+        const failed = row.status === 'error'
+        const provider =
+          data.provider || row.parser_id || this._t('unknownProvider')
+        const details = [
+          data.invoice_number
+            ? `${this._t('invoiceNumber')}: ${data.invoice_number}`
+            : '',
+          data.due_date ? `${this._t('due')}: ${data.due_date}` : '',
+          source.subject || '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+        const status = failed
+          ? `<small class="review-error">${escapeHtml(`${this._t('failedImport')}: ${row.error || this._t('unknownError')}`)}</small>`
+          : `<small>${escapeHtml(`${this._t('confidence')}: ${Number(row.confidence || 0)}%`)}</small>`
+        const actions = failed
+          ? `<button class="secondary" data-import-reject="${escapeHtml(row.id)}">${escapeHtml(this._t('rejectImport'))}</button><button class="primary" data-import-retry="${escapeHtml(row.id)}">${escapeHtml(this._t('retryImport'))}</button>`
+          : `<button class="secondary" data-import-reject="${escapeHtml(row.id)}">${escapeHtml(this._t('rejectImport'))}</button><button class="primary" data-import-approve="${escapeHtml(row.id)}">${escapeHtml(this._t('acceptImport'))}</button>`
+        return `<article class="review-row ${failed ? 'failed' : ''}"><div class="review-main"><strong>${escapeHtml(provider)}</strong><small>${escapeHtml(details)}</small>${status}</div><b>${data.amount == null ? '—' : escapeHtml(this._money(data.amount))}</b><div class="review-actions">${actions}</div></article>`
+      })
+      .join('')}</div></section>`
+  }
+
+  async _reviewImport(id, approve) {
+    if (!this._hass || !id) return
+    try {
+      await this._hass.callWS({
+        type: approve
+          ? 'bill_tracker/parser/import/approve'
+          : 'bill_tracker/parser/import/reject',
+        import_id: id,
+      })
+      await this._load(false)
+    } catch (error) {
+      this._error = String(error?.message || error)
+      this._render()
+    }
+  }
+
+  async _retryImport(id) {
+    if (!this._hass || !id) return
+    try {
+      await this._hass.callWS({
+        type: 'bill_tracker/parser/import/retry',
+        import_id: id,
+      })
+      await this._load(false)
+    } catch (error) {
+      this._error = String(error?.message || error)
+      this._render()
     }
   }
 
@@ -2010,6 +2132,7 @@ class BillyBills extends HTMLElement {
       <div class="bills-page">
         <div class="hero"><div><h1>${escapeHtml(this._t('billsTitle'))}</h1><p>${escapeHtml(this._t('billsSubtitle'))}</p></div><div class="hero-actions"><button class="secondary" id="export-bills"><ha-icon icon="mdi:tray-arrow-down"></ha-icon>${escapeHtml(this._t('exportData'))}</button><button class="primary" id="add-bill"><ha-icon icon="mdi:plus"></ha-icon>${escapeHtml(this._t('addBill'))}</button></div></div>
         ${this._error ? `<div class="notice error">${escapeHtml(this._error)}</div>` : ''}
+        ${this._pendingImportsHtml()}
         <div class="toolbar">
           <label class="search"><ha-icon icon="mdi:magnify"></ha-icon><input id="bill-search" type="search" value="${escapeHtml(this._search)}" placeholder="${escapeHtml(this._t('searchBills'))}"></label>
           <select id="bill-category"><option value="all">${escapeHtml(this._t('allTypes'))}</option>${categories.map((row) => `<option value="${escapeHtml(row.id)}" ${this._category === row.id ? 'selected' : ''}>${escapeHtml(row.name)}</option>`).join('')}</select>
@@ -2027,6 +2150,27 @@ class BillyBills extends HTMLElement {
     this.shadowRoot
       .getElementById('export-bills')
       ?.addEventListener('click', () => this._openExport())
+    this.shadowRoot
+      .querySelectorAll('[data-import-approve]')
+      .forEach((button) =>
+        button.addEventListener('click', () =>
+          this._reviewImport(button.dataset.importApprove, true),
+        ),
+      )
+    this.shadowRoot
+      .querySelectorAll('[data-import-reject]')
+      .forEach((button) =>
+        button.addEventListener('click', () =>
+          this._reviewImport(button.dataset.importReject, false),
+        ),
+      )
+    this.shadowRoot
+      .querySelectorAll('[data-import-retry]')
+      .forEach((button) =>
+        button.addEventListener('click', () =>
+          this._retryImport(button.dataset.importRetry),
+        ),
+      )
     this.shadowRoot
       .getElementById('bill-search')
       ?.addEventListener('input', (event) => {
@@ -2402,10 +2546,10 @@ class BillyBills extends HTMLElement {
 
   _styles() {
     return `
-      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.bills-page{display:flex;flex-direction:column;gap:18px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.hero h1{font-size:30px;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.primary,.secondary,.bill-actions button,.pager button,.error-card button{appearance:none;border-radius:10px;padding:9px 13px;font:inherit;font-weight:650;cursor:pointer}.primary{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.bill-actions button,.pager button,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}button:disabled{opacity:.45;cursor:default}.toolbar{display:grid;grid-template-columns:minmax(240px,1fr) repeat(4,minmax(145px,auto));gap:10px}.toolbar select,.search{height:44px;border:1px solid var(--divider-color);border-radius:11px;background:var(--card-background-color);color:var(--primary-text-color)}.toolbar select{padding:0 10px;font:inherit}.search{display:flex;align-items:center;gap:8px;padding:0 12px}.search ha-icon{color:var(--secondary-text-color);--mdc-icon-size:19px}.search input{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit;min-width:0}.list-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;overflow:hidden}.bill-row{display:grid;grid-template-columns:38px 8px minmax(220px,1.4fr) minmax(155px,.65fr) auto auto auto;gap:13px;align-items:center;padding:13px 16px;border-top:1px solid var(--divider-color)}.bill-row:first-child{border-top:0}.category-color{width:8px;height:42px;border-radius:99px}.bill-main,.bill-month{display:flex;flex-direction:column;gap:3px;min-width:0}.bill-main strong,.bill-main small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bill-main small,.bill-month small{font-size:11px;color:var(--secondary-text-color)}.bill-month span{font-size:13px;text-transform:capitalize}.bill-amount{font-size:15px;text-align:right;white-space:nowrap}.state{font-size:11px;padding:4px 8px;border-radius:999px;white-space:nowrap}.state.paid{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.state.unpaid{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.bill-state{display:flex;flex-direction:column;align-items:flex-start;gap:6px}.reimbursement-line{display:flex;align-items:center;gap:6px}.state.reimbursement.done{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.state.reimbursement.pending{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.state.reimbursement.partial{color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 11%,transparent)}.state.reimbursement.none{color:var(--secondary-text-color);background:var(--secondary-background-color)}.reimbursement-toggle{position:relative;width:22px;height:22px;display:grid;place-items:center;cursor:pointer}.reimbursement-toggle input{position:absolute;opacity:0}.reimbursement-toggle span{width:18px;height:18px;border:2px solid var(--divider-color);border-radius:5px;display:grid;place-items:center}.reimbursement-toggle input:checked+span{border-color:var(--success-color,#2e7d32);background:var(--success-color,#2e7d32)}.reimbursement-toggle input:checked+span:after{content:'✓';color:white;font-size:11px;font-weight:800}.reimbursement-toggle input:disabled+span{opacity:.55;cursor:not-allowed}.bill-actions{display:flex;gap:6px}.bill-actions button{padding:6px 9px;font-size:11px}.bill-actions .danger{color:var(--error-color,#d32f2f)}.paid-toggle{position:relative;width:32px;height:32px;display:grid;place-items:center;cursor:pointer}.paid-toggle input{position:absolute;opacity:0}.paid-toggle span{width:23px;height:23px;border:2px solid var(--divider-color);border-radius:50%;display:grid;place-items:center}.paid-toggle input:checked+span{border-color:var(--success-color,#2e7d32);background:var(--success-color,#2e7d32)}.paid-toggle input:checked+span:after{content:'✓';color:white;font-size:14px;font-weight:800}.pager{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px}.pager div{display:flex;gap:7px}.pager button{padding:6px 9px;font-size:11px}.empty{padding:50px 16px;text-align:center;color:var(--secondary-text-color)}.notice{padding:11px 14px;border-radius:10px}.notice.error{background:color-mix(in srgb,var(--error-color,#d32f2f) 10%,var(--card-background-color));color:var(--error-color,#d32f2f);border:1px solid color-mix(in srgb,var(--error-color,#d32f2f) 28%,transparent)}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px}.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}.modal-card{position:relative;z-index:1;width:min(850px,100%);max-height:min(90vh,900px);overflow:auto;background:var(--card-background-color);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.35);padding:20px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h3{font-size:20px;margin:0}.icon-close{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font-size:28px;cursor:pointer}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid label{display:flex;flex-direction:column;gap:6px}.form-grid label>span,.split-title small{font-size:12px;color:var(--secondary-text-color)}.form-grid input,.form-grid select,.form-grid textarea{width:100%;min-height:42px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color);padding:8px 11px;font:inherit;outline:none}.form-grid textarea{resize:vertical}.form-grid .check{flex-direction:row;align-items:center;padding-top:20px}.form-grid .check input{width:18px;min-height:18px;accent-color:var(--primary-color)}.span2{grid-column:1/-1}.split-box{border:1px solid var(--divider-color);border-radius:12px;padding:14px}.split-title{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.split-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.split-total{text-align:right;margin-top:8px;font-size:12px;color:var(--success-color,#2e7d32)}.split-total.bad{color:var(--error-color,#d32f2f)}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid var(--divider-color)}
+      :host{display:block;color:var(--primary-text-color)}*{box-sizing:border-box}.bills-page{display:flex;flex-direction:column;gap:18px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.hero h1{font-size:30px;margin:0 0 6px}.hero p{margin:0;color:var(--secondary-text-color);font-size:14px}.primary,.secondary,.bill-actions button,.pager button,.error-card button{appearance:none;border-radius:10px;padding:9px 13px;font:inherit;font-weight:650;cursor:pointer}.primary{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--primary-color);background:var(--primary-color);color:var(--text-primary-color,#fff)}.secondary,.bill-actions button,.pager button,.error-card button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color)}button:disabled{opacity:.45;cursor:default}.review-card{background:var(--card-background-color);border:1px solid color-mix(in srgb,var(--warning-color,#f9a825) 40%,var(--divider-color));border-radius:16px;overflow:hidden}.review-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:16px 18px;background:color-mix(in srgb,var(--warning-color,#f9a825) 7%,transparent)}.review-head h2{margin:0 0 4px;font-size:17px}.review-head p{margin:0;color:var(--secondary-text-color);font-size:12px}.review-count{min-width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:var(--warning-color,#f9a825);color:#fff;font-weight:700}.review-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:14px;align-items:center;padding:13px 18px;border-top:1px solid var(--divider-color)}.review-main{display:flex;flex-direction:column;gap:3px;min-width:0}.review-main small{color:var(--secondary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.review-actions{display:flex;gap:7px}.toolbar{display:grid;grid-template-columns:minmax(240px,1fr) repeat(4,minmax(145px,auto));gap:10px}.toolbar select,.search{height:44px;border:1px solid var(--divider-color);border-radius:11px;background:var(--card-background-color);color:var(--primary-text-color)}.toolbar select{padding:0 10px;font:inherit}.search{display:flex;align-items:center;gap:8px;padding:0 12px}.search ha-icon{color:var(--secondary-text-color);--mdc-icon-size:19px}.search input{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit;min-width:0}.list-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:16px;overflow:hidden}.bill-row{display:grid;grid-template-columns:38px 8px minmax(220px,1.4fr) minmax(155px,.65fr) auto auto auto;gap:13px;align-items:center;padding:13px 16px;border-top:1px solid var(--divider-color)}.bill-row:first-child{border-top:0}.category-color{width:8px;height:42px;border-radius:99px}.bill-main,.bill-month{display:flex;flex-direction:column;gap:3px;min-width:0}.bill-main strong,.bill-main small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bill-main small,.bill-month small{font-size:11px;color:var(--secondary-text-color)}.bill-month span{font-size:13px;text-transform:capitalize}.bill-amount{font-size:15px;text-align:right;white-space:nowrap}.state{font-size:11px;padding:4px 8px;border-radius:999px;white-space:nowrap}.state.paid{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.state.unpaid{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.bill-state{display:flex;flex-direction:column;align-items:flex-start;gap:6px}.reimbursement-line{display:flex;align-items:center;gap:6px}.state.reimbursement.done{color:var(--success-color,#2e7d32);background:color-mix(in srgb,var(--success-color,#2e7d32) 11%,transparent)}.state.reimbursement.pending{color:var(--warning-color,#f9a825);background:color-mix(in srgb,var(--warning-color,#f9a825) 12%,transparent)}.state.reimbursement.partial{color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 11%,transparent)}.state.reimbursement.none{color:var(--secondary-text-color);background:var(--secondary-background-color)}.reimbursement-toggle{position:relative;width:22px;height:22px;display:grid;place-items:center;cursor:pointer}.reimbursement-toggle input{position:absolute;opacity:0}.reimbursement-toggle span{width:18px;height:18px;border:2px solid var(--divider-color);border-radius:5px;display:grid;place-items:center}.reimbursement-toggle input:checked+span{border-color:var(--success-color,#2e7d32);background:var(--success-color,#2e7d32)}.reimbursement-toggle input:checked+span:after{content:'✓';color:white;font-size:11px;font-weight:800}.reimbursement-toggle input:disabled+span{opacity:.55;cursor:not-allowed}.bill-actions{display:flex;gap:6px}.bill-actions button{padding:6px 9px;font-size:11px}.bill-actions .danger{color:var(--error-color,#d32f2f)}.paid-toggle{position:relative;width:32px;height:32px;display:grid;place-items:center;cursor:pointer}.paid-toggle input{position:absolute;opacity:0}.paid-toggle span{width:23px;height:23px;border:2px solid var(--divider-color);border-radius:50%;display:grid;place-items:center}.paid-toggle input:checked+span{border-color:var(--success-color,#2e7d32);background:var(--success-color,#2e7d32)}.paid-toggle input:checked+span:after{content:'✓';color:white;font-size:14px;font-weight:800}.pager{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--divider-color);color:var(--secondary-text-color);font-size:12px}.pager div{display:flex;gap:7px}.pager button{padding:6px 9px;font-size:11px}.empty{padding:50px 16px;text-align:center;color:var(--secondary-text-color)}.notice{padding:11px 14px;border-radius:10px}.notice.error{background:color-mix(in srgb,var(--error-color,#d32f2f) 10%,var(--card-background-color));color:var(--error-color,#d32f2f);border:1px solid color-mix(in srgb,var(--error-color,#d32f2f) 28%,transparent)}.loading,.error-card{background:var(--card-background-color);border:1px solid var(--divider-color);border-radius:14px;padding:24px}.modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px}.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}.modal-card{position:relative;z-index:1;width:min(850px,100%);max-height:min(90vh,900px);overflow:auto;background:var(--card-background-color);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.35);padding:20px}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.modal-head h3{font-size:20px;margin:0}.icon-close{appearance:none;border:0;background:transparent;color:var(--secondary-text-color);font-size:28px;cursor:pointer}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid label{display:flex;flex-direction:column;gap:6px}.form-grid label>span,.split-title small{font-size:12px;color:var(--secondary-text-color)}.form-grid input,.form-grid select,.form-grid textarea{width:100%;min-height:42px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color);padding:8px 11px;font:inherit;outline:none}.form-grid textarea{resize:vertical}.form-grid .check{flex-direction:row;align-items:center;padding-top:20px}.form-grid .check input{width:18px;min-height:18px;accent-color:var(--primary-color)}.span2{grid-column:1/-1}.split-box{border:1px solid var(--divider-color);border-radius:12px;padding:14px}.split-title{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.split-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.split-total{text-align:right;margin-top:8px;font-size:12px;color:var(--success-color,#2e7d32)}.split-total.bad{color:var(--error-color,#d32f2f)}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid var(--divider-color)}
       .hero-actions{display:flex;gap:9px;flex-wrap:wrap}.hero-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px}.export-help{margin:0 0 16px;color:var(--secondary-text-color);font-size:13px;line-height:1.45}
       @media(max-width:1100px){.toolbar{grid-template-columns:1fr 1fr}.bill-row{grid-template-columns:34px 8px minmax(180px,1fr) auto auto}.bill-month{grid-column:3}.bill-state{grid-column:4;grid-row:1}.bill-amount{grid-column:4;grid-row:2}.bill-actions{grid-column:5;grid-row:1 / span 2}}
-      @media(max-width:720px){.hero{align-items:flex-start;flex-direction:column}.hero-actions{width:100%}.hero-actions button{flex:1}.toolbar{grid-template-columns:1fr}.bill-row{grid-template-columns:32px 8px minmax(0,1fr) auto;padding:12px}.bill-month{grid-column:3}.bill-state{grid-column:3}.bill-amount{grid-column:3;text-align:left}.bill-actions{grid-column:4;grid-row:1 / span 4;flex-direction:column}.form-grid,.split-grid{grid-template-columns:1fr}.span2{grid-column:auto}.modal{padding:8px}.modal-card{padding:16px}}
+      @media(max-width:720px){.hero{align-items:flex-start;flex-direction:column}.hero-actions{width:100%}.hero-actions button{flex:1}.review-row{grid-template-columns:1fr}.review-actions{flex-wrap:wrap}.toolbar{grid-template-columns:1fr}.bill-row{grid-template-columns:32px 8px minmax(0,1fr) auto;padding:12px}.bill-month{grid-column:3}.bill-state{grid-column:3}.bill-amount{grid-column:3;text-align:left}.bill-actions{grid-column:4;grid-row:1 / span 4;flex-direction:column}.form-grid,.split-grid{grid-template-columns:1fr}.span2{grid-column:auto}.modal{padding:8px}.modal-card{padding:16px}}
     `
   }
 }
@@ -3067,11 +3211,13 @@ class BillySettings extends HTMLElement {
     this._hass = null
     this._data = null
     this._parserData = null
+    this._rejectedImports = []
     this._section = 'categories'
     this._loading = false
     this._error = null
     this._notice = ''
     this._unsubscribe = null
+    this._unsubscribeImports = null
     this._backupBusy = false
     this._backupContent = ''
     this._backupFileName = ''
@@ -3087,6 +3233,8 @@ class BillySettings extends HTMLElement {
     if (connectionChanged) {
       this._unsubscribe?.()
       this._unsubscribe = null
+      this._unsubscribeImports?.()
+      this._unsubscribeImports = null
       this._subscribe()
     }
     if (firstAssignment || connectionChanged || !this._data) this._load()
@@ -3104,6 +3252,8 @@ class BillySettings extends HTMLElement {
   disconnectedCallback() {
     this._unsubscribe?.()
     this._unsubscribe = null
+    this._unsubscribeImports?.()
+    this._unsubscribeImports = null
   }
 
   _t(key) {
@@ -3117,6 +3267,10 @@ class BillySettings extends HTMLElement {
         () => this._load(false),
         'bill_tracker_updated',
       )
+      this._unsubscribeImports = await this._hass.connection.subscribeEvents(
+        () => this._load(false),
+        'bill_tracker_import_updated',
+      )
     } catch (_error) {}
   }
 
@@ -3125,14 +3279,24 @@ class BillySettings extends HTMLElement {
     if (showLoading) this._loading = true
     this._render()
     try {
-      const [data, parserData] = await Promise.all([
+      const [data, parserData, rejectedImports] = await Promise.all([
         this._hass.callWS({ type: 'bill_tracker/list', forecast_months: 1 }),
         this._hass
           .callWS({ type: 'bill_tracker/parser/list' })
           .catch(() => null),
+        this._hass
+          .callWS({
+            type: 'bill_tracker/parser/imports',
+            status: 'rejected',
+            limit: 500,
+          })
+          .catch(() => []),
       ])
       this._data = data
       this._parserData = parserData
+      this._rejectedImports = Array.isArray(rejectedImports)
+        ? rejectedImports
+        : rejectedImports?.imports || []
       this._error = null
     } catch (error) {
       this._error = String(error?.message || error)
@@ -3203,6 +3367,51 @@ class BillySettings extends HTMLElement {
           : `<div class="empty">${escapeHtml(this._t('noSources'))}</div>`
       }</div>
       ${rows.length ? `<div class="footer-actions"><button class="primary" id="save-sources">${escapeHtml(this._t('saveSources'))}</button></div>` : ''}`
+  }
+
+  _rejected() {
+    const rows = this._rejectedImports || []
+    return `<div class="section-head"><div><h2>${escapeHtml(this._t('rejectedImports'))}</h2><p>${escapeHtml(this._t('rejectedImportsHelp'))}</p></div><span class="status warning">${rows.length}</span></div>
+      <div class="items rejected-items">${
+        rows.length
+          ? rows
+              .map((row) => {
+                const data = row.data || {}
+                const source = row.source || {}
+                const provider =
+                  data.provider || row.parser_id || this._t('unknownProvider')
+                const details = [
+                  data.invoice_number
+                    ? `${this._t('invoiceNumber')}: ${data.invoice_number}`
+                    : '',
+                  source.uid ? `UID ${source.uid}` : '',
+                  row.rejected_at
+                    ? `${this._t('rejectedAt')}: ${new Date(row.rejected_at).toLocaleString(localeOf(this._hass))}`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+                const amount =
+                  data.amount == null
+                    ? '—'
+                    : new Intl.NumberFormat(localeOf(this._hass), {
+                        style: 'currency',
+                        currency:
+                          data.currency ||
+                          this._data?.currency ||
+                          this._hass?.config?.currency ||
+                          'EUR',
+                      }).format(Number(data.amount || 0))
+                return `<article class="item-row rejected-row">
+                  <div class="avatar"><ha-icon icon="mdi:receipt-text-remove-outline"></ha-icon></div>
+                  <div class="item-main"><strong>${escapeHtml(provider)}</strong><small>${escapeHtml(details || row.id)}</small>${source.subject ? `<small>${escapeHtml(source.subject)}</small>` : ''}</div>
+                  <strong>${escapeHtml(amount)}</strong>
+                  <div class="row-actions"><button class="primary" data-restore-rejected="${escapeHtml(row.id)}">${escapeHtml(this._t('restoreRejected'))}</button></div>
+                </article>`
+              })
+              .join('')
+          : `<div class="empty">${escapeHtml(this._t('noRejectedImports'))}</div>`
+      }</div>`
   }
 
   _transfer() {
@@ -3290,6 +3499,7 @@ class BillySettings extends HTMLElement {
     let content = this._categories()
     if (this._section === 'payers') content = this._payers()
     if (this._section === 'sources') content = this._sources()
+    if (this._section === 'rejectedImports') content = this._rejected()
     if (this._section === 'transfer') content = this._transfer()
     if (this._section === 'system') content = this._system()
     if (this._section === 'developer') content = this._developer()
@@ -3301,7 +3511,7 @@ class BillySettings extends HTMLElement {
         ${this._notice ? `<div class="notice">${escapeHtml(this._notice)}</div>` : ''}
         ${this._error ? `<div class="notice error">${escapeHtml(this._error)}</div>` : ''}
         <div class="settings-layout">
-          <aside>${this._sectionButton('categories', 'mdi:shape-outline')}${this._sectionButton('payers', 'mdi:account-group-outline')}${this._sectionButton('sources', 'mdi:email-outline')}${this._sectionButton('transfer', 'mdi:swap-vertical-bold')}${this._sectionButton('system', 'mdi:cog-outline')}${this._sectionButton('developer', 'mdi:account-heart-outline')}</aside>
+          <aside>${this._sectionButton('categories', 'mdi:shape-outline')}${this._sectionButton('payers', 'mdi:account-group-outline')}${this._sectionButton('sources', 'mdi:email-outline')}${this._sectionButton('rejectedImports', 'mdi:receipt-text-remove-outline')}${this._sectionButton('transfer', 'mdi:swap-vertical-bold')}${this._sectionButton('system', 'mdi:cog-outline')}${this._sectionButton('developer', 'mdi:account-heart-outline')}</aside>
           <section class="settings-content">${content}</section>
         </div>
       </div>
@@ -3353,6 +3563,13 @@ class BillySettings extends HTMLElement {
     this.shadowRoot
       .getElementById('save-sources')
       ?.addEventListener('click', () => this._saveSources())
+    this.shadowRoot
+      .querySelectorAll('[data-restore-rejected]')
+      .forEach((button) =>
+        button.addEventListener('click', () =>
+          this._restoreRejectedImport(button.dataset.restoreRejected),
+        ),
+      )
     this.shadowRoot
       .getElementById('backup-export')
       ?.addEventListener('click', () => this._exportBackup())
@@ -3631,6 +3848,22 @@ class BillySettings extends HTMLElement {
         entry_ids: entryIds,
       })
       this._notice = this._t('sourcesSaved')
+      this._error = null
+      await this._load(false)
+    } catch (error) {
+      this._error = String(error?.message || error)
+      this._render()
+    }
+  }
+
+  async _restoreRejectedImport(id) {
+    if (!this._hass || !id) return
+    try {
+      await this._hass.callWS({
+        type: 'bill_tracker/parser/import/retry',
+        import_id: id,
+      })
+      this._notice = this._t('restoreRejectedSuccess')
       this._error = null
       await this._load(false)
     } catch (error) {

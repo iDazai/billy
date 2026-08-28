@@ -41,6 +41,8 @@ class BillImportCoordinator:
             "period_start_date": start.isoformat() if start else None,
             "period_end_date": end.isoformat() if end else None,
             "paid": False,
+            "payer_id": candidate.get("default_payer_id"),
+            "split": candidate.get("default_split"),
             "payment_date": data.get("payment_date"),
             "due_date": data.get("due_date"),
             "provider": provider or None,

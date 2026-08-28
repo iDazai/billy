@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.9
+
+- Added a parsed-bill review queue directly to the Bills section, with Accept/Reject actions before an automatic parser candidate becomes a real expense.
+- Added parser-specific default payer and split percentages, applied consistently to manual approval and automatic imports.
+- Added support for PayPal.Me, Revolut, Venmo and Cash App reimbursement links with a preferred payment provider per payer.
+- Added short/long billing-period support with exact dates and day-aware forecast normalization for split tariff-cycle bills.
+- Monthly cashflow now follows the actual payment date for provider bills and includes recurring charges in their due month.
+- Overview chart filters now persist per Home Assistant user/browser and the current-month panel focuses on unpaid bills due this month.
+- Fixed Overview live refresh after changing a bill's paid state.
+- Expanded Billy and Home Assistant localization across English, Italian, Spanish, French, German and Portuguese.
+- Added the Lovelace widget pack and aligned frontend cache-busting/version constants to 0.11.9.
+
 ## 0.11.3
 
 - Fixed the Overview spending chart so recurring expenses are visible instead of being hidden inside forecast totals.
@@ -168,5 +180,3 @@
 - OCR/scanned-PDF support.
 - Gmail API or Outlook OAuth source adapters.
 - Historical mailbox crawling.
-
-

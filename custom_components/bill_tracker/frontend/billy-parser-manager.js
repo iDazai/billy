@@ -1,6 +1,6 @@
-import { BILLY_PARSER_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.6'
+import { BILLY_PARSER_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.9-r3'
 
-const BILLY_PARSER_MANAGER_VERSION = '0.11.6'
+const BILLY_PARSER_MANAGER_VERSION = '0.11.9'
 
 const TEXT = {
   en: {
@@ -46,10 +46,14 @@ const TEXT = {
     enabled: 'Parser enabled',
     autoImport: 'Automatic import',
     category: 'Billy bill type',
+    defaultPayer: 'Default payer',
+    defaultSplit: 'Default split',
+    noDefaultPayer: 'No default payer',
     noResults: 'No parsers match the selected filters.',
     catalogUpdated: 'Catalog updated',
     catalogCacheWarning:
       'Remote catalog refresh failed. Showing the last cached catalog.',
+    lastIngestion: 'Last IMAP event',
     never: 'not yet',
     parsers: 'parsers',
     updateCount: 'updates available',
@@ -156,10 +160,14 @@ const TEXT = {
     enabled: 'Parser abilitato',
     autoImport: 'Import automatico',
     category: 'Tipo di bolletta Billy',
+    defaultPayer: 'Pagante predefinito',
+    defaultSplit: 'Divisione predefinita',
+    noDefaultPayer: 'Nessun pagante predefinito',
     noResults: 'Nessun parser corrisponde ai filtri selezionati.',
     catalogUpdated: 'Catalogo aggiornato',
     catalogCacheWarning:
       'Aggiornamento del catalogo remoto non riuscito. Viene mostrata l’ultima copia in cache.',
+    lastIngestion: 'Ultimo evento IMAP',
     never: 'mai',
     parsers: 'parser',
     updateCount: 'aggiornamenti disponibili',
@@ -651,6 +659,11 @@ class BillyParserManagerPanel extends HTMLElement {
         </section>
 
         ${this._data?.catalog?.refresh_error ? `<div class="warning-box">⚠ ${esc(this._t('catalogCacheWarning'))}</div>` : ''}
+        ${
+          this._data?.diagnostic
+            ? `<div class="diagnostic-box"><strong>${esc(this._t('lastIngestion'))}</strong><span>${esc(`${this._data.diagnostic.outcome || 'unknown'} · UID ${this._data.diagnostic.uid || '—'} · ${this._data.diagnostic.subject || '—'}`)}</span><small>${esc(this._data.diagnostic.detail || '')}</small></div>`
+            : ''
+        }
 
         <section class="filters">
           <label class="search-field">
@@ -1174,6 +1187,7 @@ fields:
 
   _openDialog(row, mode) {
     const categories = this._billData?.categories || []
+    const payers = (this._billData?.active_payers || []).slice()
     const suggested = row.category_id || row.bill_type
     const defaultCategory = categories.some(
       (item) => String(item.id) === String(suggested),
@@ -1190,6 +1204,12 @@ fields:
       categoryId: defaultCategory,
       enabled: row.installed ? row.enabled !== false : true,
       autoImport: row.installed ? Boolean(row.auto_import) : false,
+      defaultPayerId: row.installed ? String(row.default_payer_id || '') : '',
+      defaultSplit:
+        row.installed && Array.isArray(row.default_split)
+          ? row.default_split
+          : this._billData?.default_split || [],
+      payers,
     }
     this._render()
   }
@@ -1197,6 +1217,13 @@ fields:
   _renderDialog() {
     const dialog = this._dialog
     const categories = this._billData?.categories || []
+    const payers = dialog.payers || this._billData?.active_payers || []
+    const splitMap = new Map(
+      (dialog.defaultSplit || []).map((item) => [
+        String(item.payer_id || ''),
+        Number(item.percentage || 0),
+      ]),
+    )
     const title =
       dialog.mode === 'install'
         ? this._t('installTitle')
@@ -1219,6 +1246,8 @@ fields:
             <button id="dialog-close" class="icon-button">×</button>
           </div>
           <label class="modal-field"><span>${this._t('category')}</span><select id="dialog-category">${options}</select></label>
+          <label class="modal-field"><span>${this._t('defaultPayer')}</span><select id="dialog-payer"><option value="">${this._t('noDefaultPayer')}</option>${payers.map((payer) => `<option value="${esc(payer.id)}" ${String(payer.id) === String(dialog.defaultPayerId) ? 'selected' : ''}>${esc(payer.name)}</option>`).join('')}</select></label>
+          <div class="modal-field"><span>${this._t('defaultSplit')}</span><div class="dialog-split-grid">${payers.map((payer) => `<label><span>${esc(payer.name)}</span><input class="dialog-split" data-payer-id="${esc(payer.id)}" type="number" min="0" max="100" step="0.01" value="${splitMap.get(String(payer.id)) ?? 0}"></label>`).join('')}</div></div>
           <label class="check"><input id="dialog-enabled" type="checkbox" ${dialog.enabled ? 'checked' : ''}><span>${this._t('enabled')}</span></label>
           <label class="check"><input id="dialog-auto" type="checkbox" ${dialog.autoImport ? 'checked' : ''}><span>${this._t('autoImport')}</span></label>
           <div class="modal-actions">
@@ -1241,6 +1270,14 @@ fields:
     const autoImport = Boolean(
       this.shadowRoot.getElementById('dialog-auto')?.checked,
     )
+    const defaultPayerId =
+      this.shadowRoot.getElementById('dialog-payer')?.value || ''
+    const defaultSplit = [...this.shadowRoot.querySelectorAll('.dialog-split')]
+      .map((input) => ({
+        payer_id: String(input.dataset.payerId || ''),
+        percentage: Number(input.value || 0),
+      }))
+      .filter((item) => item.payer_id && item.percentage > 0)
     this._busy = String(dialog.row.id)
     this._dialog = null
     this._render()
@@ -1252,6 +1289,8 @@ fields:
           category_id: categoryId,
           enabled,
           auto_import: autoImport,
+          default_payer_id: defaultPayerId,
+          default_split: defaultSplit,
         })
       } else {
         await this._hass.callWS({
@@ -1260,6 +1299,8 @@ fields:
           category_id: categoryId,
           enabled,
           auto_import: autoImport,
+          default_payer_id: defaultPayerId,
+          default_split: defaultSplit,
         })
       }
       await this._load({ refreshIfEmpty: false })
@@ -1290,9 +1331,17 @@ fields:
       .summary { display:flex; gap:18px; flex-wrap:wrap; align-items:center; padding:12px 14px; margin-bottom:14px; border:1px solid var(--divider-color); border-radius:12px; background:var(--card-background-color); color:var(--secondary-text-color); font-size:14px; }
       .summary strong { color:var(--primary-text-color); }
       .summary-alert { color:var(--warning-color, #f39c12); font-weight:700; }
+      .diagnostic-box { display:flex; flex-direction:column; gap:4px; margin-bottom:14px; padding:12px 14px; border:1px solid var(--divider-color); border-radius:11px; background:var(--secondary-background-color); }
+      .diagnostic-box strong { font-size:12px; color:var(--primary-text-color); }
+      .diagnostic-box span { font-size:12px; color:var(--secondary-text-color); }
+      .diagnostic-box small { font-size:11px; color:var(--secondary-text-color); overflow-wrap:anywhere; }
       .filters { display:grid; grid-template-columns:minmax(220px, 1.5fr) repeat(5, minmax(120px, .7fr)); gap:10px; margin-bottom:16px; }
       .filters label, .modal-field { display:flex; flex-direction:column; gap:5px; color:var(--secondary-text-color); font-size:12px; }
       .filters select, .filters input, .modal-field select { width:100%; height:42px; border:1px solid var(--divider-color); border-radius:10px; padding:0 11px; background:var(--card-background-color); color:var(--primary-text-color); }
+      .dialog-split-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+      .dialog-split-grid label { display:flex; flex-direction:column; gap:4px; }
+      .dialog-split-grid label span { color:var(--secondary-text-color); font-size:11px; }
+      .dialog-split-grid input { width:100%; height:38px; border:1px solid var(--divider-color); border-radius:9px; padding:0 9px; background:var(--card-background-color); color:var(--primary-text-color); }
       .search-field { position:relative; justify-content:flex-end; }
       .search-field > span { position:absolute; left:12px; bottom:11px; font-size:18px; }
       .search-field input { padding-left:34px; }

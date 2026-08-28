@@ -38,10 +38,24 @@ def test_frontend_and_manifest_use_rewrite_version():
     bootstrap = (FRONTEND / "bill-tracker-card.js").read_text(encoding="utf-8")
     implementation = (FRONTEND / "bill-tracker-card-impl.js").read_text(encoding="utf-8")
     manifest = (ROOT / "custom_components" / "bill_tracker" / "manifest.json").read_text(encoding="utf-8")
-    assert "BILLY_FRONTEND_VERSION = '0.11.6'" in bootstrap
-    assert "BILL_TRACKER_VERSION = '0.11.6'" in implementation
-    assert "./bill-tracker-i18n.js?v=0.11.6" in implementation
-    assert '"version": "0.11.6"' in manifest
+    const = (ROOT / "custom_components" / "bill_tracker" / "const.py").read_text(encoding="utf-8")
+    assert "BILLY_FRONTEND_VERSION = '0.11.9'" in bootstrap
+    assert "BILL_TRACKER_VERSION = '0.11.9'" in implementation
+    assert "./bill-tracker-i18n.js?v=0.11.9-r3" in implementation
+    assert '"version": "0.11.9"' in manifest
+    assert 'FRONTEND_VERSION = "0.11.9"' in const
+    assert 'FRONTEND_CACHE_VERSION = "0.11.9-r3"' in const
+
+
+def test_settings_exposes_rejected_parser_imports_and_restore_action():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    assert "status: 'rejected'" in panel
+    assert "limit: 500" in panel
+    assert "_rejected()" in panel
+    assert "data-restore-rejected" in panel
+    assert "bill_tracker/parser/import/retry" in panel
+    assert "bill_tracker_import_updated" in panel
+    assert "restoreRejectedSuccess" in panel
 
 
 def test_automatic_parsing_does_not_replace_lovelace_ui():
@@ -89,7 +103,7 @@ def test_billy_sidebar_panel_keeps_card_and_parser_manager():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
     for token in (
-        "billy-parser-manager.js?v=0.11.6",
+        "billy-parser-manager.js?v=0.11.9-r3",
         '<billy-dashboard id="dashboard">',
         '<billy-bills id="bills-panel">',
         '<billy-recurring id="recurring-panel">',
@@ -346,8 +360,8 @@ def test_new_billy_frontends_support_all_shipped_languages():
 
     assert "BILLY_PANEL_EXTRA_TEXT" in panel
     assert "BILLY_PARSER_EXTRA_TEXT" in parser
-    assert "billy-extra-i18n.js?v=0.11.6" in panel
-    assert "billy-extra-i18n.js?v=0.11.6" in parser
+    assert "billy-extra-i18n.js?v=0.11.9-r3" in panel
+    assert "billy-extra-i18n.js?v=0.11.9-r3" in parser
     assert "['en', 'it', 'es', 'fr', 'de', 'pt']" in panel
     assert "['en', 'it', 'es', 'fr', 'de', 'pt']" in parser
     for language in ("es", "fr", "de", "pt"):
@@ -356,6 +370,7 @@ def test_new_billy_frontends_support_all_shipped_languages():
         assert f"  {language}: {{" in bootstrap
     assert 'EXTRA_I18N_URL = "/bill_tracker/billy-extra-i18n.js"' in init
     assert "StaticPathConfig(EXTRA_I18N_URL, str(EXTRA_I18N_PATH), False)" in init
+    assert 'BILLY_PANEL_MODULE_URL = f"{BILLY_PANEL_URL}?v={FRONTEND_CACHE_VERSION}"' in init
 
 
 def test_home_assistant_translation_files_have_matching_keys():
@@ -499,6 +514,47 @@ def test_cashflow_uses_payment_date_instead_of_billing_reference_month():
     assert "cashflow_key = self._expense_cashflow_month(item)" in manager
     assert "item[\"payment_date\"] = date.today().isoformat()" in manager
     assert "item[\"payment_date\"] = None" in manager
+
+
+def test_bills_page_exposes_parser_review_queue_with_retry_accept_and_reject():
+    panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
+    bills_start = panel.index("class BillyBills")
+    bills_end = panel.index("class BillyRecurring", bills_start)
+    bills = panel[bills_start:bills_end]
+    dashboard = panel[panel.index("class BillyDashboard") : bills_start]
+    for token in (
+        "bill_tracker/parser/imports",
+        "bill_tracker/parser/import/approve",
+        "bill_tracker/parser/import/reject",
+        "bill_tracker/parser/import/retry",
+        "pendingReviewTitle",
+        "data-import-approve",
+        "data-import-reject",
+        "data-import-retry",
+        "failedImport",
+        "bill_tracker_import_updated",
+    ):
+        assert token in bills
+    assert "_pendingImportsHtml()" in bills
+    assert "_pendingImportsHtml()" not in dashboard
+
+
+def test_parser_configuration_supports_default_payer_and_split():
+    panel = (FRONTEND / "billy-parser-manager.js").read_text(encoding="utf-8")
+    api = (ROOT / "custom_components" / "bill_tracker" / "parser_api.py").read_text(
+        encoding="utf-8"
+    )
+    manager = (
+        ROOT / "custom_components" / "bill_tracker" / "parser" / "manager.py"
+    ).read_text(encoding="utf-8")
+    for token in (
+        "dialog-payer",
+        "dialog-split",
+        "default_payer_id",
+        "default_split",
+    ):
+        assert token in panel
+        assert token in api or token in manager
 
 
 def test_overview_subscribes_after_first_hass_assignment_and_refreshes_on_bill_updates():

@@ -4,13 +4,13 @@
 
 # Billy
 
-## Billy 0.11.6
+## Billy 0.11.9
 
 Billy keeps the Lovelace `custom:bill-tracker-card`, while `/billy` is the full-size application.
 
 Billy is a Home Assistant bill manager focused on household expenses: provider bills, recurring costs, forecasts, payment tracking, shared expenses, reimbursements and automatic bill parsing from email.
 
-### What's new in 0.11.6
+### What's new in 0.11.9
 
 - **Short and long billing periods** — Billy now preserves exact billing-period dates (`YYYY-MM-DD`) and automatically identifies unusually short or long bills, such as split invoices generated after a tariff or contract change.
 - **Smarter forecasts for split bills** — short/long bills are normalized using their actual number of covered days before they are used for future estimates, so two partial invoices are not mistaken for two complete billing cycles.
@@ -25,6 +25,8 @@ Billy is a Home Assistant bill manager focused on household expenses: provider b
 - **New Lovelace widget pack** — Billy now provides dedicated Summary, Spending, Breakdown, Upcoming, Recurring, Balances and Parser Status cards for custom Home Assistant dashboards.
 - **Improved localization** — Billy's sidebar, parser manager, widgets, payment settings and Home Assistant configuration strings are now fully localized in English, Italian, Spanish, French, German and Portuguese.
 - **Community parser workflow documentation** — the README now documents Catalog v2, country-specific parser catalogs, Experimental/Verified lifecycle, anonymous community feedback and how to connect Home Assistant IMAP sources.
+- **Parsed-bill review queue in Bills** — parser candidates waiting for approval are now visible directly in the Bills section, where they can be accepted or rejected before becoming real expenses.
+- **Parser-specific payer defaults** — each parser can now define its own default payer and split percentages, which are applied when a parsed bill is accepted or automatically imported.
 
 ### What Billy can do
 
@@ -188,15 +190,15 @@ The widget pack is loaded automatically with Billy's existing Lovelace resource,
 
 Available cards:
 
-| Card | Lovelace type | Purpose |
-| --- | --- | --- |
-| Summary | `custom:billy-summary-card` | Current month, outstanding bills, next month, yearly total, recurring costs and reimbursements |
-| Spending | `custom:billy-spending-card` | Historical spending plus recurring costs and forecast |
-| Breakdown | `custom:billy-breakdown-card` | Ranked bill-type / recurring-cost breakdown |
-| Upcoming | `custom:billy-upcoming-card` | Upcoming unpaid bills, forecasts and recurring charges |
-| Recurring | `custom:billy-recurring-card` | Active subscriptions, mortgages, installments and next due dates |
-| Balances | `custom:billy-balances-card` | User-to-user reimbursements and PayPal quick-pay links |
-| Parser status | `custom:billy-parser-status-card` | Installed parsers, Experimental parsers, updates and errors |
+| Card          | Lovelace type                     | Purpose                                                                                        |
+| ------------- | --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Summary       | `custom:billy-summary-card`       | Current month, outstanding bills, next month, yearly total, recurring costs and reimbursements |
+| Spending      | `custom:billy-spending-card`      | Historical spending plus recurring costs and forecast                                          |
+| Breakdown     | `custom:billy-breakdown-card`     | Ranked bill-type / recurring-cost breakdown                                                    |
+| Upcoming      | `custom:billy-upcoming-card`      | Upcoming unpaid bills, forecasts and recurring charges                                         |
+| Recurring     | `custom:billy-recurring-card`     | Active subscriptions, mortgages, installments and next due dates                               |
+| Balances      | `custom:billy-balances-card`      | User-to-user reimbursements and PayPal quick-pay links                                         |
+| Parser status | `custom:billy-parser-status-card` | Installed parsers, Experimental parsers, updates and errors                                    |
 
 All cards are registered in `window.customCards`, so they are available from the Home Assistant Lovelace card picker as well as through YAML configuration.
 
@@ -380,7 +382,6 @@ translations, automatic parser runtime, IMAP source adapter and tests required b
   to invalidate stale browser caches.
 
 See `docs/AUTOMATIC_PARSING.md` for parser setup and privacy details.
-
 
 ## Billy sidebar panel
 

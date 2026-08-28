@@ -109,10 +109,102 @@ def test_wrong_filename_does_not_bypass_mime_filter():
     assert find_part(document, parts) is None
 
 
-def test_error_source_fingerprint_is_retryable():
+def test_error_source_fingerprint_retries_once_per_runtime_without_log_loop():
     source = MANAGER.read_text(encoding="utf-8")
+    assert "self._runtime_failed_fingerprints: set[str] = set()" in source
+    assert "prefetch_key in self._runtime_failed_fingerprints" in source
+    assert "existing_source = self._source_fingerprint_row(prefetch_key)" in source
     assert 'row.get("status") != "error"' in source
-    assert "Failed attempts must be retryable" in source
+    assert "Persisted errors are deliberately excluded" in source
+    assert "self._runtime_failed_fingerprints.add(source_fingerprint)" in source
+    assert "self._runtime_failed_fingerprints.discard(source_fingerprint)" in source
+
+
+def test_repeated_error_for_same_source_updates_existing_queue_row():
+    source = MANAGER.read_text(encoding="utf-8")
+    assert 'item.get("status") == "error"' in source
+    assert "== source_fingerprint" in source
+    assert "self._remove_source_errors(prefetch_key)" in source
+
+
+def test_imap_ingestion_exposes_early_exit_diagnostics():
+    source = MANAGER.read_text(encoding="utf-8")
+    api = (ROOT / "custom_components" / "bill_tracker" / "parser_api.py").read_text(
+        encoding="utf-8"
+    )
+    assert "self._last_ingestion" in source
+    assert "IMAP source '" in source
+    assert "No enabled Billy parser matched the email prefilter" in source
+    assert "This IMAP message is already stored as" in source
+    assert "import_id=" in source
+    assert '"diagnostic": manager.ingestion_diagnostic()' in api
+
+
+def test_stale_source_fingerprint_rows_are_removed_before_retry():
+    source = MANAGER.read_text(encoding="utf-8")
+    assert 'status == "pending" and (not parser_id or not data)' in source
+    assert 'status == "imported" and not expense_id' in source
+    assert "Billy removed stale import" in source
+    assert "self._remove_import(existing_id)" in source
+
+
+def test_empty_parser_split_falls_back_to_default_payer_at_100_percent():
+    normalize = _load_method("_normalize_payment_defaults")
+
+    class BillManager:
+        @staticmethod
+        def _validate_optional_payer(value):
+            return value or None
+
+        @staticmethod
+        def default_split():
+            return []
+
+        @staticmethod
+        def _normalize_split(split):
+            return split
+
+    manager = SimpleNamespace(bill_manager=BillManager())
+    payer, split = normalize(manager, "payer-a", [])
+    assert payer == "payer-a"
+    assert split == [{"payer_id": "payer-a", "percentage": 100.0}]
+
+
+def test_imap_fetches_retry_once_on_transient_home_assistant_errors():
+    source = (ROOT / "custom_components" / "bill_tracker" / "sources" / "imap.py").read_text(
+        encoding="utf-8"
+    )
+    assert "for attempt in range(2):" in source
+    assert "await asyncio.sleep(0.25)" in source
+
+
+def test_parser_can_continue_when_full_imap_fetch_fails_but_event_metadata_is_available():
+    source = MANAGER.read_text(encoding="utf-8")
+    assert "except ImapSourceError as err:" in source
+    assert 'email_text = ""' in source
+    assert "continuing with event metadata" in source
+    assert "scored.append((score, threshold, parser_id, parser, config))" in source
+
+
+def test_optional_attachment_fetch_failure_does_not_abort_parser():
+    source = MANAGER.read_text(encoding="utf-8")
+    assert "except (ImapSourceError, PdfExtractionError) as err:" in source
+    assert "Billy skipped optional attachment" in source
+    assert "continue" in source
+
+
+def test_failed_import_retry_has_uuid_and_reprocesses_original_imap_uid():
+    source = MANAGER.read_text(encoding="utf-8")
+    api = (ROOT / "custom_components" / "bill_tracker" / "parser_api.py").read_text(
+        encoding="utf-8"
+    )
+    assert "from uuid import uuid4" in source
+    assert "async def async_retry" in source
+    assert '"entry_id": source.get("entry_id")' in source
+    assert '"uid": source.get("uid")' in source
+    assert "retry_import_id=import_id" in source
+    assert '"bill_tracker/parser/import/retry"' in api
+    assert 'row.get("status") not in {"error", "rejected"}' in source
 
 
 def test_candidate_uuid_generator_is_imported():

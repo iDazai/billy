@@ -1,5 +1,5 @@
-import './billy-parser-manager.js?v=0.11.9-r3'
-import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.9-r3'
+import './billy-parser-manager.js?v=0.11.9-r4'
+import { BILLY_PANEL_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.9-r4'
 
 const BILLY_PANEL_VERSION = '0.11.9'
 

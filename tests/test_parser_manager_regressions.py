@@ -1,5 +1,6 @@
 from pathlib import Path
 import ast
+import asyncio
 import hashlib
 import re
 from dataclasses import dataclass
@@ -22,11 +23,28 @@ class MailPart:
 def _load_method(name: str):
     tree = ast.parse(MANAGER.read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ParserManager")
-    fn = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == name)
+    fn = next(
+        node
+        for node in cls.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
+    )
     fn.decorator_list = []
     module = ast.Module(body=[fn], type_ignores=[])
     ast.fix_missing_locations(module)
-    ns = {"Any": Any, "MailPart": MailPart, "hashlib": hashlib, "re": re}
+    ns = {
+        "Any": Any,
+        "MailPart": MailPart,
+        "hashlib": hashlib,
+        "re": re,
+        "datetime": __import__("datetime").datetime,
+        "CatalogError": RuntimeError,
+        "validate_parser": lambda _parser: None,
+        "FEEDBACK_SOURCE_UNKNOWN": (
+            "Unable to submit feedback because the parser source revision is unknown. "
+            "Update or reinstall the parser first."
+        ),
+        "_LOGGER": SimpleNamespace(warning=lambda *_args, **_kwargs: None),
+    }
     exec(compile(module, str(MANAGER), "exec"), ns)
     return ns[name]
 
@@ -80,6 +98,64 @@ class _ManagerHarness:
 
     def community_fingerprint(self, parser_id, version):
         return f"fingerprint:{parser_id}:{version}"
+
+
+class _InstallStorageHarness:
+    def __init__(self, catalog):
+        self.data = {
+            "catalog": catalog,
+            "installed": {},
+            "custom": {},
+            "community_id": "install-community",
+        }
+        self.saved = 0
+        self.deleted = []
+
+    async def async_write_official(self, parser_id, _content):
+        return f"/tmp/{parser_id}.yaml"
+
+    async def async_save(self):
+        self.saved += 1
+
+    async def async_delete_file(self, path):
+        self.deleted.append(path)
+
+
+class _InstallCatalogHarness:
+    async def async_fetch_parser(self, _catalog, item):
+        return {"id": item["id"], "version": int(item["version"])}, "schema: 1\n"
+
+
+def _official_catalog(parser_id="it.example.energy", version=1, commit="commit-one", sha="abc"):
+    return {
+        "schema_version": 2,
+        "country": "IT",
+        "source_commit": commit,
+        "parsers": [
+            {
+                "id": parser_id,
+                "version": version,
+                "sha256": sha,
+                "min_billy_version": "0.0.0",
+                "catalog_status": "experimental",
+            }
+        ],
+    }
+
+
+def _install_manager(catalog):
+    storage = _InstallStorageHarness(catalog)
+    manager = SimpleNamespace(
+        storage=storage,
+        catalog_client=_InstallCatalogHarness(),
+        parsers={},
+        _ensure_category=lambda _category_id: None,
+        _normalize_payment_defaults=lambda payer, split: (payer or None, list(split or [])),
+        catalog_country=lambda: "IT",
+        _stored_catalog_for_country=lambda _country: storage.data["catalog"],
+        _version_supported=lambda _minimum: True,
+    )
+    return manager
 
 
 def test_generic_binary_pdf_matches_restrictive_pdf_parser_by_filename():
@@ -366,6 +442,283 @@ def test_installed_parser_exposes_anonymous_version_scoped_feedback_fingerprint(
     installed = {"it.enel.energy": {"id": "it.enel.energy", "version": 3, "enabled": True}}
     row = snapshot(_ManagerHarness(catalog, installed))["parsers"][0]
     assert row["feedback_fingerprint"] == "fingerprint:it.enel.energy:3"
+
+
+def test_install_parser_persists_catalog_source_commit():
+    install = _load_method("async_install")
+    catalog = _official_catalog(commit="source-install")
+    manager = _install_manager(catalog)
+
+    state = asyncio.run(
+        install(
+            manager,
+            "it.example.energy",
+            category_id="electricity",
+        )
+    )
+
+    assert state["source_commit"] == "source-install"
+    assert manager.storage.data["installed"]["it.example.energy"]["source_commit"] == "source-install"
+
+
+def test_update_parser_replaces_source_commit_with_new_installed_snapshot():
+    install = _load_method("async_install")
+    catalog = _official_catalog(version=1, commit="source-v1", sha="sha-v1")
+    manager = _install_manager(catalog)
+    asyncio.run(install(manager, "it.example.energy", category_id="electricity"))
+
+    manager.storage.data["catalog"] = _official_catalog(
+        version=2,
+        commit="source-v2",
+        sha="sha-v2",
+    )
+    state = asyncio.run(
+        install(manager, "it.example.energy", category_id="electricity")
+    )
+
+    assert state["version"] == 2
+    assert state["source_commit"] == "source-v2"
+
+
+def test_reinstall_parser_persists_source_commit_from_new_snapshot():
+    install = _load_method("async_install")
+    uninstall = _load_method("async_uninstall")
+    manager = _install_manager(
+        _official_catalog(version=3, commit="source-first", sha="same-sha")
+    )
+    asyncio.run(install(manager, "it.example.energy", category_id="electricity"))
+    assert asyncio.run(uninstall(manager, "it.example.energy")) is True
+
+    manager.storage.data["catalog"] = _official_catalog(
+        version=3,
+        commit="source-reinstall",
+        sha="same-sha",
+    )
+    state = asyncio.run(
+        install(manager, "it.example.energy", category_id="electricity")
+    )
+
+    assert state["source_commit"] == "source-reinstall"
+
+
+def test_feedback_payload_uses_installed_source_commit_and_never_remote_commit():
+    payload = _load_method("community_feedback_payload")
+    manager = SimpleNamespace(
+        storage=SimpleNamespace(
+            data={
+                "installed": {
+                    "it.example.energy": {
+                        "version": 4,
+                        "source_commit": "installed-source",
+                    }
+                },
+                "custom": {},
+            }
+        ),
+        billy_version="0.11.9",
+        community_fingerprint=lambda parser_id, version: f"fp:{parser_id}:{version}",
+    )
+
+    result = payload(manager, "it.example.energy", "working")
+
+    assert result == {
+        "schema_version": 1,
+        "parser_id": "it.example.energy",
+        "version": 4,
+        "result": "working",
+        "installation_fingerprint": "fp:it.example.energy:4",
+        "billy_version": "0.11.9",
+        "source_commit": "installed-source",
+    }
+
+
+def test_feedback_payload_never_emits_empty_source_commit():
+    payload = _load_method("community_feedback_payload")
+    manager = SimpleNamespace(
+        storage=SimpleNamespace(
+            data={
+                "installed": {"it.example.energy": {"version": 1, "source_commit": ""}},
+                "custom": {},
+            }
+        ),
+        billy_version="0.11.9",
+        community_fingerprint=lambda _parser_id, _version: "unused",
+    )
+
+    try:
+        payload(manager, "it.example.energy", "working")
+    except ValueError as err:
+        assert "source revision is unknown" in str(err)
+    else:
+        raise AssertionError("Feedback without source_commit must be blocked")
+
+
+def test_legacy_install_backfills_source_commit_on_exact_id_version_match():
+    backfill = _load_method("_backfill_installed_source_commits")
+    catalog = _official_catalog(version=3, commit="legacy-backfill", sha="same-sha")
+    storage = SimpleNamespace(
+        data={
+            "catalog": catalog,
+            "installed": {
+                "it.example.energy": {
+                    "id": "it.example.energy",
+                    "version": 3,
+                    "sha256": "same-sha",
+                }
+            },
+        }
+    )
+    manager = SimpleNamespace(
+        storage=storage,
+        catalog_country=lambda: "IT",
+        _stored_catalog_for_country=lambda _country: storage.data["catalog"],
+    )
+
+    assert backfill(manager) is True
+    assert storage.data["installed"]["it.example.energy"]["source_commit"] == "legacy-backfill"
+
+
+def test_legacy_install_does_not_backfill_from_different_remote_version():
+    backfill = _load_method("_backfill_installed_source_commits")
+    catalog = _official_catalog(version=4, commit="remote-v4", sha="sha-v4")
+    storage = SimpleNamespace(
+        data={
+            "catalog": catalog,
+            "installed": {
+                "it.example.energy": {
+                    "id": "it.example.energy",
+                    "version": 3,
+                    "sha256": "sha-v3",
+                }
+            },
+        }
+    )
+    manager = SimpleNamespace(
+        storage=storage,
+        catalog_country=lambda: "IT",
+        _stored_catalog_for_country=lambda _country: storage.data["catalog"],
+    )
+
+    assert backfill(manager) is False
+    assert "source_commit" not in storage.data["installed"]["it.example.energy"]
+
+
+def test_legacy_install_with_different_remote_version_blocks_feedback():
+    backfill = _load_method("_backfill_installed_source_commits")
+    payload = _load_method("community_feedback_payload")
+    catalog = _official_catalog(version=4, commit="remote-v4", sha="sha-v4")
+    storage = SimpleNamespace(
+        data={
+            "catalog": catalog,
+            "installed": {
+                "it.example.energy": {
+                    "id": "it.example.energy",
+                    "version": 3,
+                    "sha256": "sha-v3",
+                }
+            },
+            "custom": {},
+        }
+    )
+    manager = SimpleNamespace(
+        storage=storage,
+        catalog_country=lambda: "IT",
+        _stored_catalog_for_country=lambda _country: storage.data["catalog"],
+        billy_version="0.11.9",
+        community_fingerprint=lambda _parser_id, _version: "unused",
+    )
+
+    assert backfill(manager) is False
+    try:
+        payload(manager, "it.example.energy", "working")
+    except ValueError as err:
+        assert "source revision is unknown" in str(err)
+    else:
+        raise AssertionError("Legacy feedback must be blocked when catalog version differs")
+
+
+def test_catalog_refresh_backfill_never_overwrites_installed_source_commit():
+    backfill = _load_method("_backfill_installed_source_commits")
+    catalog = _official_catalog(version=5, commit="remote-source", sha="remote-sha")
+    storage = SimpleNamespace(
+        data={
+            "installed": {
+                "it.example.energy": {
+                    "id": "it.example.energy",
+                    "version": 4,
+                    "sha256": "installed-sha",
+                    "source_commit": "installed-source",
+                }
+            }
+        }
+    )
+    manager = SimpleNamespace(storage=storage)
+
+    assert backfill(manager, catalog) is False
+    assert storage.data["installed"]["it.example.energy"]["source_commit"] == "installed-source"
+
+
+def test_configure_preserves_installed_source_commit():
+    source = MANAGER.read_text(encoding="utf-8")
+    configure_start = source.index("    async def async_configure(")
+    configure_end = source.index("    async def async_save_custom(", configure_start)
+    configure = source[configure_start:configure_end]
+    assert 'state.update(' in configure
+    assert '"source_commit"' not in configure
+
+
+def test_real_anthropic_v3_legacy_install_backfills_current_catalog_snapshot_commit():
+    backfill = _load_method("_backfill_installed_source_commits")
+    catalog = _official_catalog(
+        parser_id="it.anthropic.subscription",
+        version=3,
+        commit="a622b4eeab53637ddb18e59e287eee8676d3a743",
+        sha="47656a25650aaed70dc887b8e03602e084eecc61885425d967be700768b5e6d2",
+    )
+    storage = SimpleNamespace(
+        data={
+            "catalog": catalog,
+            "installed": {
+                "it.anthropic.subscription": {
+                    "id": "it.anthropic.subscription",
+                    "version": 3,
+                    "sha256": "47656a25650aaed70dc887b8e03602e084eecc61885425d967be700768b5e6d2",
+                }
+            },
+        }
+    )
+    manager = SimpleNamespace(
+        storage=storage,
+        catalog_country=lambda: "IT",
+        _stored_catalog_for_country=lambda _country: storage.data["catalog"],
+    )
+
+    assert backfill(manager) is True
+    assert (
+        storage.data["installed"]["it.anthropic.subscription"]["source_commit"]
+        == "a622b4eeab53637ddb18e59e287eee8676d3a743"
+    )
+
+
+def test_custom_parser_feedback_is_rejected_without_fake_source_commit():
+    payload = _load_method("community_feedback_payload")
+    manager = SimpleNamespace(
+        storage=SimpleNamespace(
+            data={
+                "installed": {},
+                "custom": {"it.local.custom": {"version": 1}},
+            }
+        ),
+        billy_version="0.11.9",
+        community_fingerprint=lambda _parser_id, _version: "unused",
+    )
+
+    try:
+        payload(manager, "it.local.custom", "working")
+    except ValueError as err:
+        assert "custom parsers" in str(err)
+    else:
+        raise AssertionError("Custom parser feedback must not be generated")
 
 
 def test_parser_storage_generates_persistent_community_id():

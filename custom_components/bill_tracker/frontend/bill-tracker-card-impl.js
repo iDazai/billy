@@ -3,7 +3,7 @@ import {
   billyLanguage,
   billyLocale,
   billyT,
-} from './bill-tracker-i18n.js?v=0.11.9-r3'
+} from './bill-tracker-i18n.js?v=0.11.9-r4'
 
 const BILL_TRACKER_VERSION = '0.11.9'
 

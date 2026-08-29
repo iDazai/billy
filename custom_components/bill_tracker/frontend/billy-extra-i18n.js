@@ -1233,6 +1233,8 @@ export const BILLY_PARSER_EXTRA_TEXT = {
     feedbackFailed: 'No funciona',
     feedbackHint:
       'La opinión contiene solo ID del parser, versión, resultado y una huella anónima de la instalación.',
+    feedbackSourceUnknown:
+      'No se puede enviar la opinión porque se desconoce la revisión de origen del parser. Actualiza o reinstala el parser primero.',
     feedbackStats:
       '{working} funcionan · {partial} parciales · {failed} fallan',
     newCustom: 'Nuevo parser personalizado',
@@ -1349,6 +1351,8 @@ export const BILLY_PARSER_EXTRA_TEXT = {
     feedbackFailed: 'Ne fonctionne pas',
     feedbackHint:
       'L’avis contient uniquement l’ID du parser, la version, le résultat et une empreinte anonyme de l’installation.',
+    feedbackSourceUnknown:
+      'Impossible d’envoyer l’avis car la révision source du parser est inconnue. Mettez à jour ou réinstallez d’abord le parser.',
     feedbackStats:
       '{working} fonctionnent · {partial} partiels · {failed} échecs',
     newCustom: 'Nouveau parser personnalisé',
@@ -1465,6 +1469,8 @@ export const BILLY_PARSER_EXTRA_TEXT = {
     feedbackFailed: 'Funktioniert nicht',
     feedbackHint:
       'Das Feedback enthält nur Parser-ID, Version, Ergebnis und einen anonymen Installations-Fingerprint.',
+    feedbackSourceUnknown:
+      'Feedback kann nicht gesendet werden, weil die Quellrevision des Parsers unbekannt ist. Aktualisieren oder installieren Sie den Parser zuerst neu.',
     feedbackStats:
       '{working} funktionieren · {partial} teilweise · {failed} fehlgeschlagen',
     newCustom: 'Neuer benutzerdefinierter Parser',
@@ -1579,6 +1585,8 @@ export const BILLY_PARSER_EXTRA_TEXT = {
     feedbackFailed: 'Não funciona',
     feedbackHint:
       'O feedback contém apenas ID do parser, versão, resultado e uma impressão digital anónima da instalação.',
+    feedbackSourceUnknown:
+      'Não é possível enviar o feedback porque a revisão de origem do parser é desconhecida. Atualize ou reinstale primeiro o parser.',
     feedbackStats:
       '{working} funcionam · {partial} parciais · {failed} falharam',
     newCustom: 'Novo parser personalizado',

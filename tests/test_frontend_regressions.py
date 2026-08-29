@@ -41,10 +41,10 @@ def test_frontend_and_manifest_use_rewrite_version():
     const = (ROOT / "custom_components" / "bill_tracker" / "const.py").read_text(encoding="utf-8")
     assert "BILLY_FRONTEND_VERSION = '0.11.9'" in bootstrap
     assert "BILL_TRACKER_VERSION = '0.11.9'" in implementation
-    assert "./bill-tracker-i18n.js?v=0.11.9-r3" in implementation
+    assert "./bill-tracker-i18n.js?v=0.11.9-r4" in implementation
     assert '"version": "0.11.9"' in manifest
     assert 'FRONTEND_VERSION = "0.11.9"' in const
-    assert 'FRONTEND_CACHE_VERSION = "0.11.9-r3"' in const
+    assert 'FRONTEND_CACHE_VERSION = "0.11.9-r4"' in const
 
 
 def test_settings_exposes_rejected_parser_imports_and_restore_action():
@@ -103,7 +103,7 @@ def test_billy_sidebar_panel_keeps_card_and_parser_manager():
     panel = (FRONTEND / "billy-panel.js").read_text(encoding="utf-8")
     init = (ROOT / "custom_components" / "bill_tracker" / "__init__.py").read_text(encoding="utf-8")
     for token in (
-        "billy-parser-manager.js?v=0.11.9-r3",
+        "billy-parser-manager.js?v=0.11.9-r4",
         '<billy-dashboard id="dashboard">',
         '<billy-bills id="bills-panel">',
         '<billy-recurring id="recurring-panel">',
@@ -311,6 +311,9 @@ def test_panel_modals_do_not_reload_on_every_hass_object_update():
 
 def test_parser_manager_community_publish_flow():
     manager = (FRONTEND / "billy-parser-manager.js").read_text(encoding="utf-8")
+    api = (ROOT / "custom_components" / "bill_tracker" / "parser_api.py").read_text(
+        encoding="utf-8"
+    )
     for token in (
         "Share with community",
         "Condividi con la community",
@@ -322,13 +325,20 @@ def test_parser_manager_community_publish_flow():
         "feedback-working",
         "feedback-partial",
         "feedback-failed",
+        "bill_tracker/parser/feedback",
+        "feedbackSourceUnknown",
+        "feedback_available",
+        "installed_catalog_status",
         "github.com/robin994/billy-parser/issues/new",
         "catalog-experimental",
         'id="catalog-status"',
     ):
         assert token in manager
-    assert "row.catalog_status === 'experimental'" in manager
-    assert "Number(installedVersion || 0) === Number(remoteVersion || 0)" in manager
+    assert "row.feedback_available === true" in manager
+    assert "const sourceCommit = String(feedback?.source_commit || '').trim()" in manager
+    assert "source_commit: String(row.source_commit || '')" not in manager
+    assert '"bill_tracker/parser/feedback"' in api
+    assert 'vol.In(["working", "partial", "failed"])' in api
 
 
 def test_parser_manager_separates_catalog_and_installation_status():
@@ -360,8 +370,8 @@ def test_new_billy_frontends_support_all_shipped_languages():
 
     assert "BILLY_PANEL_EXTRA_TEXT" in panel
     assert "BILLY_PARSER_EXTRA_TEXT" in parser
-    assert "billy-extra-i18n.js?v=0.11.9-r3" in panel
-    assert "billy-extra-i18n.js?v=0.11.9-r3" in parser
+    assert "billy-extra-i18n.js?v=0.11.9-r4" in panel
+    assert "billy-extra-i18n.js?v=0.11.9-r4" in parser
     assert "['en', 'it', 'es', 'fr', 'de', 'pt']" in panel
     assert "['en', 'it', 'es', 'fr', 'de', 'pt']" in parser
     for language in ("es", "fr", "de", "pt"):

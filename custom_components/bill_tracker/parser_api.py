@@ -36,6 +36,7 @@ def register_parser_websockets(hass: HomeAssistant) -> None:
         ws_parser_custom_export,
         ws_parser_test,
         ws_parser_sources_set,
+        ws_parser_feedback,
         ws_parser_imports,
         ws_parser_import_approve,
         ws_parser_import_reject,
@@ -249,6 +250,26 @@ async def ws_parser_sources_set(hass, connection, msg):
         connection.send_error(msg["id"], "source_error", str(err))
         return
     connection.send_result(msg["id"], {"entry_ids": selected})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "bill_tracker/parser/feedback",
+        vol.Required("parser_id"): str,
+        vol.Required("result"): vol.In(["working", "partial", "failed"]),
+    }
+)
+@websocket_api.async_response
+async def ws_parser_feedback(hass, connection, msg):
+    try:
+        result = _manager(hass).community_feedback_payload(
+            msg["parser_id"],
+            msg["result"],
+        )
+    except Exception as err:  # noqa: BLE001
+        connection.send_error(msg["id"], "feedback_error", str(err))
+        return
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.websocket_command(

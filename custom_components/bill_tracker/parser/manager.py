@@ -25,6 +25,10 @@ from .validator import ParserValidationError, load_parser_yaml, validate_parser
 _LOGGER = logging.getLogger(__name__)
 EVENT_IMPORT_UPDATED = "bill_tracker_import_updated"
 MAX_IMPORT_HISTORY = 500
+FEEDBACK_SOURCE_UNKNOWN = (
+    "Unable to submit feedback because the parser source revision is unknown. "
+    "Update or reinstall the parser first."
+)
 
 
 class ParserManager:
@@ -54,7 +58,9 @@ class ParserManager:
 
     async def async_load(self) -> None:
         await self.storage.async_load()
-        if self._normalize_cached_catalog_country():
+        dirty = self._normalize_cached_catalog_country()
+        dirty |= self._backfill_installed_source_commits()
+        if dirty:
             await self.storage.async_save()
         await self._reload_installed()
 
@@ -425,6 +431,7 @@ class ParserManager:
             "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
         self.storage.data["catalog_cache"] = next_cache
+        self._backfill_installed_source_commits(self.storage.data["catalog"])
         await self.storage.async_save()
         return self.catalog_snapshot()
 
@@ -451,6 +458,27 @@ class ParserManager:
                 state and remote_version > int(installed_version or 0)
             )
             load_error = str(state.get("load_error") or "") if state else ""
+            installed_catalog_status = (
+                str(state.get("catalog_status") or "")
+                if state
+                else ""
+            )
+            if (
+                state
+                and not installed_catalog_status
+                and installed_version == remote_version
+            ):
+                installed_catalog_status = str(
+                    row.get("catalog_status") or "experimental"
+                )
+            installed_source_commit = (
+                str(state.get("source_commit") or "").strip()
+                if state
+                else ""
+            )
+            feedback_eligible = bool(
+                state and installed_catalog_status == "experimental"
+            )
 
             if load_error:
                 status = "error"
@@ -481,6 +509,16 @@ class ParserManager:
                         if state
                         else ""
                     ),
+                    "source_commit": installed_source_commit,
+                    "installed_catalog_status": installed_catalog_status,
+                    "feedback_available": bool(
+                        feedback_eligible and installed_source_commit
+                    ),
+                    "feedback_block_reason": (
+                        "source_commit_unavailable"
+                        if state and not installed_source_commit
+                        else ""
+                    ),
                     "status": status,
                     "enabled": bool(state.get("enabled", True)) if state else False,
                     "category_id": state.get("category_id") if state else None,
@@ -503,6 +541,14 @@ class ParserManager:
                 # country's local parser into the selected catalog view.
                 continue
             load_error = str(state.get("load_error") or "")
+            installed_catalog_status = str(
+                state.get("catalog_status")
+                or metadata.get("status")
+                or "experimental"
+            )
+            installed_source_commit = str(
+                state.get("source_commit") or ""
+            ).strip()
             rows.append(
                 {
                     "id": parser_id,
@@ -524,6 +570,17 @@ class ParserManager:
                         or "experimental"
                     ),
                     "replacement": state.get("replacement"),
+                    "source_commit": installed_source_commit,
+                    "installed_catalog_status": installed_catalog_status,
+                    "feedback_available": bool(
+                        installed_catalog_status == "experimental"
+                        and installed_source_commit
+                    ),
+                    "feedback_block_reason": (
+                        "source_commit_unavailable"
+                        if not installed_source_commit
+                        else ""
+                    ),
                     "removed_from_catalog": True,
                     "status": "error" if load_error else "removed",
                     "enabled": bool(state.get("enabled", True)),
@@ -559,6 +616,84 @@ class ParserManager:
         payload = f"{community_id}:{parser_id}:{int(version)}".encode()
         return hashlib.sha256(payload).hexdigest()
 
+    def _backfill_installed_source_commits(
+        self,
+        catalog: dict[str, Any] | None = None,
+    ) -> bool:
+        """Backfill legacy installs only from an exact catalog id/version match."""
+        if catalog is None:
+            catalog = self._stored_catalog_for_country(self.catalog_country())
+        if not isinstance(catalog, dict):
+            return False
+        source_commit = str(catalog.get("source_commit") or "").strip()
+        if not source_commit:
+            return False
+
+        catalog_rows = {
+            str(row.get("id") or ""): row
+            for row in catalog.get("parsers", []) or []
+            if isinstance(row, dict) and row.get("id")
+        }
+        changed = False
+        for parser_id, state in self.storage.data.get("installed", {}).items():
+            if str(state.get("source_commit") or "").strip():
+                continue
+            item = catalog_rows.get(str(parser_id))
+            if item is None:
+                continue
+            try:
+                installed_version = int(state.get("version", 0) or 0)
+                catalog_version = int(item.get("version", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if installed_version < 1 or installed_version != catalog_version:
+                continue
+
+            installed_sha = str(state.get("sha256") or "").strip().lower()
+            catalog_sha = str(item.get("sha256") or "").strip().lower()
+            if installed_sha and catalog_sha and installed_sha != catalog_sha:
+                continue
+
+            state["source_commit"] = source_commit
+            changed = True
+        return changed
+
+    def community_feedback_payload(
+        self,
+        parser_id: str,
+        result: str,
+    ) -> dict[str, Any]:
+        """Build a feedback payload from the immutable installed parser state."""
+        if result not in {"working", "partial", "failed"}:
+            raise ValueError("Unsupported parser feedback result")
+        if parser_id in self.storage.data.get("custom", {}):
+            raise ValueError("Community feedback is not available for custom parsers")
+        state = self.storage.data.get("installed", {}).get(parser_id)
+        if state is None:
+            raise ValueError("Parser is not installed")
+        version = int(state.get("version", 0) or 0)
+        if version < 1:
+            raise ValueError("Installed parser version is invalid")
+        source_commit = str(state.get("source_commit") or "").strip()
+        if not source_commit:
+            _LOGGER.warning(
+                "Billy parser feedback skipped for %s v%s: source_commit unavailable",
+                parser_id,
+                version,
+            )
+            raise ValueError(FEEDBACK_SOURCE_UNKNOWN)
+        return {
+            "schema_version": 1,
+            "parser_id": parser_id,
+            "version": version,
+            "result": result,
+            "installation_fingerprint": self.community_fingerprint(
+                parser_id, version
+            ),
+            "billy_version": self.billy_version,
+            "source_commit": source_commit,
+        }
+
     async def async_install(
         self,
         parser_id: str,
@@ -586,6 +721,9 @@ class ParserManager:
             raise CatalogError("Parser not found in the remote catalog")
         if not self._version_supported(str(item.get("min_billy_version") or "0.0.0")):
             raise CatalogError("This parser requires a newer Billy version")
+        source_commit = str(catalog.get("source_commit") or "").strip()
+        if not source_commit:
+            raise CatalogError("Parser catalog has no source_commit")
         parser, content = await self.catalog_client.async_fetch_parser(catalog, item)
         validate_parser(parser)
         path = await self.storage.async_write_official(parser_id, content)
@@ -593,6 +731,7 @@ class ParserManager:
             "id": parser_id,
             "version": int(parser["version"]),
             "sha256": str(item.get("sha256") or ""),
+            "source_commit": source_commit,
             "path": path,
             "enabled": bool(enabled),
             "category_id": category_id,

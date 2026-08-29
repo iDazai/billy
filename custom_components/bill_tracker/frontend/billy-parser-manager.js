@@ -1,4 +1,4 @@
-import { BILLY_PARSER_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.9-r3'
+import { BILLY_PARSER_EXTRA_TEXT } from './billy-extra-i18n.js?v=0.11.9-r4'
 
 const BILLY_PARSER_MANAGER_VERSION = '0.11.9'
 
@@ -90,6 +90,8 @@ const TEXT = {
     feedbackFailed: 'Does not work',
     feedbackHint:
       'Feedback contains only parser ID, version, result and an anonymous installation fingerprint.',
+    feedbackSourceUnknown:
+      'Unable to submit feedback because the parser source revision is unknown. Update or reinstall the parser first.',
     feedbackStats: '{working} works · {partial} partial · {failed} failed',
     newCustom: 'New custom parser',
     editCustom: 'Edit parser',
@@ -205,6 +207,8 @@ const TEXT = {
     feedbackFailed: 'Non funziona',
     feedbackHint:
       'Il feedback contiene solo ID parser, versione, esito e un fingerprint anonimo dell’installazione.',
+    feedbackSourceUnknown:
+      'Impossibile inviare il feedback perché la revisione sorgente del parser è sconosciuta. Aggiorna o reinstalla prima il parser.',
     feedbackStats: '{working} funziona · {partial} parziale · {failed} fallito',
     newCustom: 'Nuovo parser custom',
     editCustom: 'Modifica parser',
@@ -545,15 +549,21 @@ class BillyParserManagerPanel extends HTMLElement {
         ${row.update_available ? `<button class="primary" data-action="update" data-id="${esc(row.id)}" ${canUpdate && !busy ? '' : 'disabled'} title="${row.compatible === false ? esc(this._t('updateBlocked')) : ''}">${this._t('update')}</button>` : ''}
         <button class="danger" data-action="remove" data-id="${esc(row.id)}" ${busy ? 'disabled' : ''}>${this._t('remove')}</button>`
     }
-    const canSubmitFeedback =
+    const feedbackEligible =
       row.source !== 'custom' &&
       row.installed &&
-      row.catalog_status === 'experimental' &&
-      Number(installedVersion || 0) === Number(remoteVersion || 0) &&
-      Boolean(row.feedback_fingerprint)
+      (row.installed_catalog_status || row.catalog_status) === 'experimental'
+    const canSubmitFeedback =
+      feedbackEligible && row.feedback_available === true
     if (canSubmitFeedback) {
       actions += `<div class="feedback-actions" title="${esc(this._t('feedbackHint'))}"><span>${esc(this._t('feedbackPrompt'))}</span><div><button class="feedback-working" data-action="feedback-working" data-id="${esc(row.id)}">✓ ${esc(this._t('feedbackWorking'))}</button><button class="feedback-partial" data-action="feedback-partial" data-id="${esc(row.id)}">~ ${esc(this._t('feedbackPartial'))}</button><button class="feedback-failed" data-action="feedback-failed" data-id="${esc(row.id)}">× ${esc(this._t('feedbackFailed'))}</button></div></div>`
     }
+    const feedbackUnavailable =
+      row.source !== 'custom' &&
+      row.installed &&
+      row.feedback_block_reason === 'source_commit_unavailable'
+        ? this._t('feedbackSourceUnknown')
+        : ''
     if (
       row.catalog_status === 'outdated' &&
       row.replacement &&
@@ -600,6 +610,7 @@ class BillyParserManagerPanel extends HTMLElement {
             <div class="parser-name">${esc(row.name || row.id)}</div>
             <div class="meta">${esc(row.id)} · ${esc(row.bill_type || '—')} · ${versionLine}</div>
             ${hint ? `<div class="hint">${hint}</div>` : ''}
+            ${feedbackUnavailable ? `<div class="hint feedback-unavailable">${esc(feedbackUnavailable)}</div>` : ''}
             ${feedbackLine ? `<div class="hint"><strong>${this._t('communityFeedback')}:</strong> ${esc(feedbackLine)}</div>` : ''}
             ${row.changelog ? `<div class="hint"><strong>${this._t('changelog')}:</strong> ${esc(row.changelog)}</div>` : ''}
           </div>
@@ -1096,7 +1107,7 @@ fields:
       return
     }
     if (action.startsWith('feedback-')) {
-      this._submitFeedback(row, action.slice('feedback-'.length))
+      await this._submitFeedback(row, action.slice('feedback-'.length))
       return
     }
     if (action === 'remove') {
@@ -1160,29 +1171,32 @@ fields:
     }
   }
 
-  _submitFeedback(row, result) {
+  async _submitFeedback(row, result) {
     if (!['working', 'partial', 'failed'].includes(result)) return
-    const version = Number(row.installed_version ?? row.version ?? 0)
-    if (!row.feedback_fingerprint || version <= 0) return
-    const feedback = {
-      schema_version: 1,
-      parser_id: String(row.id),
-      version,
-      result,
-      installation_fingerprint: String(row.feedback_fingerprint),
-      billy_version: BILLY_PARSER_MANAGER_VERSION,
-      source_commit: String(row.source_commit || ''),
+    try {
+      const feedback = await this._hass.callWS({
+        type: 'bill_tracker/parser/feedback',
+        parser_id: String(row.id),
+        result,
+      })
+      const sourceCommit = String(feedback?.source_commit || '').trim()
+      if (!sourceCommit) throw new Error(this._t('feedbackSourceUnknown'))
+      feedback.source_commit = sourceCommit
+      const version = Number(feedback.version || 0)
+      const body = `<!-- billy-parser-feedback:v1 -->\n\n${this._t('feedbackHint')}\n\n\`\`\`json\n${JSON.stringify(feedback, null, 2)}\n\`\`\`\n`
+      const params = new URLSearchParams({
+        title: `[Parser Feedback] ${row.id} v${version} - ${result}`,
+        body,
+      })
+      window.open(
+        `https://github.com/robin994/billy-parser/issues/new?${params.toString()}`,
+        '_blank',
+        'noopener,noreferrer',
+      )
+    } catch (error) {
+      this._error = `${this._t('actionError')}: ${error?.message || error}`
+      this._render()
     }
-    const body = `<!-- billy-parser-feedback:v1 -->\n\n${this._t('feedbackHint')}\n\n\`\`\`json\n${JSON.stringify(feedback, null, 2)}\n\`\`\`\n`
-    const params = new URLSearchParams({
-      title: `[Parser Feedback] ${row.id} v${version} - ${result}`,
-      body,
-    })
-    window.open(
-      `https://github.com/robin994/billy-parser/issues/new?${params.toString()}`,
-      '_blank',
-      'noopener,noreferrer',
-    )
   }
 
   _openDialog(row, mode) {

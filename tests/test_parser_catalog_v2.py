@@ -118,6 +118,7 @@ def test_catalog_v2_loads_index_and_only_requested_it_shard():
     assert catalog["schema_version"] == 2
     assert catalog["country"] == "IT"
     assert catalog["catalog_mode"] == "v2"
+    assert catalog["source_commit"] == "abc123"
     assert {row["id"] for row in catalog["parsers"]} == {
         "it.eon.electricity",
         "it.enel.energy",
